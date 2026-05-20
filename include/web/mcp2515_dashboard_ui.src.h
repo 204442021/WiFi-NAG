@@ -883,8 +883,9 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 
 <div class="modal-backdrop" id="ota-test-modal" onclick="otaTestBackdrop(event)">
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
-    <div class="modal-title" id="ota-test-title">OTA Test Timestamp</div>
-    <div class="modal-msg" id="ota-test-msg">OTA popup build time: 2026-05-20 19:25:23 +08:00</div>
+    <div class="modal-title" id="ota-test-title">OTA Test v2</div>
+    <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
+OTA test timestamp: 2026-05-20 19:33:58 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
     </div>
@@ -1195,8 +1196,8 @@ Object.assign(I18N_ZH,{
   'Raise UI_mppSpeedLimit on CAN 760 byte 6 to a target km/h based on what the gateway is currently sending. Same bucket layout as HW3. Only writes when target is higher than current - never lowers.':'\u6839\u636e\u7f51\u5173\u5f53\u524d\u53d1\u9001\u7684 UI_mppSpeedLimit (CAN 760 byte 6) \u6309\u5206\u6bb5\u8868\u5f97\u5230\u76ee\u6807 km/h\uff0c\u4ec5\u5728\u76ee\u6807\u503c\u9ad8\u4e8e\u5f53\u524d\u503c\u65f6\u5199\u56de\uff0c\u4ece\u4e0d\u964d\u4f4e\u3002\u5206\u6bb5\u5e03\u5c40\u4e0e HW3 \u4e00\u81f4\u3002',
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
-  'OTA Test Timestamp':'OTA \u6d4b\u8bd5\u65f6\u95f4\u6233',
-  'OTA popup build time: 2026-05-20 19:25:23 +08:00':'OTA \u5f39\u7a97\u6784\u5efa\u65f6\u95f4\uff1a2026-05-20 19:25:23 +08:00'
+  'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
+  'Version: 3.0.0-beta.5\nOTA test timestamp: 2026-05-20 19:33:58 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u6d4b\u8bd5\u65f6\u95f4\uff1a2026-05-20 19:33:58 +08:00'
 });
 const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
 Object.assign(I18N_EN,{
@@ -1721,7 +1722,7 @@ function toggleLanguage(){
     $('theme-btn').innerHTML=t==='dark'?'&#9788; '+trText('Light'):'&#9790; '+trText('Dark');
     updateLanguageButton();
     applyDashboardI18n(document.body);
-    setTimeout(showOtaTestNotice,120);
+    setTimeout(showOwnerNotice,120);
     const obs=new MutationObserver(muts=>{
       if(dashLang!=='zh')return;
       muts.forEach(m=>{
