@@ -863,7 +863,11 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 &#x6DF1;&#x5EA6;&#x4F18;&#x5316;&#xFF1A;
 <span class="ok">&#x2705;</span> WiFi AP + NAPT &#x8F6C;&#x53D1;&#x901F;&#x5EA6;
 <span class="ok">&#x2705;</span> DNS &#x8FC7;&#x6EE4;&#x4E0E;&#x89E3;&#x6790;&#x6548;&#x7387;
-<span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;</div>
+<span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
+
+OTA Test v3
+Version: 3.0.0-beta.5
+OTA test timestamp: 2026-05-20 19:43:00 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
