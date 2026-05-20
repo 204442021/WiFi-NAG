@@ -609,6 +609,14 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
         </div>
         <label class="tgl"><input type="checkbox" id="gw-enabled" onchange="saveGatewayDns()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
+      <div id="gw-diag" style="margin:2px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:11px">
+        <div><span style="color:var(--tx3)">AP</span> <span id="gw-diag-ap">--</span></div>
+        <div><span style="color:var(--tx3)">STA</span> <span id="gw-diag-sta">--</span></div>
+        <div><span style="color:var(--tx3)">NAT</span> <span id="gw-diag-nat">--</span></div>
+        <div><span style="color:var(--tx3)">DNS</span> <span id="gw-diag-dns">--</span></div>
+        <div><span style="color:var(--tx3)">Upstream</span> <span id="gw-diag-upstream">--</span></div>
+        <div><span style="color:var(--tx3)">Clients</span> <span id="gw-diag-clients">--</span></div>
+      </div>
       <div style="margin:4px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2)">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
           <button class="sniff-btn gateway-profile-btn" id="gw-profile-safe" onclick="applyGatewayProfile('safe')">Conservative Mode</button>
@@ -2766,10 +2774,17 @@ async function loadGatewayStatus(){
       if(d.dns_resp_cache)statusText+=' \u2022 DNS cache '+(d.dns_resp_hits||0)+'/'+((d.dns_resp_hits||0)+(d.dns_resp_misses||0));
       $('gw-status').textContent=statusText;
       $('gw-status').style.color=d.enabled?(d.nat?'var(--ok)':'var(--acc)'):'var(--tx3)';
+      setText('gw-diag-ap',(d.ap_ip||'0.0.0.0'));
+      setText('gw-diag-sta',(d.sta_connected?(d.sta_ip||'0.0.0.0'):'offline'));
+      setText('gw-diag-nat',(d.napt_compiled?'compiled':'not compiled')+' / '+(d.nat?'on':'waiting'));
+      setText('gw-diag-dns',(d.dns_task_active?'task':'no task')+' / '+(d.dns_bind_ok?'bind ok':'bind wait')+' / fd '+(d.dns_sock===undefined?'--':d.dns_sock));
+      setText('gw-diag-upstream',d.upstream_dns||'none');
+      setText('gw-diag-clients',(d.ap_clients||0)+' client'+((d.ap_clients||0)===1?'':'s'));
       var sp=$('gw-strict-panel');if(sp)sp.style.display=d.strict?'block':'none';
       var ss=$('gw-strict-stats');if(ss)ss.textContent='allowed '+(d.allowed_ips||0)+' \u2022 blocked '+(d.blocked_ips||0);
     }catch(e){
       if($('gw-status')){$('gw-status').textContent='Gateway not available';$('gw-status').style.color='var(--tx3)';}
+      ['gw-diag-ap','gw-diag-sta','gw-diag-nat','gw-diag-dns','gw-diag-upstream','gw-diag-clients'].forEach(id=>setText(id,'--'));
     }
   });
 }

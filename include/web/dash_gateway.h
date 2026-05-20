@@ -1875,6 +1875,10 @@ static void dashGatewayOnApStarted(esp_netif_t *apNetif)
         return;
     dashGatewayConfigureApDns(apNetif);
     dashGatewayStartDns();
+    ESP_LOGI(kDashGatewayTag, "AP ready ip=%s clients=%u dns=%s",
+             WiFi.softAPIP().toString().c_str(),
+             static_cast<unsigned>(WiFi.softAPgetStationNum()),
+             gatewayApDnsConfigured ? "configured" : "pending");
 }
 
 static void dashGatewayOnStaConnected(esp_netif_t *staNetif, esp_netif_t *apNetif)
@@ -1900,6 +1904,19 @@ static void dashGatewayOnStaConnected(esp_netif_t *staNetif, esp_netif_t *apNeti
 #else
     ESP_LOGW(kDashGatewayTag, "CONFIG_LWIP_IPV4_NAPT is disabled");
 #endif
+    char upstreamLog[16] = "none";
+    if (gatewayUpstreamDns != IPADDR_NONE && gatewayUpstreamDns != 0)
+    {
+        struct in_addr a;
+        a.s_addr = gatewayUpstreamDns;
+        const char *p = inet_ntoa(a);
+        if (p)
+            snprintf(upstreamLog, sizeof(upstreamLog), "%s", p);
+    }
+    ESP_LOGI(kDashGatewayTag, "STA ready ip=%s upstream_dns=%s nat=%s",
+             WiFi.localIP().toString().c_str(),
+             upstreamLog,
+             gatewayNaptEnabled ? "on" : "waiting");
 }
 
 static String dashGatewayStatusJson()
@@ -1921,6 +1938,22 @@ static String dashGatewayStatusJson()
     j += gatewayEnabled ? "true" : "false";
     j += ",\"nat\":";
     j += gatewayNaptEnabled ? "true" : "false";
+#if IP_NAPT
+    j += ",\"napt_compiled\":true";
+#else
+    j += ",\"napt_compiled\":false";
+#endif
+    j += ",\"ap_ip\":\"";
+    j += WiFi.softAPIP().toString();
+    j += "\",\"ap_clients\":";
+    j += String(WiFi.softAPgetStationNum());
+    j += ",\"sta_connected\":";
+    j += (WiFi.status() == WL_CONNECTED) ? "true" : "false";
+    j += ",\"sta_ip\":\"";
+    j += WiFi.localIP().toString();
+    j += "\",\"sta_ssid\":\"";
+    j += jsonEscape(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : String(""));
+    j += "\"";
     j += ",\"mode\":";
     j += String(static_cast<int>(gatewayDnsMode));
     j += ",\"strict\":";
