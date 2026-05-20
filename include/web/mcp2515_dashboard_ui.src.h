@@ -609,6 +609,14 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
         </div>
         <label class="tgl"><input type="checkbox" id="gw-enabled" onchange="saveGatewayDns()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
+      <div id="gw-diag" style="margin:2px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:11px">
+        <div><span style="color:var(--tx3)">AP</span> <span id="gw-diag-ap">--</span></div>
+        <div><span style="color:var(--tx3)">STA</span> <span id="gw-diag-sta">--</span></div>
+        <div><span style="color:var(--tx3)">NAT</span> <span id="gw-diag-nat">--</span></div>
+        <div><span style="color:var(--tx3)">DNS</span> <span id="gw-diag-dns">--</span></div>
+        <div><span style="color:var(--tx3)">Upstream</span> <span id="gw-diag-upstream">--</span></div>
+        <div><span style="color:var(--tx3)">Clients</span> <span id="gw-diag-clients">--</span></div>
+      </div>
       <div style="margin:4px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2)">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
           <button class="sniff-btn gateway-profile-btn" id="gw-profile-safe" onclick="applyGatewayProfile('safe')">Conservative Mode</button>
@@ -1200,7 +1208,20 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA test timestamp: 2026-05-20 19:33:58 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u6d4b\u8bd5\u65f6\u95f4\uff1a2026-05-20 19:33:58 +08:00'
+  'Version: 3.0.0-beta.5\nOTA test timestamp: 2026-05-20 19:33:58 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u6d4b\u8bd5\u65f6\u95f4\uff1a2026-05-20 19:33:58 +08:00',
+  'AP':'AP',
+  'STA':'STA',
+  'DNS':'DNS',
+  'Upstream':'\u4e0a\u6e38',
+  'Clients':'\u5ba2\u6237\u7aef',
+  'compiled':'\u5df2\u7f16\u8bd1',
+  'not compiled':'\u672a\u7f16\u8bd1',
+  'no task':'\u65e0\u4efb\u52a1',
+  'bind ok':'\u7ed1\u5b9a\u6b63\u5e38',
+  'bind wait':'\u7b49\u5f85\u7ed1\u5b9a',
+  'fd':'fd',
+  'none':'\u65e0',
+  'whitelist override blacklist':'\u767d\u540d\u5355\u8986\u76d6\u9ed1\u540d\u5355'
 });
 const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
 Object.assign(I18N_EN,{
@@ -2797,10 +2818,17 @@ async function loadGatewayStatus(){
       if(d.dns_resp_cache)statusText+=' \u2022 DNS cache '+(d.dns_resp_hits||0)+'/'+((d.dns_resp_hits||0)+(d.dns_resp_misses||0));
       $('gw-status').textContent=statusText;
       $('gw-status').style.color=d.enabled?(d.nat?'var(--ok)':'var(--acc)'):'var(--tx3)';
+      setText('gw-diag-ap',(d.ap_ip||'0.0.0.0'));
+      setText('gw-diag-sta',(d.sta_connected?(d.sta_ip||'0.0.0.0'):'offline'));
+      setText('gw-diag-nat',trText(d.napt_compiled?'compiled':'not compiled')+' / '+trText(d.nat?'on':'waiting'));
+      setText('gw-diag-dns',trText(d.dns_task_active?'task':'no task')+' / '+trText(d.dns_bind_ok?'bind ok':'bind wait')+' / '+trText('fd')+' '+(d.dns_sock===undefined?'--':d.dns_sock));
+      setText('gw-diag-upstream',d.upstream_dns||'none');
+      setText('gw-diag-clients',(d.ap_clients||0)+' client'+((d.ap_clients||0)===1?'':'s'));
       var sp=$('gw-strict-panel');if(sp)sp.style.display=d.strict?'block':'none';
       var ss=$('gw-strict-stats');if(ss)ss.textContent='allowed '+(d.allowed_ips||0)+' \u2022 blocked '+(d.blocked_ips||0);
     }catch(e){
       if($('gw-status')){$('gw-status').textContent='Gateway not available';$('gw-status').style.color='var(--tx3)';}
+      ['gw-diag-ap','gw-diag-sta','gw-diag-nat','gw-diag-dns','gw-diag-upstream','gw-diag-clients'].forEach(id=>setText(id,'--'));
     }
   });
 }

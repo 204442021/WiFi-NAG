@@ -40,7 +40,7 @@ static constexpr size_t kDashGatewayMaxWhitelistEntries = 200;
 static constexpr size_t kDashGatewayMaxBlacklistEntries = 100;
 static constexpr size_t kDashGatewayMaxCidrEntries = 64;
 static constexpr size_t kDashGatewayRuleMaxLen = 96;
-static constexpr size_t kDashGatewayDnsCacheEntries = 64;
+static constexpr size_t kDashGatewayDnsCacheEntries = 128;
 static constexpr size_t kDashGatewayDnsCacheRespMax = 512;
 static constexpr uint32_t kDashGatewayDnsCacheTtlSec = 60;
 // Allowed IP TTL: drop entries unseen for this long, so list never overflows
@@ -722,8 +722,10 @@ static bool dashGatewayDnsAllowed(const String &domain)
 static String dashGatewayDnsDecisionJson(const String &input)
 {
     String domain = dashGatewayNormalizeDomain(input);
-    bool blacklisted = dashGatewayCompiledRuleMatchLen(domain, gatewayBlacklistRules, gatewayBlacklistRuleCount) > 0;
-    bool whitelisted = dashGatewayCompiledRuleMatchLen(domain, gatewayWhitelistRules, gatewayWhitelistRuleCount) > 0;
+    size_t blockLen = dashGatewayCompiledRuleMatchLen(domain, gatewayBlacklistRules, gatewayBlacklistRuleCount);
+    size_t allowLen = dashGatewayCompiledRuleMatchLen(domain, gatewayWhitelistRules, gatewayWhitelistRuleCount);
+    bool blacklisted = blockLen > 0;
+    bool whitelisted = allowLen > 0;
     bool allowed = domain.length() > 0 && dashGatewayDnsAllowed(domain);
     String j = "{\"domain\":\"";
     j += jsonEscape(domain.c_str());
@@ -744,6 +746,8 @@ static String dashGatewayDnsDecisionJson(const String &input)
         j += "gateway disabled";
     else if (domain.length() == 0)
         j += "empty domain";
+    else if (whitelisted && blacklisted && allowLen >= blockLen)
+        j += "whitelist override blacklist";
     else if (gatewayDnsMode == DASH_DNS_BLACKLIST)
         j += blacklisted ? "matched blacklist" : "not in blacklist";
     else
@@ -1875,6 +1879,10 @@ static void dashGatewayOnApStarted(esp_netif_t *apNetif)
         return;
     dashGatewayConfigureApDns(apNetif);
     dashGatewayStartDns();
+    ESP_LOGI(kDashGatewayTag, "AP ready ip=%s clients=%u dns=%s",
+             WiFi.softAPIP().toString().c_str(),
+             static_cast<unsigned>(WiFi.softAPgetStationNum()),
+             gatewayApDnsConfigured ? "configured" : "pending");
 }
 
 static void dashGatewayOnStaConnected(esp_netif_t *staNetif, esp_netif_t *apNetif)
@@ -1900,6 +1908,19 @@ static void dashGatewayOnStaConnected(esp_netif_t *staNetif, esp_netif_t *apNeti
 #else
     ESP_LOGW(kDashGatewayTag, "CONFIG_LWIP_IPV4_NAPT is disabled");
 #endif
+    char upstreamLog[16] = "none";
+    if (gatewayUpstreamDns != IPADDR_NONE && gatewayUpstreamDns != 0)
+    {
+        struct in_addr a;
+        a.s_addr = gatewayUpstreamDns;
+        const char *p = inet_ntoa(a);
+        if (p)
+            snprintf(upstreamLog, sizeof(upstreamLog), "%s", p);
+    }
+    ESP_LOGI(kDashGatewayTag, "STA ready ip=%s upstream_dns=%s nat=%s",
+             WiFi.localIP().toString().c_str(),
+             upstreamLog,
+             gatewayNaptEnabled ? "on" : "waiting");
 }
 
 static String dashGatewayStatusJson()
@@ -1921,6 +1942,22 @@ static String dashGatewayStatusJson()
     j += gatewayEnabled ? "true" : "false";
     j += ",\"nat\":";
     j += gatewayNaptEnabled ? "true" : "false";
+#if IP_NAPT
+    j += ",\"napt_compiled\":true";
+#else
+    j += ",\"napt_compiled\":false";
+#endif
+    j += ",\"ap_ip\":\"";
+    j += WiFi.softAPIP().toString();
+    j += "\",\"ap_clients\":";
+    j += String(WiFi.softAPgetStationNum());
+    j += ",\"sta_connected\":";
+    j += (WiFi.status() == WL_CONNECTED) ? "true" : "false";
+    j += ",\"sta_ip\":\"";
+    j += WiFi.localIP().toString();
+    j += "\",\"sta_ssid\":\"";
+    j += jsonEscape(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : String(""));
+    j += "\"";
     j += ",\"mode\":";
     j += String(static_cast<int>(gatewayDnsMode));
     j += ",\"strict\":";
