@@ -396,6 +396,13 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
         </div>
         <div class="profile-note" id="profile-note">Available profiles depend on the selected hardware.</div>
       </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">AP/EAP Auto Restore</div>
+          <div class="setting-desc">Optional 0x293 Autosteer enable restore after AP/EAP ACC drop. Default off.</div>
+        </div>
+        <label class="tgl"><input type="checkbox" id="ap-restore-tgl" onchange="saveApRestore()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+      </div>
     </div>
   </div>
 
@@ -874,7 +881,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
 Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-20 20:48:17 +08:00</div>
+OTA timestamp: 2026-05-20 22:03:26 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
@@ -896,7 +903,7 @@ OTA timestamp: 2026-05-20 20:48:17 +08:00</div>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
     <div class="modal-title" id="ota-test-title">OTA Test v2</div>
     <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-20 20:48:17 +08:00</div>
+OTA timestamp: 2026-05-20 22:03:26 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
     </div>
@@ -1208,7 +1215,7 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-20 20:48:17 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-20 20:48:17 +08:00',
+  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-20 22:03:26 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-20 22:03:26 +08:00',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -1851,6 +1858,7 @@ function updateFsdControl(d){
   const enabled=!!d.ci;
   state.can=enabled;
   const tgl=$('fsd-tgl');if(tgl)tgl.checked=enabled;
+  const apRestore=$('ap-restore-tgl');if(apRestore&&typeof d.apAutoRestore!=='undefined')apRestore.checked=!!d.apAutoRestore;
   setText('fsd-meta',enabled?'On':'Off');
   const st=$('fsd-status');
   if(st){
@@ -1872,6 +1880,17 @@ async function saveFsdSwitch(){
     if(st){st.textContent=state.can?'Built-in FSD chain is active.':'FSD chain and CAN injection are disabled.';st.style.color=state.can?'var(--ok)':'var(--tx3)';}
     poll();
   }catch(e){if(st){st.textContent='Save failed';st.style.color='var(--err)';}}
+}
+
+async function saveApRestore(){
+  const t=$('ap-restore-tgl');
+  if(!t)return;
+  try{
+    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'apRestore='+(t.checked?'1':'0')});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+  }catch(e){
+    addLog('AP/EAP auto restore save failed','le');
+  }
 }
 
 function sniffBusPrefix(){return state.hw===0?0x0800:0x1000;}

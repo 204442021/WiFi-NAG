@@ -122,6 +122,7 @@ static bool forceActivate = false;
 // 复刻 2.5.2 真车固件默认行为（kDashApGateDefaultEnabled=false）。
 // 当 true 时回到 3.0 早期行为：必须 Parked||APActive||Summoning 才允许注入。
 static bool apInjectionGate = false;
+static bool apAutoRestore = false;
 // 上一次 dashPostProcessFrame 实际发送成功的时间戳，便于 /status 区分"在持续发"与
 // "发了几次就停"，与 framesSent 单调累计计数互补。跨 CAN 任务 / dashboard 任务读写。
 static volatile uint32_t lastInjectMs = 0;
@@ -284,11 +285,76 @@ struct DashWriteProbe
 };
 static DashWriteProbe dashWriteProbe;
 
+struct DashApRestoreState
+{
+    bool gearSeen = false;
+    uint8_t gearRaw = 0xFF;
+    bool brakeSeen = false;
+    uint8_t brakePedalRaw = 0xFF;
+    bool chassisSeen = false;
+    bool brakeTorqueActive = false;
+    uint8_t anyVdcActive = 0xFF;
+    bool tcActive = false;
+    uint8_t vdcControlActive = 0xFF;
+    bool steerSeen = false;
+    uint8_t steerValidity = 0xFF;
+    int16_t steerAngleX10 = 0;
+    int16_t steerSpeedX10 = 0;
+    unsigned long steerMs = 0;
+    bool dasSettingsSeen = false;
+    uint8_t dasSettingsData[8] = {};
+    unsigned long dasSettingsMs = 0;
+    uint8_t dasSettingsCounter = 0xFF;
+    bool dasAccSeen = false;
+    uint8_t dasAccState = 0xFF;
+    unsigned long dasAccDropMs = 0;
+    unsigned long lastDropHandledMs = 0;
+    unsigned long lastTxMs = 0;
+};
+static DashApRestoreState apRestoreState;
+static constexpr unsigned long kDashApRestoreTxCooldownMs = 1000;
+
 static int8_t dashFrameMux(const CanFrame &frame)
 {
     if ((frame.id == 1006 || frame.id == 1021) && frame.dlc > 0)
         return static_cast<int8_t>(readMuxID(frame));
     return -1;
+}
+
+static uint32_t dashReadBitsLE(const CanFrame &frame, uint8_t startBit, uint8_t bitCount)
+{
+    uint32_t value = 0;
+    for (uint8_t i = 0; i < bitCount; i++)
+    {
+        uint8_t bit = startBit + i;
+        if (bit >= frame.dlc * 8)
+            break;
+        if (frame.data[bit / 8] & (1U << (bit % 8)))
+            value |= 1UL << i;
+    }
+    return value;
+}
+
+static bool dashReadBit(const CanFrame &frame, uint8_t bit)
+{
+    return dashReadBitsLE(frame, bit, 1) != 0;
+}
+
+static uint8_t dashCounterChecksumByte(const CanFrame &frame, uint8_t checksumByteIndex = 7)
+{
+    if (checksumByteIndex >= frame.dlc)
+        return 0;
+    uint16_t sum = static_cast<uint16_t>(frame.id & 0xFF) +
+                   static_cast<uint16_t>((frame.id >> 8) & 0xFF);
+    for (uint8_t i = 0; i < frame.dlc; i++)
+    {
+        if (i == checksumByteIndex)
+            sum += frame.data[i] & 0x0F;
+        else
+            sum += frame.data[i];
+    }
+    uint8_t checksum = static_cast<uint8_t>((0x10 - (sum & 0x0F)) & 0x0F);
+    return static_cast<uint8_t>((checksum << 4) | (frame.data[checksumByteIndex] & 0x0F));
 }
 
 static void dashResetWriteProbe()
@@ -407,6 +473,54 @@ static void dashRecordCanFrame(const CanFrame &f, char dir)
     recCount = idx + 1;
     if (recCount >= REC_CAP)
         dashStopRecordingAndSave("frame limit");
+}
+
+static void dashRecordApRestoreFrame(const CanFrame &frame, unsigned long now)
+{
+    if (frame.id == 280 && frame.dlc >= 3)
+    {
+        apRestoreState.gearSeen = true;
+        apRestoreState.gearRaw = readDIGear(frame);
+        apRestoreState.brakeSeen = true;
+        apRestoreState.brakePedalRaw = static_cast<uint8_t>(dashReadBitsLE(frame, 19, 2));
+        return;
+    }
+    if (frame.id == 0x148 && frame.dlc >= 8)
+    {
+        apRestoreState.chassisSeen = true;
+        apRestoreState.brakeTorqueActive = dashReadBit(frame, 15);
+        apRestoreState.anyVdcActive = static_cast<uint8_t>(dashReadBitsLE(frame, 34, 2));
+        apRestoreState.tcActive = dashReadBit(frame, 42);
+        apRestoreState.vdcControlActive = static_cast<uint8_t>(dashReadBitsLE(frame, 60, 3));
+        return;
+    }
+    if (frame.id == 0x129 && frame.dlc >= 6)
+    {
+        uint16_t angleRaw = static_cast<uint16_t>(dashReadBitsLE(frame, 16, 14));
+        uint16_t speedRaw = static_cast<uint16_t>(dashReadBitsLE(frame, 32, 14));
+        apRestoreState.steerSeen = true;
+        apRestoreState.steerValidity = static_cast<uint8_t>(dashReadBitsLE(frame, 30, 2));
+        apRestoreState.steerAngleX10 = angleRaw == 0x3FFF ? 0 : static_cast<int16_t>(angleRaw) - 8192;
+        apRestoreState.steerSpeedX10 = static_cast<int16_t>(static_cast<int32_t>(speedRaw) * 5 - 40960);
+        apRestoreState.steerMs = now;
+        return;
+    }
+    if (frame.id == 0x293 && frame.dlc >= 8)
+    {
+        apRestoreState.dasSettingsSeen = true;
+        apRestoreState.dasSettingsMs = now;
+        memcpy(apRestoreState.dasSettingsData, frame.data, 8);
+        apRestoreState.dasSettingsCounter = frame.data[7] & 0x0F;
+        return;
+    }
+    if (frame.id == 0x389 && frame.dlc >= 4)
+    {
+        uint8_t accState = static_cast<uint8_t>((frame.data[3] >> 2) & 0x1F);
+        if (apRestoreState.dasAccSeen && apRestoreState.dasAccState > 0 && accState == 0)
+            apRestoreState.dasAccDropMs = now;
+        apRestoreState.dasAccSeen = true;
+        apRestoreState.dasAccState = accState;
+    }
 }
 
 static bool dashWriteProbeMatches(const CanFrame &frame)
@@ -533,6 +647,7 @@ static void mcpDashOnFrame(const CanFrame &f)
     }
     if (f.id == 1016 && f.dlc > 5)
         followDist = (f.data[5] & 0xE0) >> 5;
+    dashRecordApRestoreFrame(f, now);
     dashRecordCanFrame(f, 'R');
     if (dashWriteProbe.active && dashWriteProbe.state != kDashWriteProbeFailed && dashWriteProbeMatches(f))
     {
@@ -618,9 +733,67 @@ static bool dashInjectionActive()
     return canActive && dashApInjectionAllowed();
 }
 
+static bool dashApRestoreBraking()
+{
+    return (apRestoreState.brakeSeen && apRestoreState.brakePedalRaw == 1) ||
+           (apRestoreState.chassisSeen && apRestoreState.brakeTorqueActive);
+}
+
+static bool dashApRestoreStabilityBlocked()
+{
+    return apRestoreState.chassisSeen &&
+           (apRestoreState.anyVdcActive == 1 || apRestoreState.vdcControlActive > 0 ||
+            apRestoreState.tcActive);
+}
+
+static void dashTryApAutoRestore(const CanFrame &trigger, CanDriver &driver)
+{
+    if (trigger.id != 0x389 || !apAutoRestore)
+        return;
+
+    unsigned long now = millis();
+    if (!apRestoreState.dasAccDropMs ||
+        apRestoreState.lastDropHandledMs == apRestoreState.dasAccDropMs ||
+        now - apRestoreState.dasAccDropMs > 250)
+        return;
+
+    apRestoreState.lastDropHandledMs = apRestoreState.dasAccDropMs;
+    if (!apRestoreState.dasSettingsSeen || now - apRestoreState.dasSettingsMs > 5000)
+        return;
+    if (!apRestoreState.gearSeen || apRestoreState.gearRaw != 4)
+        return;
+    if (dashApRestoreBraking() || dashApRestoreStabilityBlocked())
+        return;
+    if (apRestoreState.lastTxMs && now - apRestoreState.lastTxMs < kDashApRestoreTxCooldownMs)
+        return;
+
+    CanFrame modified{};
+    modified.id = 0x293;
+    modified.bus = CAN_BUS_DEFAULT;
+    modified.dlc = 8;
+    memcpy(modified.data, apRestoreState.dasSettingsData, 8);
+    CanFrame original = modified;
+    setBit(modified, 38, true);
+    setBit(modified, 24, true);
+    uint8_t counter = static_cast<uint8_t>(((apRestoreState.dasSettingsCounter == 0xFF ? 0 : apRestoreState.dasSettingsCounter) + 1) & 0x0F);
+    modified.data[7] = static_cast<uint8_t>((modified.data[7] & 0xF0) | counter);
+    modified.data[7] = dashCounterChecksumByte(modified);
+    if (!framePayloadChanged(original, modified))
+        return;
+
+    bool ok = driver.send(modified);
+    apRestoreState.lastTxMs = now;
+    if (ok)
+        lastInjectMs = now;
+    dashRecordCanFrame(modified, ok ? 'T' : 'E');
+    dashLog("[AP] Auto-restore " + String(ok ? "TX OK" : "TX FAIL"));
+}
+
 static void dashPostProcessFrame(const CanFrame &original, CanDriver &driver)
 {
 #if defined(DASH_FSD_252_COMPAT) && DASH_FSD_252_COMPAT
+    dashTryApAutoRestore(original, driver);
+
     if ((hwMode != 0 && hwMode != 1) || !dashInjectionActive())
         return;
     const uint32_t activationId = hwMode == 0 ? 1006 : 1021;
@@ -717,6 +890,7 @@ static void dashSavePrefs()
     prefs.putBool("can", canActive);
     prefs.putBool("force_act", forceActivate);
     prefs.putBool("ap_gate", apInjectionGate);
+    prefs.putBool("ap_rst", apAutoRestore);
     prefs.putBool("sp_auto", dashSpeedProfileAuto);
     prefs.putUChar("sp_sel", dashManualSpeedProfile);
     prefs.putBool("eprn", dashHandler ? (bool)dashHandler->enablePrint : true);
@@ -857,6 +1031,7 @@ static void dashLoadPrefs()
         prefs.putBool("force_act", forceActivate);
     // 默认 false：复刻 2.5.2 真车固件行为（apInjectionGate=false 注入无条件放行）。
     apInjectionGate = prefs.getBool("ap_gate", false);
+    apAutoRestore = prefs.getBool("ap_rst", false);
     dashSpeedProfileAuto = prefs.getBool("sp_auto", true);
     dashManualSpeedProfile = dashClampSpeedProfileForHw(hwMode, prefs.getUChar("sp_sel", 1));
     hw3OffsetSlew = prefs.getBool("h3_slw", false);
@@ -1194,6 +1369,8 @@ static void handleStatus()
     j += apGateOpen ? "true" : "false";
     j += ",\"apGateEnabled\":";
     j += apInjectionGate ? "true" : "false";
+    j += ",\"apAutoRestore\":";
+    j += apAutoRestore ? "true" : "false";
     j += ",\"ia\":";
     j += dashInjectionActive() ? "true" : "false";
     j += ",\"lastInjectMs\":";
@@ -1374,6 +1551,15 @@ static void handleConfig()
         if (v != dashSpeedProfileAuto)
             dashLog("[CFG] Speed profile " + String(v ? "AUTO" : "MANUAL"));
         dashSpeedProfileAuto = v;
+    }
+    if (server.hasArg("apRestore"))
+    {
+        bool v = server.arg("apRestore") == "1";
+        if (v != apAutoRestore)
+        {
+            apAutoRestore = v;
+            dashLog("[CFG] AP/EAP auto-restore " + String(v ? "ON" : "OFF"));
+        }
     }
     if (server.hasArg("hw3OffsetSlew"))
     {
