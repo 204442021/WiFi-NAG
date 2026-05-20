@@ -2319,11 +2319,10 @@ async function uploadFirmware(){
     $('ota-upload-btn').disabled=false;
   };
   xhr.open('POST','/update',true,otaUser,otaPass);
+  xhr.setRequestHeader('Content-Type','application/octet-stream');
   xhr.setRequestHeader('X-File-Name',otaFile.name);
   xhr.setRequestHeader('X-File-Size',otaFile.size);
-  const form=new FormData();
-  form.append('firmware',otaFile);
-  xhr.send(form);
+  xhr.send(otaFile);
 }
 
 async function poll(){

@@ -826,6 +826,59 @@ void WebServer::readPostBody(httpd_req_t *req)
     parseArgs(body);
 }
 
+bool WebServer::readUploadBody(httpd_req_t *req, const Route &route)
+{
+    if (!route.uploadHandler)
+        return true;
+
+    std::string filename = "firmware.bin";
+    size_t filenameLen = httpd_req_get_hdr_value_len(req, "X-File-Name");
+    if (filenameLen > 0)
+    {
+        std::vector<char> header(filenameLen + 1, 0);
+        if (httpd_req_get_hdr_value_str(req, "X-File-Name", header.data(), header.size()) == ESP_OK && header[0])
+            filename = header.data();
+    }
+
+    upload_ = {};
+    upload_.status = UPLOAD_FILE_START;
+    upload_.filename = filename.c_str();
+    upload_.totalSize = 0;
+    route.uploadHandler();
+
+    uint8_t buf[2048];
+    size_t remaining = req->content_len;
+    while (remaining > 0)
+    {
+        size_t want = std::min(remaining, sizeof(buf));
+        int got = httpd_req_recv(req, reinterpret_cast<char *>(buf), want);
+        if (got == HTTPD_SOCK_ERR_TIMEOUT)
+            continue;
+        if (got <= 0)
+        {
+            upload_.status = UPLOAD_FILE_ABORTED;
+            upload_.buf = nullptr;
+            upload_.currentSize = 0;
+            route.uploadHandler();
+            return false;
+        }
+
+        upload_.status = UPLOAD_FILE_WRITE;
+        upload_.buf = buf;
+        upload_.currentSize = static_cast<size_t>(got);
+        upload_.totalSize += static_cast<size_t>(got);
+        route.uploadHandler();
+        remaining -= static_cast<size_t>(got);
+        yield();
+    }
+
+    upload_.status = UPLOAD_FILE_END;
+    upload_.buf = nullptr;
+    upload_.currentSize = 0;
+    route.uploadHandler();
+    return true;
+}
+
 esp_err_t WebServer::handle(httpd_req_t *req)
 {
     currentReq_ = req;
@@ -845,8 +898,6 @@ esp_err_t WebServer::handle(httpd_req_t *req)
         if (httpd_req_get_url_query_str(req, query.data(), query.size()) == ESP_OK)
             parseArgs(query.data());
     }
-    if (req->method == HTTP_POST)
-        readPostBody(req);
 
     const Route *route = findRoute(routeUri.c_str(), static_cast<httpd_method_t>(req->method));
     if (!route || !route->handler)
@@ -854,6 +905,13 @@ esp_err_t WebServer::handle(httpd_req_t *req)
         send(404, "text/plain", "Not found");
         currentReq_ = nullptr;
         return ESP_OK;
+    }
+    if (req->method == HTTP_POST)
+    {
+        if (route->uploadHandler)
+            readUploadBody(req, *route);
+        else
+            readPostBody(req);
     }
     route->handler();
     currentReq_ = nullptr;
