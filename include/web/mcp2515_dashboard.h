@@ -1647,9 +1647,9 @@ static void handleOtaResult()
         server.requestAuthentication();
         return;
     }
-    bool ok = !Update.hasError();
+    bool ok = Update.isFinished() && !Update.hasError();
     server.sendHeader("Connection", "close");
-    server.send(ok ? 200 : 500, "text/plain", ok ? "OK" : "FAIL");
+    server.send(ok ? 200 : 500, "text/plain", ok ? "OK" : Update.errorString());
     if (ok)
     {
         dashLog("[OTA] Upload complete -- rebooting");
@@ -1658,7 +1658,8 @@ static void handleOtaResult()
     }
     else
     {
-        dashLog("[OTA] Upload FAILED");
+        dashLog("[OTA] Upload FAILED: " + String(Update.errorString()));
+        Update.abort();
     }
 }
 
@@ -1672,19 +1673,30 @@ static void handleOtaUpload()
         dashLog("[OTA] Receiving: " + String(upload.filename.c_str()));
         esp_task_wdt_deinit();
         if (!Update.begin(UPDATE_SIZE_UNKNOWN))
-            dashLog("[OTA] Begin failed");
+            dashLog("[OTA] Begin failed: " + String(Update.errorString()));
     }
     else if (upload.status == UPLOAD_FILE_WRITE)
     {
         if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
-            dashLog("[OTA] Write error");
+        {
+            dashLog("[OTA] Write error: " + String(Update.errorString()));
+            Update.abort();
+        }
     }
     else if (upload.status == UPLOAD_FILE_END)
     {
-        if (Update.end(true))
+        if (upload.totalSize > 0 && Update.end(true) && Update.isFinished())
             dashLog("[OTA] Done: " + String(upload.totalSize) + " bytes");
         else
-            dashLog("[OTA] End failed");
+        {
+            dashLog("[OTA] End failed: " + String(Update.errorString()));
+            Update.abort();
+        }
+    }
+    else if (upload.status == UPLOAD_FILE_ABORTED)
+    {
+        dashLog("[OTA] Upload aborted");
+        Update.abort();
     }
 }
 

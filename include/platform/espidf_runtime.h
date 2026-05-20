@@ -568,6 +568,7 @@ private:
     esp_err_t handle(httpd_req_t *req);
     void parseArgs(const std::string &query);
     void readPostBody(httpd_req_t *req);
+    bool readUploadBody(httpd_req_t *req, const Route &route);
     const Route *findRoute(const char *uri, httpd_method_t method) const;
     void applyHeaders();
 
