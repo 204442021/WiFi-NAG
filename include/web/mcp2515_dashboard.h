@@ -312,6 +312,7 @@ struct DashApRestoreState
     unsigned long lastTxMs = 0;
 };
 static DashApRestoreState apRestoreState;
+static constexpr unsigned long kDashApRestoreTxCooldownMs = 1000;
 
 static int8_t dashFrameMux(const CanFrame &frame)
 {
@@ -732,20 +733,6 @@ static bool dashInjectionActive()
     return canActive && dashApInjectionAllowed();
 }
 
-static bool dashApRestoreSteeringBlocked(unsigned long now)
-{
-    if (!apRestoreState.steerSeen || now - apRestoreState.steerMs > 1000 ||
-        apRestoreState.steerValidity != 1)
-        return false;
-    int32_t angle = apRestoreState.steerAngleX10;
-    if (angle < 0)
-        angle = -angle;
-    int32_t rate = apRestoreState.steerSpeedX10;
-    if (rate < 0)
-        rate = -rate;
-    return angle > 800 || rate > 1800;
-}
-
 static bool dashApRestoreBraking()
 {
     return (apRestoreState.brakeSeen && apRestoreState.brakePedalRaw == 1) ||
@@ -775,10 +762,9 @@ static void dashTryApAutoRestore(const CanFrame &trigger, CanDriver &driver)
         return;
     if (!apRestoreState.gearSeen || apRestoreState.gearRaw != 4)
         return;
-    if (dashApRestoreBraking() || dashApRestoreStabilityBlocked() ||
-        dashApRestoreSteeringBlocked(now))
+    if (dashApRestoreBraking() || dashApRestoreStabilityBlocked())
         return;
-    if (apRestoreState.lastTxMs && now - apRestoreState.lastTxMs < 1500)
+    if (apRestoreState.lastTxMs && now - apRestoreState.lastTxMs < kDashApRestoreTxCooldownMs)
         return;
 
     CanFrame modified{};
