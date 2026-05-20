@@ -722,8 +722,10 @@ static bool dashGatewayDnsAllowed(const String &domain)
 static String dashGatewayDnsDecisionJson(const String &input)
 {
     String domain = dashGatewayNormalizeDomain(input);
-    bool blacklisted = dashGatewayCompiledRuleMatchLen(domain, gatewayBlacklistRules, gatewayBlacklistRuleCount) > 0;
-    bool whitelisted = dashGatewayCompiledRuleMatchLen(domain, gatewayWhitelistRules, gatewayWhitelistRuleCount) > 0;
+    size_t blockLen = dashGatewayCompiledRuleMatchLen(domain, gatewayBlacklistRules, gatewayBlacklistRuleCount);
+    size_t allowLen = dashGatewayCompiledRuleMatchLen(domain, gatewayWhitelistRules, gatewayWhitelistRuleCount);
+    bool blacklisted = blockLen > 0;
+    bool whitelisted = allowLen > 0;
     bool allowed = domain.length() > 0 && dashGatewayDnsAllowed(domain);
     String j = "{\"domain\":\"";
     j += jsonEscape(domain.c_str());
@@ -744,6 +746,8 @@ static String dashGatewayDnsDecisionJson(const String &input)
         j += "gateway disabled";
     else if (domain.length() == 0)
         j += "empty domain";
+    else if (whitelisted && blacklisted && allowLen >= blockLen)
+        j += "whitelist override blacklist";
     else if (gatewayDnsMode == DASH_DNS_BLACKLIST)
         j += blacklisted ? "matched blacklist" : "not in blacklist";
     else

@@ -1192,7 +1192,20 @@ Object.assign(I18N_ZH,{
   'Restored. Reboot required.':'\u5df2\u8fd8\u539f\uff0c\u9700\u8981\u91cd\u542f\u3002',
   'Raise UI_mppSpeedLimit on CAN 760 byte 6 to a target km/h based on what the gateway is currently sending. Same bucket layout as HW3. Only writes when target is higher than current - never lowers.':'\u6839\u636e\u7f51\u5173\u5f53\u524d\u53d1\u9001\u7684 UI_mppSpeedLimit (CAN 760 byte 6) \u6309\u5206\u6bb5\u8868\u5f97\u5230\u76ee\u6807 km/h\uff0c\u4ec5\u5728\u76ee\u6807\u503c\u9ad8\u4e8e\u5f53\u524d\u503c\u65f6\u5199\u56de\uff0c\u4ece\u4e0d\u964d\u4f4e\u3002\u5206\u6bb5\u5e03\u5c40\u4e0e HW3 \u4e00\u81f4\u3002',
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
-  'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002'
+  'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
+  'AP':'AP',
+  'STA':'STA',
+  'DNS':'DNS',
+  'Upstream':'\u4e0a\u6e38',
+  'Clients':'\u5ba2\u6237\u7aef',
+  'compiled':'\u5df2\u7f16\u8bd1',
+  'not compiled':'\u672a\u7f16\u8bd1',
+  'no task':'\u65e0\u4efb\u52a1',
+  'bind ok':'\u7ed1\u5b9a\u6b63\u5e38',
+  'bind wait':'\u7b49\u5f85\u7ed1\u5b9a',
+  'fd':'fd',
+  'none':'\u65e0',
+  'whitelist override blacklist':'\u767d\u540d\u5355\u8986\u76d6\u9ed1\u540d\u5355'
 });
 const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
 Object.assign(I18N_EN,{
@@ -2776,8 +2789,8 @@ async function loadGatewayStatus(){
       $('gw-status').style.color=d.enabled?(d.nat?'var(--ok)':'var(--acc)'):'var(--tx3)';
       setText('gw-diag-ap',(d.ap_ip||'0.0.0.0'));
       setText('gw-diag-sta',(d.sta_connected?(d.sta_ip||'0.0.0.0'):'offline'));
-      setText('gw-diag-nat',(d.napt_compiled?'compiled':'not compiled')+' / '+(d.nat?'on':'waiting'));
-      setText('gw-diag-dns',(d.dns_task_active?'task':'no task')+' / '+(d.dns_bind_ok?'bind ok':'bind wait')+' / fd '+(d.dns_sock===undefined?'--':d.dns_sock));
+      setText('gw-diag-nat',trText(d.napt_compiled?'compiled':'not compiled')+' / '+trText(d.nat?'on':'waiting'));
+      setText('gw-diag-dns',trText(d.dns_task_active?'task':'no task')+' / '+trText(d.dns_bind_ok?'bind ok':'bind wait')+' / '+trText('fd')+' '+(d.dns_sock===undefined?'--':d.dns_sock));
       setText('gw-diag-upstream',d.upstream_dns||'none');
       setText('gw-diag-clients',(d.ap_clients||0)+' client'+((d.ap_clients||0)===1?'':'s'));
       var sp=$('gw-strict-panel');if(sp)sp.style.display=d.strict?'block':'none';
