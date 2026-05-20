@@ -396,6 +396,13 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
         </div>
         <div class="profile-note" id="profile-note">Available profiles depend on the selected hardware.</div>
       </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">AP/EAP Auto Restore</div>
+          <div class="setting-desc">Optional 0x293 Autosteer enable restore after AP/EAP ACC drop. Default off.</div>
+        </div>
+        <label class="tgl"><input type="checkbox" id="ap-restore-tgl" onchange="saveApRestore()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+      </div>
     </div>
   </div>
 
@@ -1798,6 +1805,7 @@ function updateFsdControl(d){
   const enabled=!!d.ci;
   state.can=enabled;
   const tgl=$('fsd-tgl');if(tgl)tgl.checked=enabled;
+  const apRestore=$('ap-restore-tgl');if(apRestore&&typeof d.apAutoRestore!=='undefined')apRestore.checked=!!d.apAutoRestore;
   setText('fsd-meta',enabled?'On':'Off');
   const st=$('fsd-status');
   if(st){
@@ -1819,6 +1827,17 @@ async function saveFsdSwitch(){
     if(st){st.textContent=state.can?'Built-in FSD chain is active.':'FSD chain and CAN injection are disabled.';st.style.color=state.can?'var(--ok)':'var(--tx3)';}
     poll();
   }catch(e){if(st){st.textContent='Save failed';st.style.color='var(--err)';}}
+}
+
+async function saveApRestore(){
+  const t=$('ap-restore-tgl');
+  if(!t)return;
+  try{
+    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'apRestore='+(t.checked?'1':'0')});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+  }catch(e){
+    addLog('AP/EAP auto restore save failed','le');
+  }
 }
 
 function sniffBusPrefix(){return state.hw===0?0x0800:0x1000;}
