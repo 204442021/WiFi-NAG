@@ -40,7 +40,7 @@ static constexpr size_t kDashGatewayMaxWhitelistEntries = 200;
 static constexpr size_t kDashGatewayMaxBlacklistEntries = 100;
 static constexpr size_t kDashGatewayMaxCidrEntries = 64;
 static constexpr size_t kDashGatewayRuleMaxLen = 96;
-static constexpr size_t kDashGatewayDnsCacheEntries = 64;
+static constexpr size_t kDashGatewayDnsCacheEntries = 128;
 static constexpr size_t kDashGatewayDnsCacheRespMax = 512;
 static constexpr uint32_t kDashGatewayDnsCacheTtlSec = 60;
 // Allowed IP TTL: drop entries unseen for this long, so list never overflows
