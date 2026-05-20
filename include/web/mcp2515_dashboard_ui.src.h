@@ -865,7 +865,6 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 <span class="ok">&#x2705;</span> DNS &#x8FC7;&#x6EE4;&#x4E0E;&#x89E3;&#x6790;&#x6548;&#x7387;
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
-OTA Test v3
 Version: 3.0.0-beta.5
 OTA test timestamp: 2026-05-20 19:43:00 +08:00</div>
     <div class="modal-actions">
