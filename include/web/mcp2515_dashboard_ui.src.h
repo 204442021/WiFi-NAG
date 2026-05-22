@@ -62,7 +62,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 
 /* FPS bar */
 .fps-bar{margin:14px 16px 0;height:3px;background:var(--bd);border-radius:2px;overflow:hidden}
-.fps-fill{height:100%;background:var(--acc);border-radius:2px;transition:width .5s;width:0%}
+.fps-fill{height:100%;background:var(--ok);border-radius:2px;transition:width .5s,background .3s;width:0%}
 
 /* Status grid */
 .stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:14px 16px 0}
@@ -71,19 +71,32 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 .stat-val{font-size:14px;font-weight:600;color:var(--tx)}
 .v-ok{color:var(--ok)}.v-err{color:var(--err)}.v-acc{color:var(--acc)}.v-dim{color:var(--tx3)}.v-warn{color:var(--warn)}
 .stat-wide{grid-column:span 3}
-.sys-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sys-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .sys-item{background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;min-width:0}
 .sys-lbl{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
 .sys-val{font-size:12px;font-weight:600;color:var(--tx);word-break:break-word}
 .sys-wide{grid-column:span 2}
+.sys-full{grid-column:span 2}
 .sys-bar{height:4px;background:var(--bd);border-radius:2px;overflow:hidden;margin-top:6px}
-.sys-fill{height:100%;background:var(--acc);border-radius:2px;transition:width .3s;width:0}
+.sys-fill{height:100%;background:var(--ok);border-radius:2px;transition:width .3s,background .3s;width:0}
+.sys-fill.warn{background:var(--warn)}
+.sys-fill.err{background:var(--err)}
+.sys-fill.dim{background:var(--tx3)}
+.sys-mini{display:flex;align-items:center;gap:6px;min-width:0}
+.sys-mini-bar{height:4px;flex:1;background:var(--bd);border-radius:2px;overflow:hidden}
+.sys-mini-fill{height:100%;background:var(--ok);border-radius:2px;width:0;transition:width .3s,background .3s}
+.sys-mini-fill.warn{background:var(--warn)}
+.sys-mini-fill.err{background:var(--err)}
+@media (min-width:900px){
+  .sys-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .sys-full{grid-column:span 4}
+}
 .task-table{width:100%;border-collapse:collapse;margin-top:4px;font-family:'SF Mono','Courier New',monospace;font-size:11px;table-layout:fixed}
 .task-table th{color:var(--tx3);font-size:9px;text-transform:uppercase;letter-spacing:.5px;text-align:left;font-weight:600;padding:3px 4px;border-bottom:1px solid var(--bd)}
 .task-table td{padding:4px;border-bottom:1px solid var(--bd);color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .task-table tr:last-child td{border-bottom:0}
 .task-table .task-name{color:var(--tx);font-weight:600;width:34%}
-.task-table .task-core{width:15%}.task-table .task-cpu{width:18%}.task-table .task-stack{width:18%}.task-table .task-state{width:15%}
+.task-table .task-core{width:13%}.task-table .task-cpu{width:22%}.task-table .task-stack{width:17%}.task-table .task-state{width:14%}
 .sys-monitor{display:flex;align-items:center;justify-content:flex-end;gap:8px}
 .sys-monitor span{white-space:nowrap}
 .sys-monitor .tgl{margin-left:0}
@@ -159,7 +172,7 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
   color:var(--tx2);font-size:11px;font-weight:600;cursor:pointer;transition:all .18s;font-family:inherit}
 .sniff-btn.paused{border-color:var(--warn);color:var(--warn)}
 .sniff-btn:hover:not(.paused){border-color:var(--bd2);color:var(--tx)}
-.gateway-profile-btn.active,.gateway-upstream-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
+.gateway-profile-btn.active,.gateway-upstream-btn.active,.hw3-enc-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
 .sniff-box{background:var(--bg);border:1px solid var(--bd);border-radius:9px;
   max-height:250px;overflow-y:auto;font-family:'SF Mono','Courier New',monospace}
 .sniff-box::-webkit-scrollbar{width:4px}
@@ -244,7 +257,7 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .ota-sub{font-size:11px;color:var(--tx3)}
 .ota-progress{margin-top:12px;display:none}
 .ota-bar{height:4px;background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:6px}
-.ota-fill{height:100%;background:var(--acc);border-radius:2px;transition:width .3s;width:0%}
+.ota-fill{height:100%;background:var(--ok);border-radius:2px;transition:width .3s,background .3s;width:0%}
 .ota-status{font-size:11px;color:var(--acc);text-align:center}
 .ota-btn{width:100%;margin-top:10px;padding:10px;border:1px solid var(--accBd);border-radius:9px;
   background:var(--accBg);color:var(--acc);font-family:inherit;font-size:13px;font-weight:600;
@@ -261,17 +274,80 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 
 /* Recorder */
 .rec-bar{height:4px;background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:6px}
-.rec-fill{height:100%;background:var(--err);border-radius:2px;transition:width .3s;width:0%}
+.rec-fill{height:100%;background:var(--ok);border-radius:2px;transition:width .3s,background .3s;width:0%}
 .rec-info{display:flex;justify-content:space-between;font-size:11px;color:var(--tx3);margin-bottom:10px}
 
 /* Warning */
 .warn-bar{margin:0 16px 14px;padding:10px 14px;border-radius:9px;
   background:var(--errBg);border:1px solid var(--errBd);font-size:11px;color:var(--err);line-height:1.7}
 .foot{text-align:center;padding:8px 16px 20px;font-size:11px;color:var(--tx3)}
+.ui-mode-strip{margin:10px 16px 0;padding:8px;border:1px solid var(--bd);border-radius:10px;background:var(--card);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ui-mode-label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);font-weight:700}
+.ui-mode-buttons{display:flex;gap:4px;flex-wrap:wrap}
+.ui-mode-btn{padding:6px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);
+  color:var(--tx2);font-size:11px;font-weight:700;font-family:inherit;cursor:pointer}
+.ui-mode-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
+.ui-mode-detected{font-size:10px;color:var(--tx3);margin-left:auto}
+.car-side{display:none}
+.hw3-enc-buttons{display:none;gap:6px;flex-wrap:wrap}
+body.ui-car{width:100vw;max-width:none;margin:0;padding-left:180px;font-size:16px;line-height:1.55}
+body.ui-car .car-side{position:fixed;left:0;top:0;bottom:0;width:168px;display:flex;flex-direction:column;gap:8px;
+  padding:14px 10px;background:linear-gradient(180deg,var(--card),var(--bg));border-right:1px solid var(--bd);z-index:1000}
+body.ui-car .car-side-title{font-size:16px;font-weight:800;color:var(--tx);margin:4px 6px 6px}
+body.ui-car .car-side-sub{font-size:10px;color:var(--tx3);margin:-5px 6px 6px;line-height:1.35}
+body.ui-car .car-nav-btn{min-height:46px;padding:10px 12px;border:1px solid var(--bd);border-radius:11px;background:var(--card2);
+  color:var(--tx2);font-size:13px;font-weight:800;text-align:left;font-family:inherit;cursor:pointer}
+body.ui-car .car-nav-btn:active,body.ui-car .car-nav-btn:hover{border-color:var(--acc);color:var(--acc);background:var(--accBg)}
+body.ui-car .hdr{padding:18px 24px 0}
+body.ui-car .hdr-title{font-size:24px}
+body.ui-car .theme-btn,body.ui-car .sniff-btn,body.ui-car .btn,body.ui-car .hw-btn,body.ui-car .ui-mode-btn{min-height:44px;font-size:14px;padding:10px 14px;border-radius:11px}
+body.ui-car .ui-mode-strip{margin:12px 24px 0;padding:10px 12px;gap:10px}
+body.ui-car .stat-grid{margin:16px 24px 0;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+body.ui-car .stat{padding:12px 14px;border-radius:13px}
+body.ui-car .stat-lbl{font-size:11px}
+body.ui-car .stat-val{font-size:16px}
+body.ui-car .card{margin:0 24px 14px;padding:18px;border-radius:15px}
+body.ui-car .card-title{font-size:15px}
+body.ui-car .card-meta,body.ui-car .subsec-meta{font-size:12px}
+body.ui-car .subsec{margin-top:18px;padding-top:16px}
+body.ui-car .subsec-head{grid-template-columns:minmax(180px,1fr) auto auto}
+body.ui-car .subsec-title{font-size:15px}
+body.ui-car .setting-row{padding:16px 0;gap:14px}
+body.ui-car .setting-name{font-size:15px}
+body.ui-car .setting-desc{font-size:12px}
+body.ui-car .sniff-input{min-height:44px;font-size:15px;padding:10px 12px;border-radius:11px}
+body.ui-car textarea.sniff-input{min-height:120px}
+body.ui-car .sys-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+body.ui-car .sys-wide{grid-column:span 2}
+body.ui-car .sys-full{grid-column:span 4}
+body.ui-car .modal-card{width:min(100%,560px);border-radius:16px}
+body.ui-car .owner-modal-card{width:min(100%,520px)}
+body.ui-car #hw3-enc{display:none}
+body.ui-car .hw3-enc-buttons{display:flex}
+body.ui-car *{transition:none !important;animation:none !important;scroll-behavior:auto !important}
+@media (max-width:900px){
+  body.ui-car{padding-left:0}
+  body.ui-car .car-side{display:none}
+  body.ui-car .stat-grid{grid-template-columns:repeat(3,1fr);margin-left:16px;margin-right:16px}
+  body.ui-car .card,body.ui-car .hdr,body.ui-car .ui-mode-strip{margin-left:16px;margin-right:16px}
+}
 body:not(.can-debug-on) .can-debug-panel{display:none !important}
 </style>
 </head>
 <body>
+
+<nav class="car-side" aria-label="Car quick navigation">
+  <div class="car-side-title">EVtools</div>
+  <div class="car-side-sub" id="car-side-mode">Auto UI</div>
+  <button class="car-nav-btn" onclick="scrollCarSection('status-panel')">Status</button>
+  <button class="car-nav-btn" onclick="scrollCarSection('config-hardware-section')">HW</button>
+  <button class="car-nav-btn" onclick="scrollCarSection('hw3-speed-section')">Speed</button>
+  <button class="car-nav-btn" onclick="scrollCarSection('wifi-internet-section')">WiFi</button>
+  <button class="car-nav-btn" onclick="scrollCarSection('gateway-section')">DNS</button>
+  <button class="car-nav-btn" onclick="scrollCarSection('system-card')">System</button>
+  <button class="car-nav-btn" onclick="scrollCarSection('can-debug-card')">CAN</button>
+</nav>
 
 <div class="hdr">
   <div class="hdr-top">
@@ -289,9 +365,19 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
   </div>
 </div>
 
+<div class="ui-mode-strip" id="ui-mode-strip">
+  <span class="ui-mode-label">UI Mode</span>
+  <div class="ui-mode-buttons">
+    <button type="button" class="ui-mode-btn" data-ui-mode="auto" onclick="setUiMode('auto',true)">Auto</button>
+    <button type="button" class="ui-mode-btn" data-ui-mode="car" onclick="setUiMode('car',true)">Car</button>
+    <button type="button" class="ui-mode-btn" data-ui-mode="phone" onclick="setUiMode('phone',true)">Phone</button>
+  </div>
+  <span class="ui-mode-detected" id="ui-mode-detected">Detected: Phone</span>
+</div>
+
 <div class="fps-bar"><div class="fps-fill" id="fps-fill"></div></div>
 
-<div class="stat-grid">
+<div class="stat-grid" id="status-panel">
   <div class="stat"><div class="stat-lbl">CAN Bus</div><div class="stat-val" id="s-can">Offline</div></div>
   <div class="stat"><div class="stat-lbl">FSD Switch</div><div class="stat-val v-dim" id="s-inj">--</div></div>
   <div class="stat"><div class="stat-lbl" title="Frames received per second">CAN Frame Rate</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
@@ -308,7 +394,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 
 <div style="height:12px"></div>
 
-<div class="card">
+<div class="card" id="system-card">
   <div class="card-hdr">
     <div class="card-title">System Status <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Hardware and runtime health reported by the ESP32 firmware.">i</span></div>
     <div class="card-meta sys-monitor"><span id="sys-summary">Monitoring off</span><label class="tgl" title="Enable live hardware status sampling"><input type="checkbox" id="sys-monitor-tgl" onchange="toggleSystemMonitor()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label></div>
@@ -316,31 +402,33 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
   <div class="sys-grid">
     <div class="sys-item"><div class="sys-lbl">Chip</div><div class="sys-val" id="sys-chip">--</div></div>
     <div class="sys-item"><div class="sys-lbl">CPU</div><div class="sys-val" id="sys-cpu">--</div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">Clock / Bus</div><div class="sys-val" id="sys-clocks">--</div></div>
     <div class="sys-item sys-wide">
       <div class="sys-lbl">CPU Load</div><div class="sys-val" id="sys-cpu-load">--</div>
       <div class="sys-bar"><div class="sys-fill" id="sys-cpu0-fill"></div></div>
       <div class="sys-bar" style="margin-top:4px"><div class="sys-fill" id="sys-cpu1-fill"></div></div>
     </div>
-    <div class="sys-item sys-wide">
-      <div class="sys-lbl">Task Load</div>
-      <table class="task-table">
-        <thead><tr><th class="task-name">task</th><th class="task-core">core</th><th class="task-cpu">cpu%</th><th class="task-stack">stack</th><th class="task-state">state</th></tr></thead>
-        <tbody id="sys-task-rows"><tr><td colspan="5" class="v-dim">--</td></tr></tbody>
-      </table>
-    </div>
-    <div class="sys-item sys-wide"><div class="sys-lbl">Board Specs</div><div class="sys-val" id="sys-board">--</div></div>
     <div class="sys-item"><div class="sys-lbl">Temperature</div><div class="sys-val" id="sys-temp">--</div></div>
     <div class="sys-item"><div class="sys-lbl">Reset</div><div class="sys-val" id="sys-reset">--</div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">Board Specs</div><div class="sys-val" id="sys-board">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">Uptime / Core</div><div class="sys-val" id="sys-runtime">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">Tasks</div><div class="sys-val" id="sys-tasks">--</div></div>
     <div class="sys-item sys-wide">
       <div class="sys-lbl">Heap RAM</div><div class="sys-val" id="sys-heap">--</div>
       <div class="sys-bar"><div class="sys-fill" id="sys-heap-fill"></div></div>
     </div>
+    <div class="sys-item sys-wide">
+      <div class="sys-lbl">Internal RAM</div><div class="sys-val" id="sys-internal">--</div>
+      <div class="sys-bar"><div class="sys-fill" id="sys-internal-fill"></div></div>
+    </div>
     <div class="sys-item"><div class="sys-lbl">Largest Block</div><div class="sys-val" id="sys-largest">--</div></div>
     <div class="sys-item"><div class="sys-lbl">Min Free Heap</div><div class="sys-val" id="sys-minheap">--</div></div>
-    <div class="sys-item"><div class="sys-lbl">PSRAM</div><div class="sys-val" id="sys-psram">--</div></div>
-    <div class="sys-item"><div class="sys-lbl">Tasks</div><div class="sys-val" id="sys-tasks">--</div></div>
     <div class="sys-item sys-wide">
-      <div class="sys-lbl">Flash</div><div class="sys-val" id="sys-flash">--</div>
+      <div class="sys-lbl">PSRAM</div><div class="sys-val" id="sys-psram">--</div>
+      <div class="sys-bar"><div class="sys-fill" id="sys-psram-fill"></div></div>
+    </div>
+    <div class="sys-item sys-wide">
+      <div class="sys-lbl">Flash / App</div><div class="sys-val" id="sys-flash">--</div>
       <div class="sys-bar"><div class="sys-fill" id="sys-app-fill"></div></div>
     </div>
     <div class="sys-item sys-wide">
@@ -353,16 +441,23 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
     <div class="sys-item"><div class="sys-lbl">Bluetooth LE</div><div class="sys-val" id="sys-ble">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">Wireless</div><div class="sys-val" id="sys-wireless">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">MAC / Firmware</div><div class="sys-val" id="sys-fw">--</div></div>
+    <div class="sys-item sys-full">
+      <div class="sys-lbl">Task Load</div>
+      <table class="task-table">
+        <thead><tr><th class="task-name">task</th><th class="task-core">core</th><th class="task-cpu">cpu%</th><th class="task-stack">stack</th><th class="task-state">state</th></tr></thead>
+        <tbody id="sys-task-rows"><tr><td colspan="5" class="v-dim">--</td></tr></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
-<div class="card">
+<div class="card" id="config-card">
   <div class="card-hdr">
     <div class="card-title">Configuration <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Device settings for hardware mode, WiFi, CAN pins, logging and backup.">i</span></div>
     <div class="card-meta">Device settings</div>
   </div>
 
-  <div class="subsec" data-subkey="config-hardware">
+  <div class="subsec" id="config-hardware-section" data-subkey="config-hardware">
     <div class="subsec-head">
       <div class="subsec-title">Hardware <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Select the autopilot hardware generation and matching speed profile set.">i</span></div>
       <div class="subsec-meta">Autopilot generation</div>
@@ -447,6 +542,10 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
           <option value="1">PCT4</option>
           <option value="0">KPH5</option>
         </select>
+        <div class="hw3-enc-buttons" id="hw3-enc-buttons">
+          <button type="button" class="sniff-btn hw3-enc-btn" data-v="1" onclick="setHw3Encoding(1)">PCT4</button>
+          <button type="button" class="sniff-btn hw3-enc-btn" data-v="0" onclick="setHw3Encoding(0)">KPH5</button>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">
         <div class="stat" style="padding:8px"><div class="stat-lbl">Fused</div><div class="stat-val" id="hw3-fused">0</div></div>
@@ -533,7 +632,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
     </div>
   </div>
 
-  <div class="subsec" data-subkey="config-wifi-hotspot">
+  <div class="subsec" id="wifi-hotspot-section" data-subkey="config-wifi-hotspot">
     <div class="subsec-head">
       <div class="subsec-title">WiFi Hotspot <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" data-help-target="ap-info" title="Configure the device hotspot name, password and visibility. Saved in NVS.">i</span></div>
       <div class="subsec-meta"><span id="ap-stored" style="margin-right:8px"></span><span id="ap-clients">0 clients</span></div>
@@ -562,7 +661,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
     </div>
   </div>
 
-  <div class="subsec" data-subkey="config-wifi-internet">
+  <div class="subsec" id="wifi-internet-section" data-subkey="config-wifi-internet">
     <div class="subsec-head">
       <div class="subsec-title">WiFi Internet <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Up to 4 saved networks. The device tries each in turn until one connects.">i</span></div>
       <div class="subsec-meta"><span id="wifi-status">Not configured</span></div>
@@ -602,7 +701,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
     </div>
   </div>
 
-  <div class="subsec" data-subkey="config-gateway">
+  <div class="subsec" id="gateway-section" data-subkey="config-gateway">
     <div class="subsec-head">
       <div class="subsec-title">STA-AP Gateway <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Routes hotspot clients through the configured WiFi Internet uplink, with DNS filtering.">i</span></div>
       <div class="subsec-meta"><span id="gw-status">Gateway status unavailable</span></div>
@@ -874,7 +973,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
 Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-22 12:14:08 +08:00</div>
+OTA timestamp: 2026-05-22 17:43:18 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
@@ -896,7 +995,7 @@ OTA timestamp: 2026-05-22 12:14:08 +08:00</div>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
     <div class="modal-title" id="ota-test-title">OTA Test v2</div>
     <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-22 12:14:08 +08:00</div>
+OTA timestamp: 2026-05-22 17:43:18 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
     </div>
@@ -1194,7 +1293,7 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-22 12:14:08 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-22 12:14:08 +08:00',
+  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-22 17:43:18 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-22 17:43:18 +08:00',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -1226,7 +1325,24 @@ Object.assign(I18N_ZH,{
   'Auto uses DHCP DNS from the connected WiFi; public DNS can avoid stale slow/fail counters from a bad router DNS.':'\u81ea\u52a8\u4f7f\u7528\u5df2\u8fde\u63a5 WiFi \u5206\u914d\u7684 DHCP DNS\uff1b\u516c\u5171 DNS \u53ef\u4ee5\u907f\u514d\u8def\u7531\u5668 DNS \u5f02\u5e38\u5bfc\u81f4\u7684 slow/fail \u7d2f\u8ba1\u8bef\u5224\u3002',
   'Using Ali DNS 223.5.5.5.':'\u4f7f\u7528\u963f\u91cc DNS 223.5.5.5\u3002',
   'Using Tencent DNS 119.29.29.29.':'\u4f7f\u7528\u817e\u8baf DNS 119.29.29.29\u3002',
-  'Enter a custom upstream DNS IPv4 address.':'\u8f93\u5165\u81ea\u5b9a\u4e49\u4e0a\u6e38 DNS IPv4 \u5730\u5740\u3002'
+  'Enter a custom upstream DNS IPv4 address.':'\u8f93\u5165\u81ea\u5b9a\u4e49\u4e0a\u6e38 DNS IPv4 \u5730\u5740\u3002',
+  'UI Mode':'UI \u6a21\u5f0f',
+  'Car':'\u8f66\u673a',
+  'Phone':'\u624b\u673a',
+  'Manual':'\u624b\u52a8',
+  'Detected: Car':'\u5df2\u8bc6\u522b\uff1a\u8f66\u673a',
+  'Detected: Phone':'\u5df2\u8bc6\u522b\uff1a\u624b\u673a',
+  'Manual: Car':'\u624b\u52a8\uff1a\u8f66\u673a',
+  'Manual: Phone':'\u624b\u52a8\uff1a\u624b\u673a',
+  'Auto UI':'\u81ea\u52a8 UI',
+  'Status':'\u72b6\u6001',
+  'Speed':'\u9650\u901f',
+  'System':'\u7cfb\u7edf',
+  'Clock / Bus':'\u65f6\u949f / \u603b\u7ebf',
+  'Internal RAM':'\u5185\u90e8 RAM',
+  'Uptime / Core':'\u8fd0\u884c / \u6838\u5fc3',
+  'Flash / App':'Flash / App',
+  'Car UI: status 7s, network diagnostics 45s, heavy lists manual only':'\u8f66\u673a UI\uff1a\u72b6\u6001 7 \u79d2\uff0c\u7f51\u7edc\u8bca\u65ad 45 \u79d2\uff0c\u91cd\u5217\u8868\u4ec5\u624b\u52a8'
 });
 const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
 Object.assign(I18N_EN,{
@@ -1344,7 +1460,82 @@ let dashboardStaIp='';
 let canDebugEnabled=localStorage.getItem('canDebug')==='1';
 let canDebugPollTimers=[];
 let networkPerformanceMode=localStorage.getItem('netPerfMode')!=='0';
+let uiModeSetting=localStorage.getItem('uiMode')||'auto';
+let uiModeEffective='phone';
 const pollLocks={};
+
+function normalizeUiMode(v){
+  v=String(v||'auto').toLowerCase();
+  return (v==='car'||v==='phone'||v==='auto')?v:'auto';
+}
+function detectAutoUiMode(){
+  const ua=navigator.userAgent||'';
+  const w=Math.max(window.innerWidth||0,screen.width||0);
+  const h=Math.max(window.innerHeight||0,screen.height||0);
+  const touch=(navigator.maxTouchPoints||0)>0||('ontouchstart' in window);
+  const landscape=w>h;
+  const wide=w>=900;
+  const shortPanel=h<=900;
+  const android=/Android/i.test(ua);
+  const webview=/\bwv\b|Version\/4\.0/i.test(ua);
+  if(touch&&landscape&&wide&&(shortPanel||android||webview))return 'car';
+  return 'phone';
+}
+function queryUiMode(){
+  const m=String(location.search||'').match(/[?&]ui=(auto|car|phone)\b/i);
+  return m?m[1].toLowerCase():'';
+}
+function resolveUiMode(){
+  const forced=normalizeUiMode(queryUiMode()||uiModeSetting);
+  return forced==='auto'?detectAutoUiMode():forced;
+}
+function isCarUiActive(){
+  return uiModeEffective==='car';
+}
+function setCollapsedPanel(el,collapsed,persist){
+  if(!el)return;
+  el.classList.toggle('collapsed',!!collapsed);
+  const btn=el.querySelector('.card-min-btn,.subsec-btn');
+  if(btn)btn.textContent=collapsed?'Show':'Hide';
+  if(persist&&el.dataset.collapseKey)localStorage.setItem(el.dataset.collapseKey,collapsed?'1':'0');
+}
+function expandCarEssentials(){
+  ['system-card','config-card'].forEach(id=>setCollapsedPanel($(id),false,true));
+  ['config-hardware-section','hw3-speed-section','wifi-internet-section','gateway-section'].forEach(id=>setCollapsedPanel($(id),false,true));
+}
+function updateUiModeUi(){
+  document.querySelectorAll('.ui-mode-btn').forEach(btn=>{
+    const active=(btn.dataset.uiMode||'auto')===uiModeSetting;
+    btn.classList.toggle('active',active);
+    btn.setAttribute('aria-pressed',active?'true':'false');
+  });
+  const label=uiModeEffective==='car'?'Detected: Car':'Detected: Phone';
+  const el=$('ui-mode-detected');if(el){el.textContent=(uiModeSetting==='auto'?label:('Manual: '+(uiModeEffective==='car'?'Car':'Phone')));applyDashboardI18n(el);}
+  const side=$('car-side-mode');if(side){side.textContent=trText(uiModeSetting==='auto'?'Auto':'Manual')+' / '+trText(uiModeEffective==='car'?'Car':'Phone');}
+}
+function applyUiMode(){
+  uiModeSetting=normalizeUiMode(uiModeSetting);
+  uiModeEffective=resolveUiMode();
+  if(document.body){
+    document.body.classList.toggle('ui-car',uiModeEffective==='car');
+    document.body.classList.toggle('ui-phone',uiModeEffective!=='car');
+  }
+  updateUiModeUi();
+}
+function setUiMode(mode,persist){
+  uiModeSetting=normalizeUiMode(mode);
+  if(persist)localStorage.setItem('uiMode',uiModeSetting);
+  applyUiMode();
+  if(isCarUiActive())expandCarEssentials();
+  startDashboardPolling();
+}
+function scrollCarSection(id){
+  const el=$(id);if(!el)return;
+  const card=el.closest&&el.closest('.card');
+  if(card)setCollapsedPanel(card,false,true);
+  if(el.classList&&el.classList.contains('subsec'))setCollapsedPanel(el,false,true);
+  el.scrollIntoView({behavior:isCarUiActive()?'auto':'smooth',block:'start'});
+}
 
 function stopDashboardPolling(){
   if(dashboardPollStopped)return;
@@ -1373,10 +1564,12 @@ function updateNetworkPerformanceUi(){
   const t=$('net-perf-tgl');if(t)t.checked=networkPerformanceMode;
   const s=$('net-perf-status');
   if(s){
-    s.textContent=networkPerformanceMode
-      ?'ON: status 5s, network diagnostics 30s, heavy lists manual only'
-      :'OFF: status 2s, network diagnostics 10s, DNS/filter lists auto refresh';
-    s.style.color=networkPerformanceMode?'var(--ok)':'var(--warn)';
+    s.textContent=isCarUiActive()
+      ?'Car UI: status 7s, network diagnostics 45s, heavy lists manual only'
+      :(networkPerformanceMode
+        ?'ON: status 5s, network diagnostics 30s, heavy lists manual only'
+        :'OFF: status 2s, network diagnostics 10s, DNS/filter lists auto refresh');
+    s.style.color=(networkPerformanceMode||isCarUiActive())?'var(--ok)':'var(--warn)';
     applyDashboardI18n(s);
   }
 }
@@ -1386,11 +1579,12 @@ function clearDashboardPollingIntervals(){
 }
 function startDashboardPolling(){
   clearDashboardPollingIntervals();
-  const fast=!networkPerformanceMode;
-  dashboardPollTimers.push(intervalVisible(poll,fast?2000:5000));
-  dashboardPollTimers.push(intervalVisible(loadWifiStatus,fast?10000:30000));
-  dashboardPollTimers.push(intervalVisible(loadApStatus,fast?10000:30000));
-  dashboardPollTimers.push(intervalVisible(loadGatewayStatus,fast?10000:30000));
+  const car=isCarUiActive();
+  const fast=!networkPerformanceMode&&!car;
+  dashboardPollTimers.push(intervalVisible(poll,car?7000:(fast?2000:5000)));
+  dashboardPollTimers.push(intervalVisible(loadWifiStatus,car?45000:(fast?10000:30000)));
+  dashboardPollTimers.push(intervalVisible(loadApStatus,car?45000:(fast?10000:30000)));
+  dashboardPollTimers.push(intervalVisible(loadGatewayStatus,car?45000:(fast?10000:30000)));
   if(fast){
     dashboardPollTimers.push(intervalVisible(loadWifiNetworks,30000));
     dashboardPollTimers.push(intervalVisible(loadGatewayBlocked,5000));
@@ -1404,7 +1598,7 @@ function setNetworkPerformanceMode(enabled,persist){
   startDashboardPolling();
   if(dashboardVisible()){
     poll();loadWifiStatus();loadApStatus();loadGatewayStatus();
-    if(!networkPerformanceMode){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
+    if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
   }
 }
 
@@ -1504,7 +1698,9 @@ function initCardMinimizers(){
     };
     hdr.appendChild(btn);
     const stored=localStorage.getItem(key);
-    const collapsed=stored===null?true:stored==='1';
+    const titleText=(title?title.textContent:'').trim().toLowerCase();
+    const carDefaultOpen=isCarUiActive()&&(titleText.startsWith('configuration')||titleText.startsWith('system status'));
+    const collapsed=stored===null?!carDefaultOpen:stored==='1';
     card.classList.toggle('collapsed',collapsed);
     btn.textContent=collapsed?'Show':'Hide';
   });
@@ -1528,7 +1724,8 @@ function initSubsectionMinimizers(){
     };
     hdr.appendChild(btn);
     const stored=localStorage.getItem(key);
-    const collapsed=stored===null?true:stored==='1';
+    const carDefaultOpen=isCarUiActive()&&['config-hardware','config-hw3-speed','config-wifi-internet','config-gateway'].includes(explicitKey);
+    const collapsed=stored===null?!carDefaultOpen:stored==='1';
     sec.classList.toggle('collapsed',collapsed);
     btn.textContent=collapsed?'Show':'Hide';
   });
@@ -1988,12 +2185,26 @@ async function saveHw3Slew(){
 const hw3CustomMax=[45,60,75,90,105];
 const hw3HighMax=[120,150,180];
 function clampToSlot(v,max){v=parseInt(v,10);return isNaN(v)?0:Math.max(0,Math.min(max,v));}
+function updateHw3EncodingButtons(enc){
+  document.querySelectorAll('.hw3-enc-btn').forEach(btn=>{
+    const active=String(btn.dataset.v||'1')===String(enc);
+    btn.classList.toggle('active',active);
+    btn.setAttribute('aria-pressed',active?'true':'false');
+  });
+}
+function setHw3Encoding(enc){
+  const eSel=$('hw3-enc');
+  if(eSel)eSel.value=String(enc===0?0:1);
+  updateHw3EncodingButtons(enc===0?0:1);
+  saveHw3Speed();
+}
 function updateHw3SpeedControl(d){
   const cust=!!d.hw3CustomSpeed,hse=!!d.hw3HighSpeedEnable;
   const enc=parseInt(d.hw3WireEncoding,10)===0?0:1;
   const cTgl=$('hw3-cust-tgl');if(cTgl)cTgl.checked=cust;
   const hTgl=$('hw3-hs-tgl');if(hTgl)hTgl.checked=hse;
   const eSel=$('hw3-enc');if(eSel&&document.activeElement!==eSel)eSel.value=String(enc);
+  updateHw3EncodingButtons(enc);
   const ct=Array.isArray(d.hw3CustomTarget)?d.hw3CustomTarget:[];
   for(let i=0;i<5;i++){const el=$('hw3-ct-'+i);if(el&&document.activeElement!==el&&ct[i]!==undefined)el.value=clampToSlot(ct[i],hw3CustomMax[i]);}
   const hs=Array.isArray(d.hw3HighSpeedTarget)?d.hw3HighSpeedTarget:[];
@@ -2100,18 +2311,50 @@ function pct(used,total){
   total=Number(total)||0;used=Number(used)||0;
   return total>0?Math.max(0,Math.min(100,used*100/total)):0;
 }
+function clampPct(value){
+  return Math.max(0,Math.min(100,Number(value)||0));
+}
+function mixColor(a,b,t){
+  t=Math.max(0,Math.min(1,t));
+  const r=Math.round(a[0]+(b[0]-a[0])*t);
+  const g=Math.round(a[1]+(b[1]-a[1])*t);
+  const bl=Math.round(a[2]+(b[2]-a[2])*t);
+  return 'rgb('+r+','+g+','+bl+')';
+}
+function progressColor(value){
+  const v=clampPct(value);
+  const green=[22,163,74],yellow=[245,166,35],red=[220,38,38];
+  if(v<=30)return 'rgb('+green.join(',')+')';
+  if(v<=60)return mixColor(green,yellow,(v-30)/30);
+  if(v<80)return mixColor(yellow,red,(v-60)/20);
+  return 'rgb('+red.join(',')+')';
+}
+function setFillElement(el,value){
+  if(!el)return;
+  const v=Math.max(0,Math.min(100,Number(value)||0));
+  el.style.width=v+'%';
+  el.style.background=progressColor(v);
+}
 function setFill(id,value){
-  const el=$(id);if(el)el.style.width=Math.max(0,Math.min(100,value||0))+'%';
+  setFillElement($(id),value);
+}
+function taskCpuHtml(value){
+  const v=clampPct(value);
+  return '<div class="sys-mini"><span>'+escapeHtml(value)+'%</span><div class="sys-mini-bar"><div class="sys-mini-fill" style="width:'+v+'%;background:'+progressColor(v)+'"></div></div></div>';
+}
+function fmtAddr(n){
+  n=Number(n)||0;
+  return n?'0x'+n.toString(16).toUpperCase():'--';
 }
 function resetTaskStatsUi(){
   const tb=$('sys-task-rows');
   if(tb)tb.innerHTML='<tr><td colspan="5" class="v-dim">--</td></tr>';
 }
 function resetSystemStatusUi(){
-  ['sys-chip','sys-cpu','sys-board','sys-temp','sys-reset','sys-heap','sys-largest','sys-minheap','sys-psram','sys-tasks','sys-flash','sys-spiffs','sys-rssi','sys-wifi-mode','sys-apclients','sys-ble','sys-wireless','sys-fw'].forEach(id=>setText(id,'--'));
+  ['sys-chip','sys-cpu','sys-clocks','sys-board','sys-temp','sys-reset','sys-runtime','sys-heap','sys-internal','sys-largest','sys-minheap','sys-psram','sys-tasks','sys-flash','sys-spiffs','sys-rssi','sys-wifi-mode','sys-apclients','sys-ble','sys-wireless','sys-fw'].forEach(id=>setText(id,'--'));
   setText('sys-summary',trText('Monitoring off'));
   setText('sys-cpu-load',trText('off'));
-  ['sys-cpu0-fill','sys-cpu1-fill','sys-heap-fill','sys-app-fill','sys-spiffs-fill'].forEach(id=>setFill(id,0));
+  ['sys-cpu0-fill','sys-cpu1-fill','sys-heap-fill','sys-internal-fill','sys-psram-fill','sys-app-fill','sys-spiffs-fill'].forEach(id=>setFill(id,0));
   resetTaskStatsUi();
 }
 function startSystemMonitor(){
@@ -2164,7 +2407,7 @@ async function loadTaskStats(){
       tb.innerHTML=rows.map(x=>
         '<tr><td class="task-name" title="'+escapeHtml(x.task)+'">'+escapeHtml(x.task)+'</td>'+
         '<td class="task-core">'+escapeHtml(x.core)+'</td>'+
-        '<td class="task-cpu">'+escapeHtml(x.cpu)+'%</td>'+
+        '<td class="task-cpu">'+taskCpuHtml(x.cpu)+'</td>'+
         '<td class="task-stack">'+escapeHtml(x.stack)+'</td>'+
         '<td class="task-state">'+escapeHtml(x.state)+'</td></tr>'
       ).join('');
@@ -2179,14 +2422,19 @@ async function loadSystemStatus(){
     try{
       const d=await fetchPollJson('/system_status',2500);
       const heapUsed=(d.heap_total||0)-(d.heap_free||0);
+      const internalTotal=d.internal_total||d.sram_bytes||0;
+      const internalFree=d.internal_free||0;
+      const internalUsed=Math.max(0,internalTotal-internalFree);
+      const psramUsed=(d.psram_total||0)-(d.psram_free||0);
       const appUsed=d.app_used||0;
       const spiffsUsed=d.spiffs_used||0;
       setText('sys-summary',(d.module||d.chip||'ESP32')+' \u2022 '+(d.cores||'?')+' cores \u2022 '+(d.cpu_mhz||'?')+' MHz now');
       setText('sys-chip',(d.module||d.chip||'?')+' rev '+(d.revision===undefined?'?':d.revision)+' / '+(d.target||''));
-      setText('sys-cpu',(d.cores||'?')+' cores \u2022 now '+(d.cpu_mhz||'?')+' MHz \u2022 max '+(d.cpu_max_mhz||240)+' MHz');
+      setText('sys-cpu',(d.cores||'?')+' cores \u2022 '+(d.cpu_policy||'fixed')+' \u2022 max '+(d.cpu_max_mhz||240)+' MHz');
+      setText('sys-clocks','CPU '+(d.cpu_mhz||'?')+' MHz \u2022 APB '+(d.apb_mhz||'?')+' MHz \u2022 XTAL '+(d.xtal_mhz||'?')+' MHz');
       if(d.cpu_load_valid){
         setText('sys-cpu-load','CPU0 '+(d.cpu0_load||0)+'% \u2022 CPU1 '+(d.cpu1_load||0)+'%');
-        setFill('sys-cpu0-fill',d.cpu0_load||0);setFill('sys-cpu1-fill',d.cpu1_load||0);
+        setFill('sys-cpu0-fill',d.cpu0_load||0,60,85);setFill('sys-cpu1-fill',d.cpu1_load||0,60,85);
       }else{
         setText('sys-cpu-load',trText('warming up'));
         setFill('sys-cpu0-fill',0);setFill('sys-cpu1-fill',0);
@@ -2194,22 +2442,26 @@ async function loadSystemStatus(){
       setText('sys-board','SRAM '+fmtBytes(d.sram_bytes)+' + RTC '+fmtBytes(d.rtc_sram_bytes)+' \u2022 ROM '+fmtBytes(d.rom_bytes));
       setText('sys-temp',d.temp_c===null||d.temp_c===undefined?trText('unavailable'):(Number(d.temp_c).toFixed(1)+' \u00B0C'));
       setText('sys-reset',d.reset||'?');
-      setText('sys-heap',fmtBytes(d.heap_free)+' free / '+fmtBytes(d.heap_total)+' total');
+      setText('sys-runtime',fmtUp(d.uptime||0)+' \u2022 running on core '+(d.core===undefined?'?':d.core));
+      setText('sys-heap',fmtBytes(d.heap_free)+' free / '+fmtBytes(d.heap_total)+' total \u2022 used '+Math.round(pct(heapUsed,d.heap_total))+'%');
+      setText('sys-internal',internalTotal?(fmtBytes(internalFree)+' free / '+fmtBytes(internalTotal)+' total \u2022 used '+Math.round(pct(internalUsed,internalTotal))+'%'):trText('unavailable'));
       setText('sys-largest',fmtBytes(d.heap_largest));
       setText('sys-minheap',fmtBytes(d.heap_min));
-      setText('sys-psram',(d.psram_total||0)?(fmtBytes(d.psram_free)+' free / '+fmtBytes(d.psram_total)+' total'):trText('not enabled'));
+      setText('sys-psram',(d.psram_total||0)?(fmtBytes(d.psram_free)+' free / '+fmtBytes(d.psram_total)+' total \u2022 used '+Math.round(pct(psramUsed,d.psram_total))+'%'):trText('not enabled'));
       setText('sys-tasks',(d.tasks||'?')+' tasks');
-      setText('sys-flash',fmtBytes(d.flash_size)+' flash \u2022 app '+(d.app_label||'?')+' '+fmtBytes(appUsed||d.app_size)+' / '+fmtBytes(d.app_size));
-      setText('sys-spiffs',d.spiffs_ok?(fmtBytes(spiffsUsed)+' used / '+fmtBytes(d.spiffs_total)):'SPIFFS '+trText('unavailable'));
+      setText('sys-flash',fmtBytes(d.flash_size)+' flash \u2022 '+((d.flash_speed||0)/1000000||80)+' MHz \u2022 '+(d.app_label||'?')+' '+fmtBytes(appUsed)+' / '+fmtBytes(d.app_size)+' @ '+fmtAddr(d.app_addr));
+      setText('sys-spiffs',d.spiffs_ok?(fmtBytes(spiffsUsed)+' used / '+fmtBytes(d.spiffs_total)+' \u2022 '+Math.round(pct(spiffsUsed,d.spiffs_total))+'%'):'SPIFFS '+trText('unavailable'));
       setText('sys-rssi',d.wifi_rssi===null||d.wifi_rssi===undefined?(d.wifi_connected?'?':'offline'):(d.wifi_rssi+' dBm'));
       setText('sys-wifi-mode',(d.wifi_mode||'?')+' \u2022 '+(d.wifi_connected?trText('STA online'):trText('STA offline'))+' \u2022 sleep '+(d.wifi_sleep?trText('on'):trText('off')));
       setText('sys-apclients',(d.ap_clients||0)+' client'+((d.ap_clients||0)===1?'':'s'));
       setText('sys-ble',(d.ble_supported?trText('supported'):trText('not supported'))+' \u2022 '+(d.ble_enabled?trText('enabled'):trText('firmware disabled')));
       setText('sys-wireless',(d.wifi_standard||'2.4GHz Wi-Fi')+' \u2022 '+(d.wifi_max_mbps||150)+' Mbps max \u2022 BLE 5 LE');
       setText('sys-fw',(d.mac||'--')+' \u2022 '+(d.firmware||'unknown')+' \u2022 IDF '+(d.idf||'?'));
-      setFill('sys-heap-fill',pct(heapUsed,d.heap_total));
-      setFill('sys-app-fill',appUsed?pct(appUsed,d.app_size):0);
-      setFill('sys-spiffs-fill',pct(spiffsUsed,d.spiffs_total));
+      setFill('sys-heap-fill',pct(heapUsed,d.heap_total),70,85);
+      setFill('sys-internal-fill',pct(internalUsed,internalTotal),70,85);
+      setFill('sys-psram-fill',pct(psramUsed,d.psram_total),70,85);
+      setFill('sys-app-fill',pct(appUsed,d.app_size),70,90);
+      setFill('sys-spiffs-fill',pct(spiffsUsed,d.spiffs_total),70,90);
     }catch(e){
       setText('sys-summary','System status unavailable');
     }
@@ -2409,14 +2661,14 @@ async function uploadFirmware(){
   xhr.upload.onprogress=e=>{
     if(e.lengthComputable){
       const pct=Math.round(e.loaded/e.total*100);
-      fill.style.width=pct+'%';
+      setFillElement(fill,pct);
       status.textContent='Uploading... '+pct+'%';
     }
   };
   xhr.onload=()=>{
     if(xhr.status===200){
       status.textContent='Done! Device is rebooting...';
-      fill.style.width='100%';
+      setFillElement(fill,100);
       setTimeout(()=>window.location.reload(),5000);
     } else {
       status.textContent='Upload failed: '+xhr.status;
@@ -2469,7 +2721,7 @@ async function poll(){
     setText('s-soff',d.soff||'0');
     setText('s-up',fmtUp(d.up));
     setText('s-mcp-raw','EFLG: 0x'+toHex(d.eflg,2));
-    const fpsFill=$('fps-fill');if(fpsFill)fpsFill.style.width=Math.min(fpsVal/20*100,100)+'%';
+    setFill('fps-fill',Math.min(fpsVal/20*100,100));
     setText('hw-badge',HW[d.hw]||'?');
     updateGtwBadge(d.gtwap);
     try{renderEflg(d.eflg);}catch(e){}
@@ -2480,7 +2732,7 @@ async function poll(){
     const eprn=$('tgl-eprn');if(eprn&&typeof d.eprn!=='undefined')eprn.checked=d.eprn;
     if(!dashboardInitialLoaded){
       dashboardInitialLoaded=true;
-      loadWifiNetworks();loadWifiStatus();loadApStatus();loadCanPins();loadGatewayDns();loadGatewayStatus();loadGatewayBlocked();
+      loadWifiNetworks();loadWifiStatus();loadApStatus();loadCanPins();loadGatewayDns();loadGatewayStatus();if(!isCarUiActive())loadGatewayBlocked();
       if(canDebugEnabled)startCanDebugPolling();
     }
     }catch(e){}
@@ -2542,7 +2794,7 @@ async function pollRec(){
   try{
     const d=await(await fetch('/rec_status')).json();
     const pct=Math.min(d.count/d.cap*100,100);
-    $('rec-fill').style.width=pct+'%';
+    setFill('rec-fill',pct);
     $('rec-count').textContent=d.count+' / '+d.cap+' frames';
     if(d.active){
       $('rec-status').textContent='Recording...';$('rec-status').style.color='var(--err)';
@@ -3101,14 +3353,20 @@ async function clearGatewayBlocked(){
     loadGatewayStatus();
   }catch(e){}
 }
+applyUiMode();
 startDashboardPolling();
+window.addEventListener('resize',()=>{
+  const prev=uiModeEffective;
+  applyUiMode();
+  if(prev!==uiModeEffective)startDashboardPolling();
+});
 document.addEventListener('visibilitychange',()=>{
   if(!dashboardVisible())return;
   poll();loadWifiStatus();loadApStatus();loadGatewayStatus();
-  if(!networkPerformanceMode){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
+  if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
   if(canDebugEnabled){pollLog();pollSniffer();pollRec();}
 });
-orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();initSystemMonitor();positionCanDebugPanels();setCanDebugUi();updateHW4(1);updateProfileControls(1,0,true);updateSniffIdToggle();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();if(!networkPerformanceMode)loadGatewayBlocked();poll();
+orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();if(isCarUiActive())expandCarEssentials();initSystemMonitor();positionCanDebugPanels();setCanDebugUi();updateHW4(1);updateProfileControls(1,0,true);updateSniffIdToggle();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();poll();
 </script>
 </body>
 </html>

@@ -2810,6 +2810,7 @@ static void handleSystemStatus()
     j += ",\"heap_free\":" + String(heap_caps_get_free_size(MALLOC_CAP_8BIT));
     j += ",\"heap_min\":" + String(heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
     j += ",\"heap_largest\":" + String(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    j += ",\"internal_total\":" + String(heap_caps_get_total_size(MALLOC_CAP_INTERNAL));
     j += ",\"internal_free\":" + String(heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     j += ",\"psram_total\":" + String(heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
     j += ",\"psram_free\":" + String(heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
