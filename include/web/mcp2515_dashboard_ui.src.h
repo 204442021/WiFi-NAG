@@ -159,8 +159,7 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
   color:var(--tx2);font-size:11px;font-weight:600;cursor:pointer;transition:all .18s;font-family:inherit}
 .sniff-btn.paused{border-color:var(--warn);color:var(--warn)}
 .sniff-btn:hover:not(.paused){border-color:var(--bd2);color:var(--tx)}
-.gateway-mode-btn.active,.gateway-profile-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
-.gateway-mode-btn.saving{opacity:.65;pointer-events:none}
+.gateway-profile-btn.active,.gateway-upstream-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
 .sniff-box{background:var(--bg);border:1px solid var(--bd);border-radius:9px;
   max-height:250px;overflow-y:auto;font-family:'SF Mono','Courier New',monospace}
 .sniff-box::-webkit-scrollbar{width:4px}
@@ -609,6 +608,14 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
         </div>
         <label class="tgl"><input type="checkbox" id="gw-enabled" onchange="saveGatewayDns()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
+      <div class="setting-row" style="padding:8px 0">
+        <div class="setting-info">
+          <div class="setting-name">Network Performance Mode</div>
+          <div class="setting-desc">Reduce WebUI polling while AP+STA+NAPT is forwarding traffic</div>
+          <div id="net-perf-status" style="font-size:10px;color:var(--tx3);margin-top:3px">ON: status 5s, network diagnostics 30s, heavy lists manual only</div>
+        </div>
+        <label class="tgl"><input type="checkbox" id="net-perf-tgl" onchange="setNetworkPerformanceMode(this.checked,true)"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+      </div>
       <div id="gw-diag" style="margin:2px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:11px">
         <div><span style="color:var(--tx3)">AP</span> <span id="gw-diag-ap">--</span></div>
         <div><span style="color:var(--tx3)">STA</span> <span id="gw-diag-sta">--</span></div>
@@ -622,13 +629,14 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
       </div>
       <div style="margin:4px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2)">
         <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:6px">Upstream DNS</div>
-        <div style="display:grid;grid-template-columns:150px minmax(0,1fr) auto auto;gap:6px;align-items:center">
-          <select class="sniff-input" id="gw-upstream-mode" onchange="toggleGatewayUpstreamCustom()">
-            <option value="0">Auto</option>
-            <option value="1">223.5.5.5 Ali</option>
-            <option value="2">119.29.29.29 Tencent</option>
-            <option value="3">Custom</option>
-          </select>
+        <input type="hidden" id="gw-upstream-mode" value="0">
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:6px">
+          <button type="button" class="sniff-btn gateway-upstream-btn" data-mode="0" onclick="setGatewayUpstreamMode(0,true)">Auto</button>
+          <button type="button" class="sniff-btn gateway-upstream-btn" data-mode="1" onclick="setGatewayUpstreamMode(1,true)">223.5.5.5 Ali</button>
+          <button type="button" class="sniff-btn gateway-upstream-btn" data-mode="2" onclick="setGatewayUpstreamMode(2,true)">119.29.29.29 Tencent</button>
+          <button type="button" class="sniff-btn gateway-upstream-btn" data-mode="3" onclick="setGatewayUpstreamMode(3,true)">Custom</button>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center">
           <input class="sniff-input" id="gw-upstream-custom" placeholder="Custom DNS, e.g. 8.8.8.8">
           <button class="sniff-btn modal-btn-primary" onclick="saveGatewayDns()">Save DNS</button>
           <button class="sniff-btn" onclick="resetGatewayDnsStats()">Reset DNS Stats</button>
@@ -1070,15 +1078,10 @@ Object.assign(I18N_ZH,{
   'Routes hotspot clients through the configured WiFi Internet uplink, with DNS filtering.':'通过已配置的 WiFi 互联网上行为热点客户端转发，并提供 DNS 过滤。',
   'Filter List':'过滤清单','Clear':'清空','Refresh':'刷新',
   'Current: Blacklist mode - saving automatically':'当前：黑名单模式 - 自动保存中',
-  'Current: Whitelist mode - saving automatically':'当前：白名单模式 - 自动保存中',
   'Current: Blacklist mode - click mode to save immediately':'当前：黑名单模式 - 点击模式立即保存',
-  'Current: Whitelist mode - click mode to save immediately':'当前：白名单模式 - 点击模式立即保存',
   'Current: Blacklist mode - saved':'当前：黑名单模式 - 已保存',
-  'Current: Whitelist mode - saved':'当前：白名单模式 - 已保存',
   'Already in blacklist':'已在黑名单',
   'Gateway not available':'网关不可用',
-  'No blocked IPs recorded':'尚无阻断 IP 记录',
-  'Blocked IP list unavailable':'阻断 IP 列表不可用',
   // CAN Pins
   'Save CAN pins':'保存 CAN 引脚',
   'Reboot required after change':'修改后需要重启',
@@ -1208,6 +1211,10 @@ Object.assign(I18N_ZH,{
   'Reset DNS Stats':'\u6e05\u96f6 DNS \u7edf\u8ba1',
   'Resetting DNS stats...':'\u6b63\u5728\u6e05\u96f6 DNS \u7edf\u8ba1...',
   'DNS stats reset':'DNS \u7edf\u8ba1\u5df2\u6e05\u96f6',
+  'Network Performance Mode':'\u7f51\u7edc\u6027\u80fd\u6a21\u5f0f',
+  'Reduce WebUI polling while AP+STA+NAPT is forwarding traffic':'AP+STA+NAPT \u8f6c\u53d1\u6d41\u91cf\u65f6\u964d\u4f4e WebUI \u8f6e\u8be2',
+  'ON: status 5s, network diagnostics 30s, heavy lists manual only':'\u5f00\uff1a\u72b6\u6001 5 \u79d2\uff0c\u7f51\u7edc\u8bca\u65ad 30 \u79d2\uff0c\u91cd\u5217\u8868\u4ec5\u624b\u52a8',
+  'OFF: status 2s, network diagnostics 10s, DNS/filter lists auto refresh':'\u5173\uff1a\u72b6\u6001 2 \u79d2\uff0c\u7f51\u7edc\u8bca\u65ad 10 \u79d2\uff0cDNS/\u8fc7\u6ee4\u5217\u8868\u81ea\u52a8\u5237\u65b0',
   'invalid upstream DNS':'\u4e0a\u6e38 DNS \u5730\u5740\u65e0\u6548',
   'custom upstream DNS required':'\u9700\u8981\u586b\u5199\u81ea\u5b9a\u4e49\u4e0a\u6e38 DNS',
   'Auto uses DHCP DNS from the connected WiFi; public DNS can avoid stale slow/fail counters from a bad router DNS.':'\u81ea\u52a8\u4f7f\u7528\u5df2\u8fde\u63a5 WiFi \u5206\u914d\u7684 DHCP DNS\uff1b\u516c\u5171 DNS \u53ef\u4ee5\u907f\u514d\u8def\u7531\u5668 DNS \u5f02\u5e38\u5bfc\u81f4\u7684 slow/fail \u7d2f\u8ba1\u8bef\u5224\u3002',
@@ -1227,9 +1234,6 @@ const I18N_RX=[
   [/^Enabled \u2022 NAT on \u2022 blocked (\d+) \u2022 DNS cache (\d+)\/(\d+)$/,'已启用 \u2022 NAT 开启 \u2022 已阻断 $1 \u2022 DNS 缓存 $2/$3'],
   [/^Enabled \u2022 NAT waiting \u2022 blocked (\d+) \u2022 DNS cache (\d+)\/(\d+)$/,'已启用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 DNS 缓存 $2/$3'],
   [/^Disabled \u2022 NAT waiting \u2022 blocked (\d+) \u2022 DNS cache (\d+)\/(\d+)$/,'已禁用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 DNS 缓存 $2/$3'],
-  [/^Enabled \u2022 NAT on \u2022 blocked (\d+) \u2022 CIDR (\d+) \u2022 DNS cache (\d+)\/(\d+)$/,'已启用 \u2022 NAT 开启 \u2022 已阻断 $1 \u2022 CIDR $2 \u2022 DNS 缓存 $3/$4'],
-  [/^Enabled \u2022 NAT waiting \u2022 blocked (\d+) \u2022 CIDR (\d+) \u2022 DNS cache (\d+)\/(\d+)$/,'已启用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 CIDR $2 \u2022 DNS 缓存 $3/$4'],
-  [/^Disabled \u2022 NAT waiting \u2022 blocked (\d+) \u2022 CIDR (\d+) \u2022 DNS cache (\d+)\/(\d+)$/,'已禁用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 CIDR $2 \u2022 DNS 缓存 $3/$4'],
   [/^Connected: (.+) \u2022 ([0-9a-fA-F:.]+) \u2022 switch to that WiFi and open this IP$/,'已连接：$1 \u2022 $2 \u2022 请切换到该 WiFi 并打开此 IP'],
   [/^Connected: (.+) \u2022 ([0-9a-fA-F:.]+)$/,'已连接：$1 \u2022 $2'],
   [/^Add network \((\d+)\/(\d+)\)$/,'添加网络 ($1/$2)'],
@@ -1238,15 +1242,6 @@ const I18N_RX=[
   [/^(\d+) client(s?)$/,'$1 个客户端'],[/^(\d+) frames$/,'$1 帧'],[/^(\d+) \/ (\d+) frames$/,'$1 / $2 帧'],
   [/^(\d+) frames saved$/,'已保存 $1 帧'],
   [/^Up to date \(v(.+)\)$/,'已是最新 (v$1)'],[/^Update available!$/,'发现可用更新！'],
-  [/^Enabled\s*[\u2022?]\s*NAT on\s*[\u2022?]\s*blocked (\d+)\s*[\u2022?]\s*strict \(allow (\d+) \/ block (\d+)\)$/,'已启用 \u2022 NAT 开启 \u2022 已阻断 $1 \u2022 严格 (允许 $2 / 阻断 $3)'],
-  [/^Enabled\s*[\u2022?]\s*NAT waiting\s*[\u2022?]\s*blocked (\d+)\s*[\u2022?]\s*strict \(allow (\d+) \/ block (\d+)\)$/,'已启用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 严格 (允许 $2 / 阻断 $3)'],
-  [/^Disabled\s*[\u2022?]\s*NAT waiting\s*[\u2022?]\s*blocked (\d+)\s*[\u2022?]\s*strict \(allow (\d+) \/ block (\d+)\)$/,'已禁用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 严格 (允许 $2 / 阻断 $3)'],
-  [/^Enabled\s*[\u2022?]\s*NAT on\s*[\u2022?]\s*blocked (\d+)\s*[\u2022?]\s*strict \(allow (\d+) \/ block (\d+)\)\s*[\u2022?]\s*DNS cache (\d+)\/(\d+)$/,'已启用 \u2022 NAT 开启 \u2022 已阻断 $1 \u2022 严格 (允许 $2 / 阻断 $3) \u2022 DNS 缓存 $4/$5'],
-  [/^Enabled\s*[\u2022?]\s*NAT waiting\s*[\u2022?]\s*blocked (\d+)\s*[\u2022?]\s*strict \(allow (\d+) \/ block (\d+)\)\s*[\u2022?]\s*DNS cache (\d+)\/(\d+)$/,'已启用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 严格 (允许 $2 / 阻断 $3) \u2022 DNS 缓存 $4/$5'],
-  [/^Disabled\s*[\u2022?]\s*NAT waiting\s*[\u2022?]\s*blocked (\d+)\s*[\u2022?]\s*strict \(allow (\d+) \/ block (\d+)\)\s*[\u2022?]\s*DNS cache (\d+)\/(\d+)$/,'已禁用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 严格 (允许 $2 / 阻断 $3) \u2022 DNS 缓存 $4/$5'],
-  [/^Enabled\s*[\u2022?]\s*NAT on\s*[\u2022?]\s*blocked (\d+)\s*[\u2022?]\s*strict \(allow (\d+) \/ block (\d+)\)\s*[\u2022?]\s*CIDR (\d+)\s*[\u2022?]\s*DNS cache (\d+)\/(\d+)$/,'已启用 \u2022 NAT 开启 \u2022 已阻断 $1 \u2022 严格 (允许 $2 / 阻断 $3) \u2022 CIDR $4 \u2022 DNS 缓存 $5/$6'],
-  [/^Enabled\s*[\u2022?]\s*NAT waiting\s*[\u2022?]\s*blocked (\d+)\s*[\u2022?]\s*strict \(allow (\d+) \/ block (\d+)\)\s*[\u2022?]\s*CIDR (\d+)\s*[\u2022?]\s*DNS cache (\d+)\/(\d+)$/,'已启用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 严格 (允许 $2 / 阻断 $3) \u2022 CIDR $4 \u2022 DNS 缓存 $5/$6'],
-  [/^Disabled\s*[\u2022?]\s*NAT waiting\s*[\u2022?]\s*blocked (\d+)\s*[\u2022?]\s*strict \(allow (\d+) \/ block (\d+)\)\s*[\u2022?]\s*CIDR (\d+)\s*[\u2022?]\s*DNS cache (\d+)\/(\d+)$/,'已禁用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 严格 (允许 $2 / 阻断 $3) \u2022 CIDR $4 \u2022 DNS 缓存 $5/$6'],
   [/^(.+)\s*[\u2022?]\s*(\d+) cores\s*[\u2022?]\s*(\d+) MHz now$/,'$1 \u2022 $2 核 \u2022 当前 $3 MHz'],
   [/^(\d+) cores\s*[\u2022?]\s*now (\d+) MHz\s*[\u2022?]\s*max (\d+) MHz$/,'$1 核 \u2022 当前 $2 MHz \u2022 最大 $3 MHz'],
   [/^CPU0 (\d+)%\s*[\u2022?]\s*CPU1 (\d+)%$/,'CPU0 $1% \u2022 CPU1 $2%'],
@@ -1267,7 +1262,6 @@ const I18N_RX=[
   [/^Running (\d+)\/(\d+) · every (\d+) ms$/,'运行中 $1/$2 · 间隔 $3 毫秒'],
   [/^Waiting for CAN 0x([0-9A-Fa-f]+)$/,'等待 CAN 0x$1'],
   [/^Whitelist (\d+)\/(\d+)\s*[\u2022?]\s*Blacklist (\d+)\/(\d+)$/,'白名单 $1/$2 \u2022 黑名单 $3/$4'],
-  [/^Whitelist (\d+)\/(\d+)\s*[\u2022?]\s*Blacklist (\d+)\/(\d+)\s*[\u2022?]\s*CIDR (\d+)\/(\d+)$/,'白名单 $1/$2 \u2022 黑名单 $3/$4 \u2022 CIDR $5/$6'],
   [/^allowed (\d+)\s*[\u2022?]\s*blocked (\d+)$/,'允许 $1 \u2022 阻断 $2'],
   [/^Connection to (.+) lost\. Reload after reconnecting\.$/,'与 $1 的连接已断开，重新连接后请刷新。'],
   [/^Connection to (.+) lost\. Switch to your normal WiFi and open http:\/\/(.+)$/,'与 $1 的连接已断开，请切换到常用 WiFi 后打开 http://$2'],
@@ -1343,6 +1337,7 @@ let taskStatsTimer=null;
 let dashboardStaIp='';
 let canDebugEnabled=localStorage.getItem('canDebug')==='1';
 let canDebugPollTimers=[];
+let networkPerformanceMode=localStorage.getItem('netPerfMode')!=='0';
 const pollLocks={};
 
 function stopDashboardPolling(){
@@ -1366,6 +1361,45 @@ function dashboardVisible(){
 }
 function intervalVisible(fn,ms){
   return setInterval(()=>{if(dashboardVisible())fn();},ms);
+}
+
+function updateNetworkPerformanceUi(){
+  const t=$('net-perf-tgl');if(t)t.checked=networkPerformanceMode;
+  const s=$('net-perf-status');
+  if(s){
+    s.textContent=networkPerformanceMode
+      ?'ON: status 5s, network diagnostics 30s, heavy lists manual only'
+      :'OFF: status 2s, network diagnostics 10s, DNS/filter lists auto refresh';
+    s.style.color=networkPerformanceMode?'var(--ok)':'var(--warn)';
+    applyDashboardI18n(s);
+  }
+}
+function clearDashboardPollingIntervals(){
+  dashboardPollTimers.forEach(clearInterval);
+  dashboardPollTimers=[];
+}
+function startDashboardPolling(){
+  clearDashboardPollingIntervals();
+  const fast=!networkPerformanceMode;
+  dashboardPollTimers.push(intervalVisible(poll,fast?2000:5000));
+  dashboardPollTimers.push(intervalVisible(loadWifiStatus,fast?10000:30000));
+  dashboardPollTimers.push(intervalVisible(loadApStatus,fast?10000:30000));
+  dashboardPollTimers.push(intervalVisible(loadGatewayStatus,fast?10000:30000));
+  if(fast){
+    dashboardPollTimers.push(intervalVisible(loadWifiNetworks,30000));
+    dashboardPollTimers.push(intervalVisible(loadGatewayBlocked,5000));
+    dashboardPollTimers.push(intervalVisible(()=>loadGatewayDns(true),15000));
+  }
+  updateNetworkPerformanceUi();
+}
+function setNetworkPerformanceMode(enabled,persist){
+  networkPerformanceMode=!!enabled;
+  if(persist)localStorage.setItem('netPerfMode',networkPerformanceMode?'1':'0');
+  startDashboardPolling();
+  if(dashboardVisible()){
+    poll();loadWifiStatus();loadApStatus();loadGatewayStatus();
+    if(!networkPerformanceMode){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
+  }
 }
 
 function setCanDebugUi(){
@@ -2715,11 +2749,9 @@ async function saveWifi(){
   }catch(e){$('wifi-status').textContent=e.message||'Error';$('wifi-status').style.color='var(--err)';}
 }
 // 鈹€鈹€ STA-AP Gateway / DNS 鈹€鈹€
-let gatewayMode=0;
 let gatewayDnsSaving=false;
 let gatewayDnsBlackDirty=false,gatewayDnsWhiteDirty=false;
-let gatewayDnsLastBlack=null,gatewayDnsLastWhite=null,gatewayDnsLastCidr=null;
-let gatewayAdvancedUserOpen=false;
+let gatewayDnsLastBlack=null,gatewayDnsLastWhite=null;
 const gatewayDnsCacheKey='dashGatewayDnsStateV1';
 const gatewayTeslaBlacklist='tesla.cn\ntesla.com\nteslamotors.com\ntesla.services';
 const gatewayProfileSafeWhitelist='connman.vn.cloud.tesla.cn\nnav-prd-maps.tesla.cn\nmaps-cn-prd.go.tesla.services\nsignaling.vn.cloud.tesla.cn\napi-prd.vn.cloud.tesla.cn\nmedia-server-me.tesla.cn';
@@ -2753,9 +2785,6 @@ function updateGatewayTextarea(id,next,last,dirty,forceApply){
   }
   if(!dirty&&el.value!==next)el.value=next;
   return next;
-}
-function toggleGatewayAdvanced(open,forceActive){
-  gatewayAdvancedUserOpen=false;
 }
 function normalizeGatewayList(v){
   return gatewayListItems(v).join('\n');
@@ -2806,8 +2835,7 @@ function writeGatewayDnsCache(d){
   try{
     if(!d||d.ok===false)return;
     localStorage.setItem(gatewayDnsCacheKey,JSON.stringify({
-      enabled:!!d.enabled,mode:0,strict:false,
-      blacklist:d.blacklist||'',whitelist:d.whitelist||'',cidr:'',
+      blacklist:d.blacklist||'',whitelist:d.whitelist||'',
       upstream_mode:(d.upstream_mode!==undefined?d.upstream_mode:0),
       upstream_custom:d.upstream_custom||'',
       upstream_dhcp:d.upstream_dhcp||'',
@@ -2828,8 +2856,6 @@ function applyGatewayProfile(profile){
       current=removeGatewayList(current,'hermes-prd.vn.cloud.tesla.cn\nhermes-stream-prd.vn.cloud.tesla.cn');
     $('gw-whitelist').value=mergeGatewayList(current,aggressive?gatewayProfileAggressiveWhitelist:gatewayProfileSafeWhitelist);
   }
-  setGatewayMode(0,false);
-  toggleGatewayAdvanced(false,false);
   gatewayDnsBlackDirty=true;gatewayDnsWhiteDirty=true;
   updateGatewayProfileButtons();
   saveGatewayDns().catch(()=>{});
@@ -2845,7 +2871,6 @@ function applyGatewayDnsState(d,opts){
   if(d.blacklist!==undefined)gatewayDnsLastBlack=updateGatewayTextarea('gw-blacklist',d.blacklist,gatewayDnsLastBlack,opts.saved?false:gatewayDnsBlackDirty,!!opts.saved);
   if(d.whitelist!==undefined)gatewayDnsLastWhite=updateGatewayTextarea('gw-whitelist',d.whitelist,gatewayDnsLastWhite,opts.saved?false:gatewayDnsWhiteDirty,!!opts.saved);
   if(opts.saved){gatewayDnsBlackDirty=false;gatewayDnsWhiteDirty=false;}
-  setGatewayMode(0);
   updateGatewayProfileButtons();
   var ce=$('gw-list-counts');
   if(ce){
@@ -2854,22 +2879,6 @@ function applyGatewayDnsState(d,opts){
     ce.style.color=(wc>=wm||bc>=bm)?'var(--err)':'var(--tx3)';
   }
   if(!opts.cached)writeGatewayDnsCache(d);
-}
-function setGatewayMode(mode,persist){
-  gatewayMode=0;
-  const b=$('gw-mode-black'),w=$('gw-mode-white');
-  if(b&&w){
-    b.classList.toggle('active',gatewayMode===0);
-    w.classList.toggle('active',gatewayMode===1);
-    b.setAttribute('aria-pressed',gatewayMode===0?'true':'false');
-    w.setAttribute('aria-pressed',gatewayMode===1?'true':'false');
-  }
-  const hint=$('gw-mode-hint');
-  if(hint){
-    hint.textContent='Current: Blacklist mode'+(persist?' - saving automatically':' - click mode to save immediately');
-    hint.style.color=persist?'var(--acc)':'var(--tx3)';
-  }
-  if(persist)saveGatewayDns().catch(()=>{});
 }
 function setGatewayDiag(id,text,color){
   const el=$(id);if(!el)return;
@@ -2891,6 +2900,11 @@ function gatewayUpstreamModeLabel(v){
 function toggleGatewayUpstreamCustom(d){
   const sel=$('gw-upstream-mode'),inp=$('gw-upstream-custom'),hint=$('gw-upstream-hint');
   const mode=sel?Number(sel.value||0):0;
+  document.querySelectorAll('.gateway-upstream-btn').forEach(btn=>{
+    const active=Number(btn.dataset.mode||0)===mode;
+    btn.classList.toggle('active',active);
+    btn.setAttribute('aria-pressed',active?'true':'false');
+  });
   if(inp){
     const custom=mode===3;
     inp.disabled=!custom;
@@ -2904,6 +2918,12 @@ function toggleGatewayUpstreamCustom(d){
     hint.textContent=text;
     applyDashboardI18n(hint);
   }
+}
+function setGatewayUpstreamMode(mode,persist){
+  const sel=$('gw-upstream-mode');
+  if(sel)sel.value=String(mode);
+  toggleGatewayUpstreamCustom();
+  if(persist)saveGatewayDns().catch(()=>{});
 }
 async function loadGatewayStatus(){
   return runPoll('gateway_status',async()=>{
@@ -2970,20 +2990,17 @@ async function saveGatewayDns(){
   try{
     gatewayDnsSaving=true;
     if(msg){msg.textContent='Saving...';msg.style.color='var(--tx3)';}
-    document.querySelectorAll('.gateway-mode-btn').forEach(el=>el.classList.add('saving'));
     const upstreamMode=$('gw-upstream-mode')?$('gw-upstream-mode').value:'0';
     const upstreamCustom=$('gw-upstream-custom')?$('gw-upstream-custom').value:'';
-    const body='enabled='+($('gw-enabled').checked?1:0)+'&mode=0&strict=0&blacklist='+encodeURIComponent($('gw-blacklist').value)+'&whitelist='+encodeURIComponent($('gw-whitelist').value)+'&cidr=&upstream_mode='+encodeURIComponent(upstreamMode)+'&upstream_custom='+encodeURIComponent(upstreamCustom);
+    const body='enabled='+($('gw-enabled').checked?1:0)+'&blacklist='+encodeURIComponent($('gw-blacklist').value)+'&whitelist='+encodeURIComponent($('gw-whitelist').value)+'&upstream_mode='+encodeURIComponent(upstreamMode)+'&upstream_custom='+encodeURIComponent(upstreamCustom);
     const r=await fetch('/gateway_dns',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
     const d=await r.json().catch(()=>({}));
     if(!r.ok||d.ok===false)throw new Error(d.error||'save failed');
     applyGatewayDnsState(d,{saved:true});
     if(msg){msg.textContent='Saved';msg.style.color='var(--ok)';}
-    const hint=$('gw-mode-hint');
-    if(hint){hint.textContent='Current: Blacklist mode - saved';hint.style.color='var(--ok)';}
     loadGatewayStatus();setTimeout(loadGatewayBlocked,250);
   }catch(e){if(msg){msg.textContent=e.message||'Error';msg.style.color='var(--err)';}}
-  finally{gatewayDnsSaving=false;document.querySelectorAll('.gateway-mode-btn').forEach(el=>el.classList.remove('saving'));}
+  finally{gatewayDnsSaving=false;}
 }
 function openGwBlockedModal(){loadGatewayBlocked();}
 function closeGwBlockedModal(){}
@@ -3051,28 +3068,14 @@ async function clearGatewayBlocked(){
     loadGatewayStatus();
   }catch(e){}
 }
-async function loadGatewayBlockedIps(){
-  try{
-    const r=await fetch('/gateway_blocked_ips');if(!r.ok)throw new Error('unavailable');
-    const d=await r.json();
-    const el=$('gw-blocked-ips');if(!el)return;
-    if(!d.length){el.innerHTML='<div style="color:var(--tx3)">'+trText('No blocked IPs recorded')+'</div>';return;}
-    el.innerHTML=d.map(x=>'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--bd)"><span style="color:var(--tx2);font-family:monospace">'+escapeHtml(x.ip||'')+'</span><span style="color:var(--tx3)">x'+(x.count||0)+'</span></div>').join('');
-  }catch(e){
-    const el=$('gw-blocked-ips');
-    if(el)el.innerHTML='<div style="color:var(--tx3)">'+trText('Blocked IP list unavailable')+'</div>';
-  }
-}
-async function clearGatewayBlockedIps(){
-  try{
-    await fetch('/gateway_blocked_ips_clear',{method:'POST'});
-    const el=$('gw-blocked-ips');if(el)el.textContent='Cleared';
-    loadGatewayStatus();
-  }catch(e){}
-}
-dashboardPollTimers.push(intervalVisible(poll,2000));dashboardPollTimers.push(intervalVisible(loadWifiStatus,10000));dashboardPollTimers.push(intervalVisible(loadApStatus,10000));dashboardPollTimers.push(intervalVisible(loadWifiNetworks,30000));dashboardPollTimers.push(intervalVisible(loadGatewayStatus,10000));dashboardPollTimers.push(intervalVisible(loadGatewayBlocked,5000));dashboardPollTimers.push(intervalVisible(()=>loadGatewayDns(true),15000));
-document.addEventListener('visibilitychange',()=>{if(!dashboardVisible())return;poll();loadWifiStatus();loadApStatus();loadGatewayStatus();loadGatewayDns(true);if(canDebugEnabled){pollLog();pollSniffer();pollRec();}});
-orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();initSystemMonitor();positionCanDebugPanels();setCanDebugUi();updateHW4(1);updateProfileControls(1,0,true);updateSniffIdToggle();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();loadGatewayBlocked();poll();
+startDashboardPolling();
+document.addEventListener('visibilitychange',()=>{
+  if(!dashboardVisible())return;
+  poll();loadWifiStatus();loadApStatus();loadGatewayStatus();
+  if(!networkPerformanceMode){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
+  if(canDebugEnabled){pollLog();pollSniffer();pollRec();}
+});
+orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();initSystemMonitor();positionCanDebugPanels();setCanDebugUi();updateHW4(1);updateProfileControls(1,0,true);updateSniffIdToggle();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();if(!networkPerformanceMode)loadGatewayBlocked();poll();
 </script>
 </body>
 </html>

@@ -3260,8 +3260,6 @@ static void handleSettingsExport()
     j += ",\"beta\":" + String(beta ? "true" : "false");
 #if defined(ESP_PLATFORM) && defined(DASH_STA_AP_GATEWAY)
     j += ",\"gateway\":{\"enabled\":" + String(gatewayEnabled ? "true" : "false");
-    j += ",\"mode\":0";
-    j += ",\"strict\":false";
     j += ",\"blacklist\":\"" + jsonEscape(gatewayDnsBlacklist.c_str()) + "\"";
     j += ",\"whitelist\":\"" + jsonEscape(gatewayDnsWhitelist.c_str()) + "\"}";
 #endif
@@ -3453,9 +3451,6 @@ static void handleSettingsImport()
         JsonObject gw = doc["gateway"].as<JsonObject>();
         if (gw["enabled"].is<bool>())
             gatewayEnabled = gw["enabled"].as<bool>();
-        gatewayDnsMode = DASH_DNS_BLACKLIST;
-        gatewayDnsStrict = false;
-        gatewayDnsCidrAllowlist = "";
         if (gw["blacklist"].is<const char *>())
             gatewayDnsBlacklist = dashGatewaySanitizeBlacklist((const char *)(gw["blacklist"] | ""));
         if (gw["whitelist"].is<const char *>())
@@ -4109,8 +4104,6 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     server.on("/gateway_whitelist_add", HTTP_POST, handleGatewayWhitelistAdd);
     server.on("/gateway_blocked", HTTP_GET, handleGatewayBlocked);
     server.on("/gateway_blocked_clear", HTTP_POST, handleGatewayBlockedClear);
-    server.on("/gateway_blocked_ips", HTTP_GET, handleGatewayBlockedIps);
-    server.on("/gateway_blocked_ips_clear", HTTP_POST, handleGatewayBlockedIpsClear);
 #endif
 
     server.begin();
