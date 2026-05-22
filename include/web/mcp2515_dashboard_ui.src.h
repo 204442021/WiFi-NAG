@@ -62,7 +62,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 
 /* FPS bar */
 .fps-bar{margin:14px 16px 0;height:3px;background:var(--bd);border-radius:2px;overflow:hidden}
-.fps-fill{height:100%;background:var(--acc);border-radius:2px;transition:width .5s;width:0%}
+.fps-fill{height:100%;background:var(--ok);border-radius:2px;transition:width .5s,background .3s;width:0%}
 
 /* Status grid */
 .stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:14px 16px 0}
@@ -84,7 +84,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 .sys-fill.dim{background:var(--tx3)}
 .sys-mini{display:flex;align-items:center;gap:6px;min-width:0}
 .sys-mini-bar{height:4px;flex:1;background:var(--bd);border-radius:2px;overflow:hidden}
-.sys-mini-fill{height:100%;background:var(--ok);border-radius:2px;width:0}
+.sys-mini-fill{height:100%;background:var(--ok);border-radius:2px;width:0;transition:width .3s,background .3s}
 .sys-mini-fill.warn{background:var(--warn)}
 .sys-mini-fill.err{background:var(--err)}
 @media (min-width:900px){
@@ -257,7 +257,7 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .ota-sub{font-size:11px;color:var(--tx3)}
 .ota-progress{margin-top:12px;display:none}
 .ota-bar{height:4px;background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:6px}
-.ota-fill{height:100%;background:var(--acc);border-radius:2px;transition:width .3s;width:0%}
+.ota-fill{height:100%;background:var(--ok);border-radius:2px;transition:width .3s,background .3s;width:0%}
 .ota-status{font-size:11px;color:var(--acc);text-align:center}
 .ota-btn{width:100%;margin-top:10px;padding:10px;border:1px solid var(--accBd);border-radius:9px;
   background:var(--accBg);color:var(--acc);font-family:inherit;font-size:13px;font-weight:600;
@@ -274,7 +274,7 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 
 /* Recorder */
 .rec-bar{height:4px;background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:6px}
-.rec-fill{height:100%;background:var(--err);border-radius:2px;transition:width .3s;width:0%}
+.rec-fill{height:100%;background:var(--ok);border-radius:2px;transition:width .3s,background .3s;width:0%}
 .rec-info{display:flex;justify-content:space-between;font-size:11px;color:var(--tx3);margin-bottom:10px}
 
 /* Warning */
@@ -973,7 +973,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
 Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-22 16:36:02 +08:00</div>
+OTA timestamp: 2026-05-22 17:43:18 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
@@ -995,7 +995,7 @@ OTA timestamp: 2026-05-22 16:36:02 +08:00</div>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
     <div class="modal-title" id="ota-test-title">OTA Test v2</div>
     <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-22 16:36:02 +08:00</div>
+OTA timestamp: 2026-05-22 17:43:18 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
     </div>
@@ -1293,7 +1293,7 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-22 16:36:02 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-22 16:36:02 +08:00',
+  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-22 17:43:18 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-22 17:43:18 +08:00',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -2311,23 +2311,36 @@ function pct(used,total){
   total=Number(total)||0;used=Number(used)||0;
   return total>0?Math.max(0,Math.min(100,used*100/total)):0;
 }
-function fillLevel(value,warn,danger){
-  value=Math.max(0,Math.min(100,Number(value)||0));
-  warn=warn===undefined?60:warn;danger=danger===undefined?80:danger;
-  return value>=danger?'err':(value>=warn?'warn':'ok');
+function clampPct(value){
+  return Math.max(0,Math.min(100,Number(value)||0));
 }
-function setFill(id,value,warn,danger){
-  const el=$(id);if(!el)return;
+function mixColor(a,b,t){
+  t=Math.max(0,Math.min(1,t));
+  const r=Math.round(a[0]+(b[0]-a[0])*t);
+  const g=Math.round(a[1]+(b[1]-a[1])*t);
+  const bl=Math.round(a[2]+(b[2]-a[2])*t);
+  return 'rgb('+r+','+g+','+bl+')';
+}
+function progressColor(value){
+  const v=clampPct(value);
+  const green=[22,163,74],yellow=[245,166,35],red=[220,38,38];
+  if(v<=30)return 'rgb('+green.join(',')+')';
+  if(v<=60)return mixColor(green,yellow,(v-30)/30);
+  if(v<80)return mixColor(yellow,red,(v-60)/20);
+  return 'rgb('+red.join(',')+')';
+}
+function setFillElement(el,value){
+  if(!el)return;
   const v=Math.max(0,Math.min(100,Number(value)||0));
   el.style.width=v+'%';
-  el.classList.remove('warn','err','dim');
-  const level=fillLevel(v,warn,danger);
-  if(level!=='ok')el.classList.add(level);
+  el.style.background=progressColor(v);
+}
+function setFill(id,value){
+  setFillElement($(id),value);
 }
 function taskCpuHtml(value){
-  const v=Math.max(0,Math.min(100,Number(value)||0));
-  const level=fillLevel(v,20,50);
-  return '<div class="sys-mini"><span>'+escapeHtml(value)+'%</span><div class="sys-mini-bar"><div class="sys-mini-fill '+(level==='ok'?'':level)+'" style="width:'+v+'%"></div></div></div>';
+  const v=clampPct(value);
+  return '<div class="sys-mini"><span>'+escapeHtml(value)+'%</span><div class="sys-mini-bar"><div class="sys-mini-fill" style="width:'+v+'%;background:'+progressColor(v)+'"></div></div></div>';
 }
 function fmtAddr(n){
   n=Number(n)||0;
@@ -2648,14 +2661,14 @@ async function uploadFirmware(){
   xhr.upload.onprogress=e=>{
     if(e.lengthComputable){
       const pct=Math.round(e.loaded/e.total*100);
-      fill.style.width=pct+'%';
+      setFillElement(fill,pct);
       status.textContent='Uploading... '+pct+'%';
     }
   };
   xhr.onload=()=>{
     if(xhr.status===200){
       status.textContent='Done! Device is rebooting...';
-      fill.style.width='100%';
+      setFillElement(fill,100);
       setTimeout(()=>window.location.reload(),5000);
     } else {
       status.textContent='Upload failed: '+xhr.status;
@@ -2708,7 +2721,7 @@ async function poll(){
     setText('s-soff',d.soff||'0');
     setText('s-up',fmtUp(d.up));
     setText('s-mcp-raw','EFLG: 0x'+toHex(d.eflg,2));
-    const fpsFill=$('fps-fill');if(fpsFill)fpsFill.style.width=Math.min(fpsVal/20*100,100)+'%';
+    setFill('fps-fill',Math.min(fpsVal/20*100,100));
     setText('hw-badge',HW[d.hw]||'?');
     updateGtwBadge(d.gtwap);
     try{renderEflg(d.eflg);}catch(e){}
@@ -2781,7 +2794,7 @@ async function pollRec(){
   try{
     const d=await(await fetch('/rec_status')).json();
     const pct=Math.min(d.count/d.cap*100,100);
-    $('rec-fill').style.width=pct+'%';
+    setFill('rec-fill',pct);
     $('rec-count').textContent=d.count+' / '+d.cap+' frames';
     if(d.active){
       $('rec-status').textContent='Recording...';$('rec-status').style.color='var(--err)';
