@@ -432,6 +432,8 @@ public:
     bool softAP(const char *ssid, const char *pass, int channel, int hidden, int maxConn);
     void begin(const char *ssid, const char *pass);
     wl_status_t status();
+    uint8_t lastDisconnectReason() const;
+    const char *lastDisconnectReasonName() const;
     void disconnect(bool wifioff = false, bool eraseap = false);
     void config(IPAddress local, IPAddress gateway, IPAddress subnet, IPAddress dns);
     IPAddress localIP();

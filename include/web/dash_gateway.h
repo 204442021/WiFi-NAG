@@ -126,6 +126,9 @@ static String gatewayDnsBlacklist;
 static String gatewayDnsWhitelist;
 static String gatewayDnsCidrAllowlist;
 static uint32_t gatewayUpstreamDns = IPADDR_NONE;
+static uint32_t gatewayDhcpDns = IPADDR_NONE;
+static uint8_t gatewayUpstreamDnsMode = 0; // 0=DHCP/auto, 1=Ali, 2=Tencent, 3=custom
+static uint32_t gatewayCustomUpstreamDns = IPADDR_NONE;
 static TaskHandle_t gatewayDnsTaskHandle = nullptr;
 static int gatewayDnsSock = -1;
 static int gatewayUpstreamSock = -1;
@@ -160,10 +163,27 @@ static DashGatewayDnsCacheEntry *gatewayDnsCache = nullptr;
 static bool gatewayDnsCacheInPsram = false;
 static uint32_t gatewayDnsCacheHits = 0;
 static uint32_t gatewayDnsCacheMisses = 0;
+static uint32_t gatewayDnsLatencyLastMs = 0;
+static uint32_t gatewayDnsLatencyAvgMs = 0;
+static uint32_t gatewayDnsLatencyMaxMs = 0;
+static uint32_t gatewayDnsSlow500Ms = 0;
+static uint32_t gatewayDnsSlow1000Ms = 0;
+static uint32_t gatewayDnsSlow2000Ms = 0;
+static uint16_t gatewayDnsPendingMax = 0;
+static uint32_t gatewayDnsPendingFull = 0;
+static uint32_t gatewayDnsTimeouts = 0;
+static uint32_t gatewayDnsUpstreamFails = 0;
 static DashGatewayCidrRule *gatewayCidrRules = nullptr;
 static bool gatewayCidrRulesInPsram = false;
 static uint16_t gatewayCidrRuleCount = 0;
 static uint32_t gatewayDnsRulesVersion = 1;
+
+static constexpr uint8_t kDashGatewayUpstreamAuto = 0;
+static constexpr uint8_t kDashGatewayUpstreamAli = 1;
+static constexpr uint8_t kDashGatewayUpstreamTencent = 2;
+static constexpr uint8_t kDashGatewayUpstreamCustom = 3;
+
+static uint32_t dashGatewaySelectedUpstreamDns();
 
 static const char kDashGatewayDefaultBlacklist[] =
     "tesla.cn\n"
@@ -397,7 +417,7 @@ static String dashGatewayFormatCidrRule(const DashGatewayCidrRule &r)
     return String(buf);
 }
 
-static String dashGatewaySanitizeCidrAllowlist(const String &list)
+__attribute__((unused)) static String dashGatewaySanitizeCidrAllowlist(const String &list)
 {
     String out;
     size_t entryCount = 0;
@@ -474,7 +494,7 @@ static void dashGatewayCompileCidrRules()
     }
 }
 
-static bool dashGatewayCidrAllows(uint32_t destAddrNbo)
+__attribute__((unused)) static bool dashGatewayCidrAllows(uint32_t destAddrNbo)
 {
     if (!gatewayCidrRules || gatewayCidrRuleCount == 0)
         return false;
@@ -714,8 +734,6 @@ static bool dashGatewayDnsAllowed(const String &domain)
         return true;
     if (blockLen > 0)
         return false;
-    if (gatewayDnsMode == DASH_DNS_WHITELIST)
-        return allowLen > 0;
     return true;
 }
 
@@ -748,10 +766,8 @@ static String dashGatewayDnsDecisionJson(const String &input)
         j += "empty domain";
     else if (whitelisted && blacklisted && allowLen >= blockLen)
         j += "whitelist override blacklist";
-    else if (gatewayDnsMode == DASH_DNS_BLACKLIST)
-        j += blacklisted ? "matched blacklist" : "not in blacklist";
     else
-        j += whitelisted ? "matched whitelist" : "not in whitelist";
+        j += blacklisted ? "matched blacklist" : "not in blacklist";
     j += "\"}";
     return j;
 }
@@ -927,6 +943,62 @@ static void dashGatewayInitPending(DashGatewayPendingQuery &q, uint16_t origId, 
         q.clientAddr = *client;
         dashGatewayPendingAddClient(q, origId, *client);
     }
+}
+
+static uint16_t dashGatewayPendingCount()
+{
+    uint16_t count = 0;
+    DASH_GATEWAY_FOR_PENDING(q)
+        if (q.inUse)
+            count++;
+    return count;
+}
+
+static void dashGatewayUpdatePendingMax()
+{
+    uint16_t count = dashGatewayPendingCount();
+    if (count > gatewayDnsPendingMax)
+        gatewayDnsPendingMax = count;
+}
+
+static bool dashGatewayStorePending(uint16_t origId, uint16_t proxyId, uint16_t qtype,
+                                    const sockaddr_in *client, const String &domain,
+                                    bool blackholeLearn, bool whitelistRefresh)
+{
+    DASH_GATEWAY_FOR_PENDING(q)
+    {
+        if (!q.inUse)
+        {
+            dashGatewayInitPending(q, origId, proxyId, qtype, client, domain, blackholeLearn, whitelistRefresh);
+            dashGatewayUpdatePendingMax();
+            return true;
+        }
+    }
+    gatewayDnsPendingFull++;
+    return false;
+}
+
+static void dashGatewayClearPending()
+{
+    DASH_GATEWAY_FOR_PENDING(q)
+        q.inUse = false;
+}
+
+static void dashGatewayTrackLatency(const DashGatewayPendingQuery &q, TickType_t nowTick)
+{
+    uint32_t elapsedMs = static_cast<uint32_t>((nowTick - q.startTime) * portTICK_PERIOD_MS);
+    gatewayDnsLatencyLastMs = elapsedMs;
+    gatewayDnsLatencyAvgMs = gatewayDnsLatencyAvgMs == 0
+                                  ? elapsedMs
+                                  : static_cast<uint32_t>((gatewayDnsLatencyAvgMs * 7UL + elapsedMs) / 8UL);
+    if (elapsedMs > gatewayDnsLatencyMaxMs)
+        gatewayDnsLatencyMaxMs = elapsedMs;
+    if (elapsedMs > 500)
+        gatewayDnsSlow500Ms++;
+    if (elapsedMs > 1000)
+        gatewayDnsSlow1000Ms++;
+    if (elapsedMs > 2000)
+        gatewayDnsSlow2000Ms++;
 }
 
 static size_t dashGatewayMakeDnsBlockedReply(const uint8_t *query, size_t qlen, uint8_t *reply, size_t cap)
@@ -1243,7 +1315,7 @@ static void dashGatewayLearnBlackholeIp(uint32_t ip)
     portEXIT_CRITICAL(&gatewayBlockedIpMux);
 }
 
-static bool dashGatewayBlockedIpContainsAndBump(uint32_t ip)
+__attribute__((unused)) static bool dashGatewayBlockedIpContainsAndBump(uint32_t ip)
 {
     if (ip == 0 || ip == 0xFFFFFFFFu || gatewayBlockedIpCount == 0)
         return false;
@@ -1382,65 +1454,14 @@ __attribute__((unused)) static bool dashGatewayIsIpAllowed(uint32_t ip)
 
 // 鈹€鈹€ lwIP IP4_CANFORWARD hook 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // Wired in via include/lwip_hooks.h + -DESP_IDF_LWIP_HOOK_FILENAME in
-// platformio.ini. Called per outbound IPv4 packet during NAPT forwarding
-// (AP鈫扴TA direction). Hot path 鈥?short-circuits as cheaply as possible when
-// strict mode is off, which is the default.
-//
-// Returns nonzero (forward) or 0 (drop).
-//
-// Design constraints:
-//   * Whitelist + strict: drops dest IPs that were never learned via our
-//     captive DNS 鈥?catches clients that bypass DNS by hardcoding an IP or
-//     using 8.8.8.8. gatewayAllowedIps is populated from upstream A-record
-//     responses by dashGatewayExtractAllowedIps().
-//   * Blacklist + strict: today only drops IPs that have already been added
-//     to gatewayBlockedIps (currently nothing populates that set during
-//     normal traffic 鈥?a periodic resolver would be needed to harvest IPs
-//     from blacklist domains. Tracked as a follow-up; see report).
-//   * Always-allow ranges keep AP-internal traffic, multicast, link-local,
-//     loopback, broadcast and the upstream DNS server reachable regardless
-//     of mode, so we don't break DHCP/DNS or accidentally cut off the
-//     captive web UI on 100.100.1.1.
+// platformio.ini. The daily build keeps filtering domain-only in the DNS proxy
+// and leaves NAPT forwarding untouched for maximum throughput.
 extern "C" int dashGatewayHookIp4CanForward(unsigned int destAddrNbo)
 {
-    if (!gatewayEnabled)
-        return 1; // gateway off 鈥?default forward
-
-    // Decode bytes from network-order address (lwIP stores NBO on little-endian).
-    const uint8_t a = static_cast<uint8_t>(destAddrNbo & 0xFFu);
-    const uint8_t b = static_cast<uint8_t>((destAddrNbo >> 8) & 0xFFu);
-
-    // Always-allow ranges (apply to every check below):
-    if (a == 100 && b == 100) return 1;          // AP subnet
-    if (a >= 224 && a <= 239) return 1;          // multicast
-    if (a == 169 && b == 254) return 1;          // link-local
-    if (a == 127) return 1;                      // loopback
-    if (a == 0) return 1;                        // DHCP discover
-    if (destAddrNbo == 0xFFFFFFFFu) return 1;    // limited broadcast
-    if (gatewayUpstreamDns != IPADDR_NONE && destAddrNbo == gatewayUpstreamDns)
-        return 1;                                // upstream DNS reachable
-
-    // Explicit CIDR allowlist bypasses strict/blackhole checks for services
-    // that legitimately connect by IP or CDN range without a stable hostname.
-    if (dashGatewayCidrAllows(destAddrNbo))
-        return 1;
-
-    // Always: blackhole cache (auto-learned IPs from blocked DNS queries +
-    // strict-mode drop entries). Catches clients hardcoding IPs to bypass DNS.
-    if (dashGatewayBlockedIpContainsAndBump(destAddrNbo))
-        return 0;
-
-    // Strict mode adds whitelist-only enforcement on top of the blackhole.
-    if (!gatewayDnsStrict) return 1;
-
-    if (gatewayDnsMode == DASH_DNS_WHITELIST)
-    {
-        bool ok = dashGatewayAllowedIpContains(destAddrNbo);
-        if (!ok)
-            dashGatewayTrackBlockedIp(destAddrNbo);
-        return ok ? 1 : 0;
-    }
-    // Strict blacklist mode: blackhole already handled above; default forward.
+    (void)destAddrNbo;
+    // DNS filtering is intentionally domain-only: blacklist root domains are
+    // blocked in the DNS proxy, whitelist subdomains override those roots, and
+    // NAT forwarding stays on the fastest path with no per-packet IP filtering.
     return 1;
 }
 
@@ -1482,7 +1503,10 @@ static void dashGatewayDnsTask(void *)
             TickType_t now = xTaskGetTickCount();
             DASH_GATEWAY_FOR_PENDING(q)
                 if (q.inUse && (int32_t)(now - q.startTime) > (int32_t)pdMS_TO_TICKS(5000))
+                {
+                    gatewayDnsTimeouts++;
                     q.inUse = false;
+                }
             lastCleanup = xTaskGetTickCount();
 
             uint32_t nowSec = static_cast<uint32_t>(esp_timer_get_time() / 1000000ULL);
@@ -1513,23 +1537,16 @@ static void dashGatewayDnsTask(void *)
                     size_t qlen = dashGatewayBuildDnsQuery(rule, proxyId, tx, sizeof(tx));
                     if (qlen > 0)
                     {
-                        uint32_t upstream = gatewayUpstreamDns != IPADDR_NONE ? gatewayUpstreamDns : inet_addr("223.6.6.6");
+                        uint32_t upstream = gatewayUpstreamDns != IPADDR_NONE ? gatewayUpstreamDns : dashGatewaySelectedUpstreamDns();
                         sockaddr_in dst = {};
                         dst.sin_family = AF_INET;
                         dst.sin_port = htons(53);
                         dst.sin_addr.s_addr = upstream;
                         ssize_t sent = sendto(gatewayUpstreamSock, tx, qlen, 0, reinterpret_cast<sockaddr *>(&dst), sizeof(dst));
                         if (sent == static_cast<ssize_t>(qlen))
-                        {
-                            DASH_GATEWAY_FOR_PENDING(q)
-                            {
-                                if (!q.inUse)
-                                {
-                                    dashGatewayInitPending(q, 0, proxyId, kDashGatewayDnsTypeA, nullptr, rule, false, true);
-                                    break;
-                                }
-                            }
-                        }
+                            dashGatewayStorePending(0, proxyId, kDashGatewayDnsTypeA, nullptr, rule, false, true);
+                        else
+                            gatewayDnsUpstreamFails++;
                     }
                     gatewayWhitelistRefreshIdx++;
                     gatewayWhitelistRefreshLastSec = nowSec;
@@ -1580,32 +1597,9 @@ static void dashGatewayDnsTask(void *)
                     if (len > 0)
                         sendto(gatewayDnsSock, tx, len, 0, reinterpret_cast<sockaddr *>(&client), clientLen);
 
-                    // Self-learning IP blackhole: forward the blocked query to
-                    // upstream so we can capture the real A-record IPs and add
-                    // them to the NAT drop list. Catches hardcoded-IP bypass.
-                    if (parsed && qname.length() > 0 && qtype == kDashGatewayDnsTypeA)
-                    {
-                        uint16_t origId = static_cast<uint16_t>((rx[0] << 8) | rx[1]);
-                        uint16_t proxyId = gatewayNextProxyId++;
-                        rx[0] = proxyId >> 8; rx[1] = proxyId & 0xFF;
-                        uint32_t upstream = gatewayUpstreamDns != IPADDR_NONE ? gatewayUpstreamDns : inet_addr("223.6.6.6");
-                        sockaddr_in dst = {};
-                        dst.sin_family = AF_INET;
-                        dst.sin_port = htons(53);
-                        dst.sin_addr.s_addr = upstream;
-                        ssize_t sent = sendto(gatewayUpstreamSock, rx, n, 0, reinterpret_cast<sockaddr *>(&dst), sizeof(dst));
-                        if (sent == n)
-                        {
-                            DASH_GATEWAY_FOR_PENDING(q)
-                            {
-                                if (!q.inUse)
-                                {
-                                    dashGatewayInitPending(q, origId, proxyId, qtype, nullptr, qname, true, false);
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                    // IP blackhole learning is intentionally disabled for the
+                    // simplified daily mode: root-domain blocking should not
+                    // poison NAT forwarding for shared CDN IP addresses.
                 }
                 else
                 {
@@ -1627,23 +1621,16 @@ static void dashGatewayDnsTask(void *)
                         continue;
                     uint16_t proxyId = gatewayNextProxyId++;
                     rx[0] = proxyId >> 8; rx[1] = proxyId & 0xFF;
-                    uint32_t upstream = gatewayUpstreamDns != IPADDR_NONE ? gatewayUpstreamDns : inet_addr("223.6.6.6");
+                    uint32_t upstream = gatewayUpstreamDns != IPADDR_NONE ? gatewayUpstreamDns : dashGatewaySelectedUpstreamDns();
                     sockaddr_in dst = {};
                     dst.sin_family = AF_INET;
                     dst.sin_port = htons(53);
                     dst.sin_addr.s_addr = upstream;
                     ssize_t sent = sendto(gatewayUpstreamSock, rx, n, 0, reinterpret_cast<sockaddr *>(&dst), sizeof(dst));
                     if (sent == n)
-                    {
-                        DASH_GATEWAY_FOR_PENDING(q)
-                        {
-                            if (!q.inUse)
-                            {
-                                dashGatewayInitPending(q, origId, proxyId, qtype, &client, qname, false, false);
-                                break;
-                            }
-                        }
-                    }
+                        dashGatewayStorePending(origId, proxyId, qtype, &client, qname, false, false);
+                    else
+                        gatewayDnsUpstreamFails++;
                 }
             }
         }
@@ -1665,6 +1652,8 @@ static void dashGatewayDnsTask(void *)
                             q.inUse = false;
                             break;
                         }
+                        if (!q.blackholeLearn && !q.whitelistRefresh)
+                            dashGatewayTrackLatency(q, xTaskGetTickCount());
                         if (q.blackholeLearn)
                         {
                             dashGatewayExtractBlackholeIps(rx, rn);
@@ -1717,6 +1706,91 @@ static bool dashGatewayWriteListFile(const char *path, const String &value)
     return written == value.length();
 }
 
+static String dashGatewayIpToString(uint32_t ip, const char *emptyText = "none")
+{
+    if (ip == IPADDR_NONE || ip == 0)
+        return emptyText;
+    struct in_addr a;
+    a.s_addr = ip;
+    const char *p = inet_ntoa(a);
+    return p ? String(p) : String(emptyText);
+}
+
+static bool dashGatewayParseDnsIp(const String &value, uint32_t &out)
+{
+    std::string s = static_cast<std::string>(value);
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front())))
+        s.erase(s.begin());
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
+        s.pop_back();
+    if (s.empty())
+        return false;
+    uint32_t ip = inet_addr(s.c_str());
+    if (ip == IPADDR_NONE || ip == 0)
+        return false;
+    out = ip;
+    return true;
+}
+
+static const char *dashGatewayUpstreamModeName(uint8_t mode)
+{
+    switch (mode)
+    {
+    case kDashGatewayUpstreamAli:
+        return "ali";
+    case kDashGatewayUpstreamTencent:
+        return "tencent";
+    case kDashGatewayUpstreamCustom:
+        return "custom";
+    default:
+        return "auto";
+    }
+}
+
+static uint32_t dashGatewaySelectedUpstreamDns()
+{
+    switch (gatewayUpstreamDnsMode)
+    {
+    case kDashGatewayUpstreamAli:
+        return inet_addr("223.5.5.5");
+    case kDashGatewayUpstreamTencent:
+        return inet_addr("119.29.29.29");
+    case kDashGatewayUpstreamCustom:
+        if (gatewayCustomUpstreamDns != IPADDR_NONE && gatewayCustomUpstreamDns != 0)
+            return gatewayCustomUpstreamDns;
+        break;
+    default:
+        break;
+    }
+    if (gatewayDhcpDns != IPADDR_NONE && gatewayDhcpDns != 0)
+        return gatewayDhcpDns;
+    return inet_addr("223.5.5.5");
+}
+
+static void dashGatewayRefreshSelectedUpstreamDns()
+{
+    if (WiFi.status() == WL_CONNECTED)
+        gatewayUpstreamDns = dashGatewaySelectedUpstreamDns();
+    else
+        gatewayUpstreamDns = IPADDR_NONE;
+}
+
+static void dashGatewayResetDnsStats()
+{
+    gatewayDnsCacheHits = 0;
+    gatewayDnsCacheMisses = 0;
+    gatewayDnsLatencyLastMs = 0;
+    gatewayDnsLatencyAvgMs = 0;
+    gatewayDnsLatencyMaxMs = 0;
+    gatewayDnsSlow500Ms = 0;
+    gatewayDnsSlow1000Ms = 0;
+    gatewayDnsSlow2000Ms = 0;
+    gatewayDnsPendingMax = dashGatewayPendingCount();
+    gatewayDnsPendingFull = 0;
+    gatewayDnsTimeouts = 0;
+    gatewayDnsUpstreamFails = 0;
+}
+
 static bool dashGatewaySaveMeta()
 {
     nvs_handle_t h = 0;
@@ -1728,9 +1802,16 @@ static bool dashGatewaySaveMeta()
     }
 
     err = nvs_set_u8(h, "en", gatewayEnabled ? 1 : 0);
-    if (err == ESP_OK) err = nvs_set_u8(h, "mode", static_cast<uint8_t>(gatewayDnsMode));
-    if (err == ESP_OK) err = nvs_set_u8(h, "strict", gatewayDnsStrict ? 1 : 0);
+    // Daily DNS mode is fixed: blacklist roots, whitelist subdomains override.
+    gatewayDnsMode = DASH_DNS_BLACKLIST;
+    gatewayDnsStrict = false;
+    gatewayDnsCidrAllowlist = "";
+    if (err == ESP_OK) err = nvs_set_u8(h, "mode", static_cast<uint8_t>(DASH_DNS_BLACKLIST));
+    if (err == ESP_OK) err = nvs_set_u8(h, "strict", 0);
     if (err == ESP_OK) err = nvs_set_u8(h, "profile", kDashGatewayTeslaProfileVersion);
+    if (err == ESP_OK) err = nvs_set_u8(h, "upmode", gatewayUpstreamDnsMode);
+    if (err == ESP_OK)
+        err = nvs_set_str(h, "upcustom", dashGatewayIpToString(gatewayCustomUpstreamDns, "").c_str());
     // Lists now live in SPIFFS so large edits no longer consume scarce NVS pages.
     if (err == ESP_OK)
     {
@@ -1759,6 +1840,7 @@ static bool dashGatewaySave()
 {
     bool ok = dashGatewayWriteListFile(kDashGatewayBlacklistPath, gatewayDnsBlacklist);
     ok = dashGatewayWriteListFile(kDashGatewayWhitelistPath, gatewayDnsWhitelist) && ok;
+    gatewayDnsCidrAllowlist = "";
     ok = dashGatewayWriteListFile(kDashGatewayCidrPath, gatewayDnsCidrAllowlist) && ok;
     ok = dashGatewaySaveMeta() && ok;
     if (!ok)
@@ -1781,9 +1863,17 @@ static void dashGatewayLoad()
     if (p.begin(kDashGatewayPrefsNs, false))
     {
         gatewayEnabled = p.getBool("en", true);
-        gatewayDnsMode = static_cast<DashGatewayDnsMode>(p.getUChar("mode", DASH_DNS_BLACKLIST) ? DASH_DNS_WHITELIST : DASH_DNS_BLACKLIST);
-        gatewayDnsStrict = p.getBool("strict", false);
+        gatewayDnsMode = DASH_DNS_BLACKLIST;
+        gatewayDnsStrict = false;
         profileVersion = p.getUChar("profile", 0);
+        gatewayUpstreamDnsMode = p.getUChar("upmode", kDashGatewayUpstreamAuto);
+        if (gatewayUpstreamDnsMode > kDashGatewayUpstreamCustom)
+            gatewayUpstreamDnsMode = kDashGatewayUpstreamAuto;
+        uint32_t customDns = IPADDR_NONE;
+        if (dashGatewayParseDnsIp(p.getString("upcustom", ""), customDns))
+            gatewayCustomUpstreamDns = customDns;
+        else
+            gatewayCustomUpstreamDns = IPADDR_NONE;
         legacyBlacklist = p.getString("black", kDashGatewayDefaultBlacklist);
         legacyWhitelist = p.getString("white", kDashGatewayDefaultWhitelist);
         p.end();
@@ -1794,8 +1884,8 @@ static void dashGatewayLoad()
     gatewayDnsBlacklist = dashGatewaySanitizeBlacklist(loadedBlackFromFile ? fileList : legacyBlacklist);
     bool loadedWhiteFromFile = dashGatewayReadListFile(kDashGatewayWhitelistPath, fileList);
     gatewayDnsWhitelist = dashGatewaySanitizeWhitelist(loadedWhiteFromFile ? fileList : legacyWhitelist);
-    bool loadedCidrFromFile = dashGatewayReadListFile(kDashGatewayCidrPath, fileList);
-    gatewayDnsCidrAllowlist = dashGatewaySanitizeCidrAllowlist(loadedCidrFromFile ? fileList : String(""));
+    bool loadedCidrFromFile = true;
+    gatewayDnsCidrAllowlist = "";
 
     if (profileVersion < kDashGatewayTeslaProfileVersion)
     {
@@ -1811,6 +1901,10 @@ static void dashGatewayLoad()
     }
 
     dashGatewayCompileAllRules();
+
+    gatewayDnsMode = DASH_DNS_BLACKLIST;
+    gatewayDnsStrict = false;
+    gatewayDnsCidrAllowlist = "";
 
     if (!loadedBlackFromFile || !loadedWhiteFromFile || !loadedCidrFromFile)
         dashGatewaySave();
@@ -1893,8 +1987,13 @@ static void dashGatewayOnStaConnected(esp_netif_t *staNetif, esp_netif_t *apNeti
     if (staNetif && esp_netif_get_dns_info(staNetif, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK &&
         dns.ip.type == ESP_IPADDR_TYPE_V4 && dns.ip.u_addr.ip4.addr != 0)
     {
-        gatewayUpstreamDns = dns.ip.u_addr.ip4.addr;
+        gatewayDhcpDns = dns.ip.u_addr.ip4.addr;
     }
+    else
+    {
+        gatewayDhcpDns = IPADDR_NONE;
+    }
+    gatewayUpstreamDns = dashGatewaySelectedUpstreamDns();
 
 #if IP_NAPT
     void *lwipAp = apNetif ? esp_netif_get_netif_impl(apNetif) : nullptr;
@@ -1917,31 +2016,46 @@ static void dashGatewayOnStaConnected(esp_netif_t *staNetif, esp_netif_t *apNeti
         if (p)
             snprintf(upstreamLog, sizeof(upstreamLog), "%s", p);
     }
-    ESP_LOGI(kDashGatewayTag, "STA ready ip=%s upstream_dns=%s nat=%s",
+    ESP_LOGI(kDashGatewayTag, "STA ready ip=%s upstream_dns=%s mode=%s dhcp=%s nat=%s",
              WiFi.localIP().toString().c_str(),
              upstreamLog,
+             dashGatewayUpstreamModeName(gatewayUpstreamDnsMode),
+             dashGatewayIpToString(gatewayDhcpDns).c_str(),
              gatewayNaptEnabled ? "on" : "waiting");
+}
+
+static void dashGatewayOnStaDisconnected(esp_netif_t *apNetif)
+{
+    gatewayUpstreamDns = IPADDR_NONE;
+    gatewayDhcpDns = IPADDR_NONE;
+    gatewayNaptEnabled = false;
+    dashGatewayClearPending();
+#if IP_NAPT
+    void *lwipAp = apNetif ? esp_netif_get_netif_impl(apNetif) : nullptr;
+    if (lwipAp)
+        ip_napt_enable_netif(static_cast<netif *>(lwipAp), 0);
+#endif
+    ESP_LOGI(kDashGatewayTag, "STA offline; NAT disabled and DNS pending cleared");
 }
 
 static String dashGatewayStatusJson()
 {
     // Format upstream DNS as dotted-decimal string
-    char upstreamStr[16] = "none";
-    if (gatewayUpstreamDns != IPADDR_NONE && gatewayUpstreamDns != 0)
-    {
-        // gatewayUpstreamDns is stored in network byte order (as returned by
-        // esp_netif_get_dns_info -> ip4.addr which is lwIP NBO). Use inet_ntoa.
-        struct in_addr a;
-        a.s_addr = gatewayUpstreamDns;
-        const char *p = inet_ntoa(a);
-        if (p)
-            snprintf(upstreamStr, sizeof(upstreamStr), "%s", p);
-    }
+    String upstreamStr = dashGatewayIpToString(gatewayUpstreamDns);
+    String dhcpDnsStr = dashGatewayIpToString(gatewayDhcpDns);
+    String customDnsStr = dashGatewayIpToString(gatewayCustomUpstreamDns, "");
+
+    wifi_ap_record_t staInfo = {};
+    bool hasStaInfo = esp_wifi_sta_get_ap_info(&staInfo) == ESP_OK;
+    wifi_config_t apConfig = {};
+    uint8_t apChannel = 0;
+    if (esp_wifi_get_config(WIFI_IF_AP, &apConfig) == ESP_OK)
+        apChannel = apConfig.ap.channel;
 
     String j = "{\"enabled\":";
     j += gatewayEnabled ? "true" : "false";
     j += ",\"nat\":";
-    j += gatewayNaptEnabled ? "true" : "false";
+    j += (gatewayNaptEnabled && WiFi.status() == WL_CONNECTED) ? "true" : "false";
 #if IP_NAPT
     j += ",\"napt_compiled\":true";
 #else
@@ -1951,6 +2065,8 @@ static String dashGatewayStatusJson()
     j += WiFi.softAPIP().toString();
     j += "\",\"ap_clients\":";
     j += String(WiFi.softAPgetStationNum());
+    j += ",\"ap_channel\":";
+    j += String(apChannel);
     j += ",\"sta_connected\":";
     j += (WiFi.status() == WL_CONNECTED) ? "true" : "false";
     j += ",\"sta_ip\":\"";
@@ -1958,6 +2074,12 @@ static String dashGatewayStatusJson()
     j += "\",\"sta_ssid\":\"";
     j += jsonEscape(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : String(""));
     j += "\"";
+    j += ",\"sta_rssi\":";
+    j += hasStaInfo ? String(staInfo.rssi) : String("null");
+    j += ",\"sta_channel\":";
+    j += hasStaInfo ? String(staInfo.primary) : String("0");
+    j += ",\"same_channel\":";
+    j += (hasStaInfo && apChannel > 0 && staInfo.primary == apChannel) ? "true" : "false";
     j += ",\"mode\":";
     j += String(static_cast<int>(gatewayDnsMode));
     j += ",\"strict\":";
@@ -1993,8 +2115,40 @@ static String dashGatewayStatusJson()
     j += String(gatewayDnsSock);
     j += ",\"upstream_dns\":\"";
     j += upstreamStr;
+    j += "\",\"upstream_dns_mode\":";
+    j += String(gatewayUpstreamDnsMode);
+    j += ",\"upstream_dns_mode_name\":\"";
+    j += dashGatewayUpstreamModeName(gatewayUpstreamDnsMode);
+    j += "\",\"upstream_dns_dhcp\":\"";
+    j += dhcpDnsStr;
+    j += "\",\"upstream_dns_custom\":\"";
+    j += customDnsStr;
     j += "\",\"ap_dns_configured\":";
     j += gatewayApDnsConfigured ? "true" : "false";
+    j += ",\"dns_latency_last_ms\":";
+    j += String(gatewayDnsLatencyLastMs);
+    j += ",\"dns_latency_avg_ms\":";
+    j += String(gatewayDnsLatencyAvgMs);
+    j += ",\"dns_latency_max_ms\":";
+    j += String(gatewayDnsLatencyMaxMs);
+    j += ",\"dns_slow_500ms\":";
+    j += String(gatewayDnsSlow500Ms);
+    j += ",\"dns_slow_1000ms\":";
+    j += String(gatewayDnsSlow1000Ms);
+    j += ",\"dns_slow_2000ms\":";
+    j += String(gatewayDnsSlow2000Ms);
+    j += ",\"dns_pending\":";
+    j += String(dashGatewayPendingCount());
+    j += ",\"dns_pending_capacity\":";
+    j += String(static_cast<unsigned>(kDashGatewayMaxPending));
+    j += ",\"dns_pending_max\":";
+    j += String(gatewayDnsPendingMax);
+    j += ",\"dns_pending_full\":";
+    j += String(gatewayDnsPendingFull);
+    j += ",\"dns_timeouts\":";
+    j += String(gatewayDnsTimeouts);
+    j += ",\"dns_upstream_fails\":";
+    j += String(gatewayDnsUpstreamFails);
     j += "}";
     return j;
 }
@@ -2020,6 +2174,16 @@ static String dashGatewayDnsSettingsJson(bool ok)
     j += jsonEscape(gatewayDnsWhitelist.c_str());
     j += "\",\"cidr\":\"";
     j += jsonEscape(gatewayDnsCidrAllowlist.c_str());
+    j += "\",\"upstream_mode\":";
+    j += String(gatewayUpstreamDnsMode);
+    j += ",\"upstream_mode_name\":\"";
+    j += dashGatewayUpstreamModeName(gatewayUpstreamDnsMode);
+    j += "\",\"upstream_custom\":\"";
+    j += dashGatewayIpToString(gatewayCustomUpstreamDns, "");
+    j += "\",\"upstream_dhcp\":\"";
+    j += dashGatewayIpToString(gatewayDhcpDns);
+    j += "\",\"upstream_effective\":\"";
+    j += dashGatewayIpToString(gatewayUpstreamDns);
     j += "\",\"black_count\":";
     j += String(static_cast<unsigned>(dashGatewayCountEntries(gatewayDnsBlacklist)));
     j += ",\"white_count\":";
@@ -2056,11 +2220,60 @@ static void handleGatewayDnsPost()
     String oldBlacklist = gatewayDnsBlacklist;
     String oldWhitelist = gatewayDnsWhitelist;
     String oldCidr = gatewayDnsCidrAllowlist;
+    uint8_t oldUpstreamMode = gatewayUpstreamDnsMode;
+    uint32_t oldCustomUpstream = gatewayCustomUpstreamDns;
 
     gatewayEnabled = !server.hasArg("enabled") || server.arg("enabled").toInt() != 0;
-    gatewayDnsMode = server.hasArg("mode") && server.arg("mode").toInt() == 0 ? DASH_DNS_BLACKLIST : DASH_DNS_WHITELIST;
-    gatewayDnsStrict = server.hasArg("strict") && server.arg("strict").toInt() != 0;
+    gatewayDnsMode = DASH_DNS_BLACKLIST;
+    gatewayDnsStrict = false;
     bool rulesChanged = false;
+    bool upstreamChanged = false;
+    if (gatewayDnsCidrAllowlist.length() > 0)
+    {
+        gatewayDnsCidrAllowlist = "";
+        rulesChanged = true;
+    }
+    if (server.hasArg("upstream_mode"))
+    {
+        int nextMode = server.arg("upstream_mode").toInt();
+        if (nextMode < 0 || nextMode > kDashGatewayUpstreamCustom)
+            nextMode = kDashGatewayUpstreamAuto;
+        gatewayUpstreamDnsMode = static_cast<uint8_t>(nextMode);
+    }
+    if (server.hasArg("upstream_custom"))
+    {
+        uint32_t custom = IPADDR_NONE;
+        String customArg = server.arg("upstream_custom");
+        if (customArg.length() > 0 && !dashGatewayParseDnsIp(customArg, custom))
+        {
+            gatewayEnabled = oldEnabled;
+            gatewayDnsMode = oldMode;
+            gatewayDnsStrict = oldStrict;
+            gatewayDnsBlacklist = oldBlacklist;
+            gatewayDnsWhitelist = oldWhitelist;
+            gatewayDnsCidrAllowlist = oldCidr;
+            gatewayUpstreamDnsMode = oldUpstreamMode;
+            gatewayCustomUpstreamDns = oldCustomUpstream;
+            server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid upstream DNS\"}");
+            return;
+        }
+        gatewayCustomUpstreamDns = custom;
+    }
+    if (gatewayUpstreamDnsMode == kDashGatewayUpstreamCustom &&
+        (gatewayCustomUpstreamDns == IPADDR_NONE || gatewayCustomUpstreamDns == 0))
+    {
+        gatewayEnabled = oldEnabled;
+        gatewayDnsMode = oldMode;
+        gatewayDnsStrict = oldStrict;
+        gatewayDnsBlacklist = oldBlacklist;
+        gatewayDnsWhitelist = oldWhitelist;
+        gatewayDnsCidrAllowlist = oldCidr;
+        gatewayUpstreamDnsMode = oldUpstreamMode;
+        gatewayCustomUpstreamDns = oldCustomUpstream;
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"custom upstream DNS required\"}");
+        return;
+    }
+    upstreamChanged = oldUpstreamMode != gatewayUpstreamDnsMode || oldCustomUpstream != gatewayCustomUpstreamDns;
     if (server.hasArg("blacklist"))
     {
         String next = dashGatewaySanitizeBlacklist(server.arg("blacklist"));
@@ -2071,11 +2284,6 @@ static void handleGatewayDnsPost()
         String next = dashGatewaySanitizeWhitelist(server.arg("whitelist"));
         if (next != gatewayDnsWhitelist) { gatewayDnsWhitelist = next; rulesChanged = true; }
     }
-    if (server.hasArg("cidr"))
-    {
-        String next = dashGatewaySanitizeCidrAllowlist(server.arg("cidr"));
-        if (next != gatewayDnsCidrAllowlist) { gatewayDnsCidrAllowlist = next; rulesChanged = true; }
-    }
     if (!dashGatewaySave())
     {
         gatewayEnabled = oldEnabled;
@@ -2084,6 +2292,8 @@ static void handleGatewayDnsPost()
         gatewayDnsBlacklist = oldBlacklist;
         gatewayDnsWhitelist = oldWhitelist;
         gatewayDnsCidrAllowlist = oldCidr;
+        gatewayUpstreamDnsMode = oldUpstreamMode;
+        gatewayCustomUpstreamDns = oldCustomUpstream;
         dashGatewayCompileAllRules();
         server.send(500, "application/json", "{\"ok\":false,\"error\":\"save failed\"}");
         return;
@@ -2109,7 +2319,22 @@ static void handleGatewayDnsPost()
     {
         gatewayDnsRulesVersion++;
     }
+    if (upstreamChanged)
+    {
+        dashGatewayRefreshSelectedUpstreamDns();
+        dashGatewayClearPending();
+        ESP_LOGI(kDashGatewayTag, "DNS upstream changed mode=%s effective=%s custom=%s",
+                 dashGatewayUpstreamModeName(gatewayUpstreamDnsMode),
+                 dashGatewayIpToString(gatewayUpstreamDns).c_str(),
+                 dashGatewayIpToString(gatewayCustomUpstreamDns, "").c_str());
+    }
     server.send(200, "application/json", dashGatewayDnsSettingsJson(true));
+}
+
+static void handleGatewayDnsStatsReset()
+{
+    dashGatewayResetDnsStats();
+    server.send(200, "application/json", dashGatewayStatusJson());
 }
 
 static void handleGatewayWhitelistAdd()
@@ -2232,38 +2457,12 @@ static void handleGatewayBlockedIpsClear()
     server.send(200, "application/json", "{\"ok\":true}");
 }
 
-static void handleGatewayStrict()
-{
-    if (server.hasArg("enabled"))
-    {
-        bool oldStrict = gatewayDnsStrict;
-        gatewayDnsStrict = server.arg("enabled").toInt() != 0;
-        if (oldStrict != gatewayDnsStrict)
-            gatewayDnsRulesVersion++;
-        if (!gatewayDnsStrict)
-        {
-            portENTER_CRITICAL(&gatewayBlockedIpMux);
-            gatewayBlockedIpCount = 0;
-            std::memset(gatewayBlockedIps, 0, sizeof(DashGatewayBlockedIp) * kDashGatewayMaxBlockedIps);
-            portEXIT_CRITICAL(&gatewayBlockedIpMux);
-        }
-        dashGatewaySave();
-    }
-    String j = "{\"strict\":";
-    j += gatewayDnsStrict ? "true" : "false";
-    j += ",\"allowed_count\":";
-    j += String(gatewayAllowedIpCount);
-    j += ",\"blocked_count\":";
-    j += String(gatewayBlockedIpCount);
-    j += "}";
-    server.send(200, "application/json", j);
-}
-
 #else
 
 static void dashGatewayLoad() {}
 static void dashGatewayOnApStarted(esp_netif_t *) {}
 static void dashGatewayOnStaConnected(esp_netif_t *, esp_netif_t *) {}
+static void dashGatewayOnStaDisconnected(esp_netif_t *) {}
 
 #endif
 

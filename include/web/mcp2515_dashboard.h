@@ -151,6 +151,10 @@ static constexpr size_t kDashMinApPassLen = 8;
 static constexpr size_t kDashMaxPassLen = 64;
 static constexpr int kDashApChannel = 1;
 static constexpr int kDashApMaxConn = 4;
+static uint8_t apRuntimeChannel = kDashApChannel;
+static unsigned long apLastChannelSyncMs = 0;
+static uint8_t apLastChannelSyncTarget = 0;
+static bool apLastChannelSyncOk = false;
 
 // WiFi STA (client) mode for internet access
 static char staSSID[33] = "";
@@ -181,21 +185,12 @@ static bool autoUpdateDone = false;            // one-shot per boot
 static unsigned long autoUpdateEligibleAt = 0; // millis() at which auto-check may fire
 static unsigned long staConnectStartedAt = 0;
 static unsigned long staRetryAt = 0;
-static uint8_t staConsecutiveFailures = 0; // for graduated backoff
+static uint8_t staConsecutiveFailures = 0; // diagnostics only; retry interval is fixed
 static constexpr unsigned long kDashStaBootDelayMs = 1000;
-static constexpr unsigned long kDashStaConnectTimeoutMs = 25000;
-// Graduated backoff schedule (ms). Clamped to last entry after that many failures.
-// Keeps reconnect attempts infrequent enough that the AP beacon is not disturbed
-// by repeated WiFi.begin() when the upstream router is unavailable.
-// First step is short so a known-good upstream comes up quickly; later steps
-// stretch out so a missing upstream doesn't keep hammering WiFi.begin().
-static constexpr unsigned long kDashStaBackoffMs[] = {
-    3000, 8000, 15000, 30000, 60000, 120000, 300000
-};
-static constexpr uint8_t kDashStaBackoffSteps =
-    static_cast<uint8_t>(sizeof(kDashStaBackoffMs) / sizeof(kDashStaBackoffMs[0]));
-// kDashStaRetryMs kept for backward compat (used as max backoff cap)
-static constexpr unsigned long kDashStaRetryMs = kDashStaBackoffMs[kDashStaBackoffSteps - 1];
+static constexpr unsigned long kDashStaSavedPollMs = 5000;
+static constexpr unsigned long kDashStaConnectTimeoutMs = 10000;
+// kDashStaRetryMs kept for backward compat with older references.
+static constexpr unsigned long kDashStaRetryMs = kDashStaSavedPollMs;
 static IPAddress staIP(0, 0, 0, 0);
 static IPAddress staGW(0, 0, 0, 0);
 static IPAddress staMask(255, 255, 255, 0);
@@ -792,6 +787,12 @@ static void dashUseDefaultApConfig()
     strlcpy(apSSID, DASH_SSID, sizeof(apSSID));
     strlcpy(apPass, DASH_PASS, sizeof(apPass));
     apHidden = false;
+    apRuntimeChannel = kDashApChannel;
+}
+
+static uint8_t dashConfiguredApChannel()
+{
+    return kDashApChannel;
 }
 
 static bool dashStaConfigLengthValid(const String &ssid, const String &pass)
@@ -934,6 +935,7 @@ static void dashLoadPrefs()
         }
         dashUseDefaultApConfig();
     }
+    apRuntimeChannel = dashConfiguredApChannel();
 
     // Load WiFi STA networks (multi-SSID slot array)
     wifiNetworkCount = 0;
@@ -1733,11 +1735,12 @@ static bool dashStartAccessPoint(bool withSta)
     if (!dashApConfigValid(apSSID, apPass))
         dashUseDefaultApConfig();
 
-    bool ok = WiFi.softAP(apSSID, apPass, kDashApChannel, apHidden ? 1 : 0, kDashApMaxConn);
+    apRuntimeChannel = dashConfiguredApChannel();
+    bool ok = WiFi.softAP(apSSID, apPass, apRuntimeChannel, apHidden ? 1 : 0, kDashApMaxConn);
     if (!ok)
     {
         dashUseDefaultApConfig();
-        ok = WiFi.softAP(apSSID, apPass, kDashApChannel, 0, kDashApMaxConn);
+        ok = WiFi.softAP(apSSID, apPass, apRuntimeChannel, 0, kDashApMaxConn);
     }
     if (!ok)
         dashLog("[WIFI] AP start failed");
@@ -1784,10 +1787,11 @@ static void dashPrepareStaReconnect()
 {
     if (staConnectAttemptActive || staConnected || WiFi.status() == WL_CONNECTED)
         WiFi.disconnect(false, false);
+    dashGatewayOnStaDisconnected(WiFi.apNetif());
     staConnected = false;
     staConnectAttemptActive = false;
     staRetryAt = 0;
-    staConsecutiveFailures = 0; // user-initiated reconnect resets backoff
+    staConsecutiveFailures = 0; // user-initiated reconnect resets diagnostics
     autoUpdateEligibleAt = 0;
 }
 
@@ -1857,6 +1861,83 @@ static void dashPrepareWifiScan()
     WiFi.setSleep(false);
 }
 
+static uint8_t dashCurrentApChannel()
+{
+#ifdef ESP_PLATFORM
+    wifi_config_t cfg = {};
+    if (esp_wifi_get_config(WIFI_IF_AP, &cfg) == ESP_OK && cfg.ap.channel > 0)
+        return cfg.ap.channel;
+#endif
+    return apRuntimeChannel;
+}
+
+static bool dashSyncApChannelToSta()
+{
+#ifdef ESP_PLATFORM
+    wifi_ap_record_t staInfo = {};
+    if (esp_wifi_sta_get_ap_info(&staInfo) != ESP_OK || staInfo.primary == 0)
+        return false;
+
+    uint8_t staChannel = staInfo.primary;
+    uint8_t apChannel = dashCurrentApChannel();
+    apLastChannelSyncTarget = staChannel;
+    apLastChannelSyncMs = millis();
+
+    if (apChannel == staChannel)
+    {
+        apRuntimeChannel = staChannel;
+        apLastChannelSyncOk = true;
+        dashLog("[WIFI] AP channel already matches STA CH" + String(staChannel));
+        return true;
+    }
+
+    wifi_config_t cfg = {};
+    esp_err_t err = esp_wifi_get_config(WIFI_IF_AP, &cfg);
+    if (err == ESP_OK)
+    {
+        cfg.ap.channel = staChannel;
+        err = esp_wifi_set_config(WIFI_IF_AP, &cfg);
+    }
+
+    if (err == ESP_OK)
+    {
+        apRuntimeChannel = staChannel;
+        apLastChannelSyncOk = true;
+        dashLog("[WIFI] AP channel auto matched: AP CH" + String(apChannel) +
+                " -> STA CH" + String(staChannel));
+        return true;
+    }
+
+    apLastChannelSyncOk = false;
+    dashLog("[WIFI] AP channel auto match failed: AP CH" + String(apChannel) +
+            " STA CH" + String(staChannel) + " err=" + String(esp_err_to_name(err)));
+#endif
+    return false;
+}
+
+static const char *dashWifiStatusName(int status)
+{
+    switch (status)
+    {
+    case WL_IDLE_STATUS:
+        return "IDLE";
+    case WL_NO_SSID_AVAIL:
+        return "NO_SSID";
+    case WL_SCAN_COMPLETED:
+        return "SCAN_DONE";
+    case WL_CONNECTED:
+        return "CONNECTED";
+    case WL_CONNECT_FAILED:
+        return "CONNECT_FAILED";
+    case WL_CONNECTION_LOST:
+        return "CONNECTION_LOST";
+    case WL_DISCONNECTED:
+        return "DISCONNECTED";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 static void performAutoUpdate(); // forward decl, defined below
 
 static void dashCheckWifi()
@@ -1869,13 +1950,35 @@ static void dashCheckWifi()
     {
         staRetryAt = 0;
         dashRotateAndConnect();
+        return; // let the fresh attempt age from its own start timestamp
     }
 
-    if (now - lastCheck < 5000)
+    unsigned long checkInterval = staConnectAttemptActive ? 250UL : 1000UL;
+    if (now - lastCheck < checkInterval)
         return;
     lastCheck = now;
 
-    bool connected = WiFi.status() == WL_CONNECTED;
+    int wifiStatus = WiFi.status();
+    bool connected = wifiStatus == WL_CONNECTED;
+    bool timedOut = !connected && staConnectAttemptActive &&
+                    now - staConnectStartedAt >= kDashStaConnectTimeoutMs;
+    if (timedOut)
+    {
+        uint8_t reason = WiFi.lastDisconnectReason();
+        const char *reasonName = WiFi.lastDisconnectReasonName();
+        staConnectAttemptActive = false;
+        WiFi.disconnect(false, false);
+        dashGatewayOnStaDisconnected(WiFi.apNetif());
+        if (staConsecutiveFailures < 255)
+            staConsecutiveFailures++;
+        staRetryAt = now + kDashStaSavedPollMs;
+        dashLog("[WIFI] STA connect timed out; status=" + String(dashWifiStatusName(wifiStatus)) +
+                " reason=" + String(reasonName) + "(" + String(reason) + ")" +
+                " retry saved networks in " + String(kDashStaSavedPollMs / 1000) +
+                "s, AP+STA stays up (fail#" + String(staConsecutiveFailures) + ")");
+        connected = false;
+    }
+
     if (connected != staConnected)
     {
         staConnected = connected;
@@ -1883,8 +1986,9 @@ static void dashCheckWifi()
         {
             staConnectAttemptActive = false;
             staRetryAt = 0;
-            staConsecutiveFailures = 0; // reset backoff on successful connect
+            staConsecutiveFailures = 0; // reset diagnostics on successful connect
             dashLog("[WIFI] Connected to " + String(staSSID) + " IP: " + WiFi.localIP().toString());
+            dashSyncApChannelToSta();
             dashGatewayOnStaConnected(WiFi.staNetif(), WiFi.apNetif());
             // Remember which slot just succeeded so the next reboot tries it
             // first. Avoids rotating through stale/dead networks on every boot.
@@ -1901,37 +2005,15 @@ static void dashCheckWifi()
         }
         else
         {
-            // Graduated backoff: each failure increases the retry interval.
-            // Avoids hammering WiFi.begin() when the upstream is unavailable,
-            // which would cause repeated APSTA-mode beacon jitter.
-            uint8_t fi = staConsecutiveFailures < kDashStaBackoffSteps
-                             ? staConsecutiveFailures
-                             : static_cast<uint8_t>(kDashStaBackoffSteps - 1);
-            unsigned long backoff = kDashStaBackoffMs[fi];
-            if (staConsecutiveFailures < kDashStaBackoffSteps)
+            if (staConsecutiveFailures < 255)
                 staConsecutiveFailures++;
             dashLog("[WIFI] Disconnected from " + String(staSSID) +
-                    "; retry in " + String(backoff / 1000) + "s (fail#" +
+                    "; retry saved networks in " + String(kDashStaSavedPollMs / 1000) + "s (fail#" +
                     String(staConsecutiveFailures) + ")");
+            dashGatewayOnStaDisconnected(WiFi.apNetif());
             staConnectAttemptActive = false;
-            staRetryAt = now + backoff;
+            staRetryAt = now + kDashStaSavedPollMs;
         }
-    }
-
-    if (!connected && staConnectAttemptActive && now - staConnectStartedAt >= kDashStaConnectTimeoutMs)
-    {
-        staConnectAttemptActive = false;
-        WiFi.disconnect(false, false);
-        // Stay in AP+STA mode; will retry STA later. Don't drop AP back to AP-only.
-        uint8_t fi = staConsecutiveFailures < kDashStaBackoffSteps
-                         ? staConsecutiveFailures
-                         : static_cast<uint8_t>(kDashStaBackoffSteps - 1);
-        unsigned long backoff = kDashStaBackoffMs[fi];
-        if (staConsecutiveFailures < kDashStaBackoffSteps)
-            staConsecutiveFailures++;
-        staRetryAt = now + backoff;
-        dashLog("[WIFI] STA connect timed out; retry in " + String(backoff / 1000) +
-                "s, AP+STA stays up (fail#" + String(staConsecutiveFailures) + ")");
     }
 
     // Fire one-shot auto-update check once eligible
@@ -1940,6 +2022,7 @@ static void dashCheckWifi()
         autoUpdateDone = true;
         performAutoUpdate();
     }
+
 }
 
 // Cached scan results — a full-channel scan in APSTA mode briefly drops the
@@ -1983,7 +2066,9 @@ static void handleWifiScan()
             j += ",";
         j += "{\"ssid\":\"" + jsonEscape(WiFi.SSID(i).c_str()) + "\"";
         j += ",\"rssi\":" + String(WiFi.RSSI(i));
-        j += ",\"enc\":" + String(WiFi.encryptionType(i) != WIFI_AUTH_OPEN ? "true" : "false");
+        wifi_auth_mode_t auth = WiFi.encryptionType(i);
+        j += ",\"enc\":" + String(auth != WIFI_AUTH_OPEN ? "true" : "false");
+        j += ",\"auth\":" + String(static_cast<int>(auth));
         j += ",\"ch\":" + String(WiFi.channel(i));
         j += "}";
     }
@@ -2040,7 +2125,7 @@ static void handleWifiConfig()
 
     String ssid = server.arg("ssid");
     String pass = server.arg("pass");
-    if (!dashStaConfigLengthValid(ssid, pass) || dashStaSsidLooksCorrupt(ssid) || ssid.length() == 0)
+    if (ssid.length() == 0 || ssid.length() > kDashMaxSsidLen || dashStaSsidLooksCorrupt(ssid))
     {
         server.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid SSID or password\"}");
         return;
@@ -2058,10 +2143,19 @@ static void handleWifiConfig()
         return;
     }
 
+    String effectivePass = pass;
+    if (idx >= 0 && idx < wifiNetworkCount && pass.length() == 0 && strlen(wifiNetworks[idx].pass) > 0)
+        effectivePass = wifiNetworks[idx].pass;
+    if (!dashStaConfigLengthValid(ssid, effectivePass))
+    {
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid SSID or password\"}");
+        return;
+    }
+
     DashWifiNetwork &n = wifiNetworks[idx];
     dashClearWifiNetwork(n);
     strlcpy(n.ssid, ssid.c_str(), sizeof(n.ssid));
-    strlcpy(n.pass, pass.c_str(), sizeof(n.pass));
+    strlcpy(n.pass, effectivePass.c_str(), sizeof(n.pass));
     n.useStatic = server.hasArg("static") && server.arg("static") == "1";
     if (n.useStatic)
     {
@@ -2088,6 +2182,37 @@ static void handleWifiConfig()
 
     server.send(200, "application/json", "{\"ok\":true,\"idx\":" + String(idx) + "}");
     dashScheduleSTAConnect(1000);
+}
+
+static void handleWifiConnect()
+{
+    if (!server.hasArg("idx"))
+    {
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"missing idx\"}");
+        return;
+    }
+    int idx = server.arg("idx").toInt();
+    if (idx < 0 || idx >= wifiNetworkCount)
+    {
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"bad idx\"}");
+        return;
+    }
+
+    dashApplyWifiSlot(static_cast<uint8_t>(idx));
+    if (strlen(apSSID) > 0 && strcmp(staSSID, apSSID) == 0)
+    {
+        server.send(409, "application/json", "{\"ok\":false,\"error\":\"SSID matches AP hotspot\"}");
+        return;
+    }
+
+    wifiNextRotateSlot = static_cast<uint8_t>(idx);
+    dashPrepareStaReconnect();
+    dashLog("[WIFI] Manual connect slot " + String(idx) + ": " + String(staSSID));
+
+    server.send(200, "application/json",
+                "{\"ok\":true,\"idx\":" + String(idx) +
+                    ",\"ssid\":\"" + jsonEscape(staSSID) + "\"}");
+    dashScheduleSTAConnect(100);
 }
 
 static void handleWifiDelete()
@@ -2139,6 +2264,7 @@ static void handleWifiDelete()
         if (staConnectAttemptActive || staConnected)
         {
             WiFi.disconnect(false, false);
+            dashGatewayOnStaDisconnected(WiFi.apNetif());
             staConnectAttemptActive = false;
             staConnected = false;
         }
@@ -2203,8 +2329,7 @@ static void handleWifiStatus()
     bool stored = wifiNetworkCount > 0;
     bool connectedNow = WiFi.status() == WL_CONNECTED;
     IPAddress staIp = WiFi.localIP();
-    bool hasStaIp = static_cast<uint32_t>(staIp) != 0;
-    bool connected = connectedNow || staConnected || hasStaIp;
+    bool connected = connectedNow;
     String activeSsid = connectedNow ? WiFi.SSID() : String(staSSID);
     if (dashStaSsidLooksCorrupt(activeSsid))
         activeSsid = "";
@@ -2214,6 +2339,18 @@ static void handleWifiStatus()
     j += ",\"stored\":" + String(stored ? "true" : "false");
     j += ",\"count\":" + String(wifiNetworkCount);
     j += ",\"active\":" + String(wifiActiveSlot);
+    int wifiStatus = WiFi.status();
+    j += ",\"wifi_status\":" + String(wifiStatus);
+    j += ",\"wifi_status_name\":\"";
+    j += dashWifiStatusName(wifiStatus);
+    j += "\"";
+    j += ",\"disconnect_reason\":";
+    j += String(static_cast<unsigned>(WiFi.lastDisconnectReason()));
+    j += ",\"disconnect_reason_name\":\"";
+    j += WiFi.lastDisconnectReasonName();
+    j += "\"";
+    if (staConnectAttemptActive)
+        j += ",\"attempt_age_s\":" + String((millis() - staConnectStartedAt) / 1000);
     if (connected)
         j += ",\"ip\":\"" + staIp.toString() + "\"";
     j += ",\"static\":" + String(staStaticIP ? "true" : "false");
@@ -3123,8 +3260,8 @@ static void handleSettingsExport()
     j += ",\"beta\":" + String(beta ? "true" : "false");
 #if defined(ESP_PLATFORM) && defined(DASH_STA_AP_GATEWAY)
     j += ",\"gateway\":{\"enabled\":" + String(gatewayEnabled ? "true" : "false");
-    j += ",\"mode\":" + String(static_cast<int>(gatewayDnsMode));
-    j += ",\"strict\":" + String(gatewayDnsStrict ? "true" : "false");
+    j += ",\"mode\":0";
+    j += ",\"strict\":false";
     j += ",\"blacklist\":\"" + jsonEscape(gatewayDnsBlacklist.c_str()) + "\"";
     j += ",\"whitelist\":\"" + jsonEscape(gatewayDnsWhitelist.c_str()) + "\"}";
 #endif
@@ -3316,10 +3453,9 @@ static void handleSettingsImport()
         JsonObject gw = doc["gateway"].as<JsonObject>();
         if (gw["enabled"].is<bool>())
             gatewayEnabled = gw["enabled"].as<bool>();
-        if (gw["mode"].is<int>())
-            gatewayDnsMode = gw["mode"].as<int>() == 0 ? DASH_DNS_BLACKLIST : DASH_DNS_WHITELIST;
-        if (gw["strict"].is<bool>())
-            gatewayDnsStrict = gw["strict"].as<bool>();
+        gatewayDnsMode = DASH_DNS_BLACKLIST;
+        gatewayDnsStrict = false;
+        gatewayDnsCidrAllowlist = "";
         if (gw["blacklist"].is<const char *>())
             gatewayDnsBlacklist = dashGatewaySanitizeBlacklist((const char *)(gw["blacklist"] | ""));
         if (gw["whitelist"].is<const char *>())
@@ -3369,8 +3505,9 @@ static void handleApConfig()
         prefs.putBool("ap_hidden", newHidden);
     prefs.end();
 
-    dashLog("[WIFI] AP config updated: SSID=" + newSsid + (apHidden ? " (hidden)" : ""));
-    server.send(200, "application/json", "{\"ok\":true,\"msg\":\"Saved. Reboot to apply new AP settings.\"}");
+    dashLog("[WIFI] AP config updated: SSID=" + newSsid + (apHidden ? " (hidden)" : "") +
+            " channel=auto match STA");
+    server.send(200, "application/json", "{\"ok\":true,\"msg\":\"Saved. AP starts on CH1 and auto matches STA after WiFi connects.\"}");
 }
 
 static void handleApStatus()
@@ -3385,6 +3522,11 @@ static void handleApStatus()
     String j = "{\"ssid\":\"" + jsonEscape(apSSID) + "\"";
     j += ",\"ip\":\"" + WiFi.softAPIP().toString() + "\"";
     j += ",\"clients\":" + String(WiFi.softAPgetStationNum());
+    j += ",\"channel\":" + String(dashCurrentApChannel());
+    j += ",\"channel_auto\":true";
+    j += ",\"last_channel_sync_ms\":" + String(apLastChannelSyncMs);
+    j += ",\"last_channel_sync_target\":" + String(apLastChannelSyncTarget);
+    j += ",\"last_channel_sync_ok\":" + String(apLastChannelSyncOk ? "true" : "false");
     j += ",\"stored\":" + String(stored ? "true" : "false");
     j += ",\"hidden\":" + String(apHidden ? "true" : "false");
     j += "}";
@@ -3951,6 +4093,7 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     server.on("/system_status", HTTP_GET, handleSystemStatus);
     server.on("/task_stats", HTTP_GET, handleTaskStats);
     server.on("/wifi_networks", HTTP_GET, handleWifiNetworks);
+    server.on("/wifi_connect", HTTP_POST, handleWifiConnect);
     server.on("/wifi_delete", HTTP_POST, handleWifiDelete);
     server.on("/update_check", HTTP_GET, handleUpdateCheck);
     server.on("/update_install", HTTP_POST, handleUpdateInstall);
@@ -3962,13 +4105,12 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     server.on("/gateway_dns", HTTP_GET, handleGatewayDnsGet);
     server.on("/gateway_dns", HTTP_POST, handleGatewayDnsPost);
     server.on("/gateway_dns_test", HTTP_GET, handleGatewayDnsTest);
+    server.on("/gateway_dns_stats_reset", HTTP_POST, handleGatewayDnsStatsReset);
     server.on("/gateway_whitelist_add", HTTP_POST, handleGatewayWhitelistAdd);
     server.on("/gateway_blocked", HTTP_GET, handleGatewayBlocked);
     server.on("/gateway_blocked_clear", HTTP_POST, handleGatewayBlockedClear);
     server.on("/gateway_blocked_ips", HTTP_GET, handleGatewayBlockedIps);
     server.on("/gateway_blocked_ips_clear", HTTP_POST, handleGatewayBlockedIpsClear);
-    server.on("/gateway_strict", HTTP_GET, handleGatewayStrict);
-    server.on("/gateway_strict", HTTP_POST, handleGatewayStrict);
 #endif
 
     server.begin();

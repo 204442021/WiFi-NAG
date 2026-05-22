@@ -613,9 +613,27 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
         <div><span style="color:var(--tx3)">AP</span> <span id="gw-diag-ap">--</span></div>
         <div><span style="color:var(--tx3)">STA</span> <span id="gw-diag-sta">--</span></div>
         <div><span style="color:var(--tx3)">NAT</span> <span id="gw-diag-nat">--</span></div>
+        <div><span style="color:var(--tx3)">Radio</span> <span id="gw-diag-radio">--</span></div>
         <div><span style="color:var(--tx3)">DNS</span> <span id="gw-diag-dns">--</span></div>
+        <div><span style="color:var(--tx3)">DNS Slow</span> <span id="gw-diag-slow">--</span></div>
+        <div><span style="color:var(--tx3)">Pending</span> <span id="gw-diag-pending">--</span></div>
         <div><span style="color:var(--tx3)">Upstream</span> <span id="gw-diag-upstream">--</span></div>
-        <div><span style="color:var(--tx3)">Clients</span> <span id="gw-diag-clients">--</span></div>
+        <div><span style="color:var(--tx3)">AP Clients</span> <span id="gw-diag-clients">--</span></div>
+      </div>
+      <div style="margin:4px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2)">
+        <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:6px">Upstream DNS</div>
+        <div style="display:grid;grid-template-columns:150px minmax(0,1fr) auto auto;gap:6px;align-items:center">
+          <select class="sniff-input" id="gw-upstream-mode" onchange="toggleGatewayUpstreamCustom()">
+            <option value="0">Auto</option>
+            <option value="1">223.5.5.5 Ali</option>
+            <option value="2">119.29.29.29 Tencent</option>
+            <option value="3">Custom</option>
+          </select>
+          <input class="sniff-input" id="gw-upstream-custom" placeholder="Custom DNS, e.g. 8.8.8.8">
+          <button class="sniff-btn modal-btn-primary" onclick="saveGatewayDns()">Save DNS</button>
+          <button class="sniff-btn" onclick="resetGatewayDnsStats()">Reset DNS Stats</button>
+        </div>
+        <div id="gw-upstream-hint" style="font-size:10px;color:var(--tx3);margin-top:5px">Auto uses DHCP DNS from the connected WiFi; public DNS can avoid stale slow/fail counters from a bad router DNS.</div>
       </div>
       <div style="margin:4px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2)">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
@@ -623,28 +641,6 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
           <button class="sniff-btn gateway-profile-btn" id="gw-profile-aggressive" onclick="applyGatewayProfile('aggressive')">Aggressive Mode</button>
         </div>
         <div id="gw-profile-desc" style="font-size:11px;color:var(--tx3);line-height:1.45">Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.</div>
-      </div>
-      <div class="setting-row" style="padding:8px 0;margin-bottom:8px;border-top:1px solid var(--bd)">
-        <div class="setting-info">
-          <div class="setting-name">Expert Filtering Options</div>
-          <div class="setting-desc">Show whitelist-only mode, strict DNS and CIDR exceptions. Keep off for daily Tesla domain filtering.</div>
-        </div>
-        <label class="tgl"><input type="checkbox" id="gw-advanced" onchange="toggleGatewayAdvanced(this.checked)"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
-      </div>
-      <div id="gw-advanced-panel" style="display:none;margin-bottom:10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2)">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
-          <button class="sniff-btn gateway-mode-btn" id="gw-mode-black" onclick="setGatewayMode(0,true)">Blacklist Mode</button>
-          <button class="sniff-btn gateway-mode-btn" id="gw-mode-white" onclick="setGatewayMode(1,true)">Whitelist Mode</button>
-        </div>
-        <div id="gw-mode-hint" style="font-size:11px;color:var(--tx3);margin:-2px 0 8px"></div>
-        <label style="font-size:11px;color:var(--tx3);display:flex;align-items:center;gap:6px;margin-bottom:8px">
-          <input type="checkbox" id="gw-strict"> Strict DNS mode
-        </label>
-        <div style="margin-bottom:2px">
-          <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:4px">CIDR Allowlist</div>
-          <textarea class="sniff-input" id="gw-cidr" rows="3" placeholder="Allowed IP ranges, one per line, e.g. 142.250.0.0/15" style="width:100%;resize:vertical"></textarea>
-          <div style="font-size:10px;color:var(--tx3);margin-top:4px">CIDR hits bypass DNS strict and blackhole checks. Use only for trusted direct-IP services.</div>
-        </div>
       </div>
       <div style="margin-bottom:10px">
         <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:4px">Blacklist</div>
@@ -678,17 +674,6 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
       <div id="gw-test-result" style="font-size:11px;color:var(--tx3);margin-bottom:8px"></div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <button class="sniff-btn" onclick="saveGatewayDns()">Save DNS</button>
-      </div>
-      <div id="gw-strict-panel" style="display:none;margin-top:10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <span style="font-weight:600;color:var(--tx2)">Strict Mode IPs</span>
-          <span id="gw-strict-stats" style="font-size:11px;color:var(--tx3)"></span>
-        </div>
-        <div style="display:flex;gap:6px;margin-bottom:6px">
-          <button class="sniff-btn" onclick="loadGatewayBlockedIps()">Refresh Blocked IPs</button>
-          <button class="sniff-btn" onclick="clearGatewayBlockedIps()">Clear Blocked IPs</button>
-        </div>
-        <div id="gw-blocked-ips" style="font-size:11px;color:var(--tx3);max-height:160px;overflow:auto"></div>
       </div>
     </div>
   </div>
@@ -944,13 +929,13 @@ const I18N_ZH={
 'CAN Bus':'CAN 总线','Injection':'注入','Frame rate':'CAN 帧率','CAN Frame Rate':'CAN 帧率','RX Frames':'接收帧','TX Frames':'发送帧','Errors':'错误','AD Status':'AP 状态','Profile':'配置档','Offset':'偏移','Uptime':'运行时间',
 'Offline':'离线','Online':'在线','Active':'运行中','Inactive':'未激活','BLOCKED':'已阻止','Waiting AP':'等待 AP','No frames':'无帧','Sniffer paused':'嗅探暂停',
 'WiFi Hotspot':'WiFi 热点','Change the WiFi hotspot name and password':'修改 WiFi 热点名称和密码','SSID':'SSID','Password':'密码','Hidden':'隐藏','WiFi Internet':'WiFi 互联网','Not configured':'未配置','Save up to 4 networks (e.g. home + phone hotspot).':'最多保存 4 个网络（如家庭 WiFi + 手机热点）。','Add network':'添加网络','WiFi SSID':'WiFi SSID','Scan':'扫描','Save & Connect':'保存并连接','Use static IP':'使用静态 IP',
-'STA-AP Gateway':'STA-AP 网关','Gateway status unavailable':'网关状态不可用','Gateway':'网关','Enable STA-AP NAT routing for hotspot clients when WiFi Internet is connected.':'WiFi 互联网连接后，为热点客户端启用 STA-AP NAT 路由。','Conservative Mode':'保守模式','Aggressive Mode':'激进模式','Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.':'保守模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手。','Aggressive Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant / app vehicle control.':'激进模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手 / 控车。','Custom DNS profile':'自定义 DNS 配置','Expert Filtering Options':'专家过滤选项','Show whitelist-only mode, strict DNS and CIDR exceptions. Keep off for daily Tesla domain filtering.':'显示纯白名单模式、严格 DNS 和 CIDR 例外。日常 Tesla 域名过滤保持关闭。','Blacklist':'黑名单','Whitelist':'白名单','Strict mode':'严格模式','Save DNS':'保存 DNS','Blocked':'阻断记录','DNS Filter List':'DNS 过滤清单','Add to Whitelist':'加入白名单','Blacklisted':'黑名单','Already whitelisted':'已在白名单','Clear':'清空','No blocked domains recorded':'没有阻断记录','Cleared':'已清空','Gateway not available':'网关不可用','domain is blacklisted':'域名在黑名单中，禁止加入白名单','cannot add domain':'无法加入域名',
+'STA-AP Gateway':'STA-AP 网关','Gateway status unavailable':'网关状态不可用','Gateway':'网关','Enable STA-AP NAT routing for hotspot clients when WiFi Internet is connected.':'WiFi 互联网连接后，为热点客户端启用 STA-AP NAT 路由。','Conservative Mode':'保守模式','Aggressive Mode':'激进模式','Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.':'保守模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手。','Aggressive Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant / app vehicle control.':'激进模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手 / 控车。','Custom DNS profile':'自定义 DNS 配置','Blacklist':'黑名单','Whitelist':'白名单','Save DNS':'保存 DNS','Blocked':'阻断记录','DNS Filter List':'DNS 过滤清单','Add to Whitelist':'加入白名单','Blacklisted':'黑名单','Already whitelisted':'已在白名单','Clear':'清空','No blocked domains recorded':'没有阻断记录','Cleared':'已清空','Gateway not available':'网关不可用','domain is blacklisted':'域名在黑名单中，禁止加入白名单','cannot add domain':'无法加入域名',
 'CAN Pins':'CAN 引脚','default':'默认','TX GPIO':'TX GPIO','RX GPIO':'RX GPIO','Reboot required after saving custom pins.':'保存自定义引脚后需要重启。','Dashboard Log':'调试日志','Debug Log':'调试日志','Settings Backup':'设置备份','Export and import device settings':'导出和导入设备设置','Download':'下载','Import':'导入','Support':'支持','Open':'打开',
 'Firmware Update':'固件更新','Beta Channel':'Beta 通道','Include pre-release / beta firmware versions':'包含预发布 / beta 固件版本','Auto-Update on Boot':'启动后自动更新','Check and install updates automatically ~15 s after WiFi connects':'WiFi 连接约 15 秒后自动检查并安装更新','Check for Updates':'检查更新','Manual firmware upload':'手动上传固件','Tap to select firmware .bin':'点击选择固件 .bin','Or drag and drop a file here':'或将文件拖放到这里','Uploading...':'上传中...','Flash Firmware':'刷写固件','Reset OTA Credentials':'重置 OTA 凭据',
   'System Health':'系统状态','System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','CAN Debug':'CAN 调试','CAN调试':'CAN 调试','Enable CAN debug tools':'启用 CAN 调试工具','Shows firmware update, logs, sniffer and recorder panels':'显示固件更新、日志、嗅探器和记录器面板','Chip':'芯片','CPU':'CPU','CPU Load':'CPU 负载','Task Load':'任务负载','task':'任务','core':'核心','cpu%':'CPU%','stack':'栈余量','state':'状态','Task stats unavailable':'任务负载不可用','Core 0':'核心 0','Core 1':'核心 1','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Heap RAM':'堆内存','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','On':'开启','Off':'关闭','off':'关闭','not enabled':'未启用','unavailable':'不可用','offline':'离线','not present':'不存在','STA online':'STA 在线','STA offline':'STA 离线','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','warming up':'采样中',
 'CAN':'CAN','CAN Sniffer':'CAN 嗅探器','Pause':'暂停','Resume':'继续','Wire IDs':'线束 ID','CAN Recorder':'CAN 记录器','Start Recording':'开始记录','Stop Recording':'停止记录','Ready':'就绪','Saved':'已保存','Recording...':'记录中...','CAN Controller':'CAN 控制器','Last Write Check':'最后写入检查','Reset Stats':'重置统计',
 'Cancel':'取消','Continue':'继续','Confirm':'确认','Copy':'复制','Open GitHub Issue':'打开 GitHub Issue','Close':'关闭','Show':'显示','Hide':'隐藏','Loading...':'加载中...','Saving...':'保存中...','Saved! Reboot to apply.':'已保存！重启后生效。','Saved':'已保存','Error':'错误','Save failed':'保存失败','Connection error':'连接错误','Connection to ':'到 ',
-'Enabled':'已启用','Disabled':'已禁用','on':'开启','waiting':'等待中','blocked':'已阻断','NAT':'NAT','Connected':'已连接','Connecting to ':'正在连接 ','Delete':'删除','Edit':'编辑','No networks saved.':'未保存网络。','firmware default':'固件默认','saved':'已保存'
+'Enabled':'已启用','Disabled':'已禁用','on':'开启','waiting':'等待中','blocked':'已阻断','NAT':'NAT','Connected':'已连接','Connecting to ':'正在连接 ','Connect':'连接','Reconnect':'重连','Connect failed':'连接失败','Delete':'删除','Edit':'编辑','No networks saved.':'未保存网络。','firmware default':'固件默认','saved':'已保存'
 };
 Object.assign(I18N_ZH,{
   'Configuration':'\u914d\u7f6e',
@@ -980,15 +965,9 @@ Object.assign(I18N_ZH,{
   'Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.':'保守模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手。',
   'Aggressive Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant / app vehicle control.':'激进模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手 / 控车。',
   'Custom DNS profile':'自定义 DNS 配置',
-  'Expert Filtering Options':'专家过滤选项',
-  'Show whitelist-only mode, strict DNS and CIDR exceptions. Keep off for daily Tesla domain filtering.':'显示纯白名单模式、严格 DNS 和 CIDR 例外。日常 Tesla 域名过滤保持关闭。',
   'Enable STA-AP NAT routing for hotspot clients when WiFi Internet is connected':'WiFi 互联网连接后，为热点客户端启用 STA-AP NAT 路由。',
-  'Strict DNS mode':'严格 DNS 模式',
   'Blocked domains, one per line':'阻止域名，每行一个',
   'Allowed domains, one per line':'允许域名，每行一个',
-  'CIDR Allowlist':'CIDR 白名单',
-  'Allowed IP ranges, one per line, e.g. 142.250.0.0/15':'允许的 IP 网段，每行一个，例如 142.250.0.0/15',
-  'CIDR hits bypass DNS strict and blackhole checks. Use only for trusted direct-IP services.':'命中 CIDR 后会绕过 DNS 严格模式和黑洞拦截，仅用于可信的直连 IP 服务。',
   'Test domain':'测试域名',
   'Test DNS':'测试 DNS',
   'DNS test failed':'DNS 测试失败',
@@ -1089,10 +1068,7 @@ Object.assign(I18N_ZH,{
   'Password required':'请输入密码','Enter SSID':'请输入 SSID','Scan failed':'扫描失败',
   // STA-AP Gateway
   'Routes hotspot clients through the configured WiFi Internet uplink, with DNS filtering.':'通过已配置的 WiFi 互联网上行为热点客户端转发，并提供 DNS 过滤。',
-  'Blacklist Mode':'黑名单模式','Whitelist Mode':'白名单模式',
-  'Refresh Blocked IPs':'刷新已阻断 IP','Clear Blocked IPs':'清空已阻断 IP',
-  'Filter List':'过滤清单','Clear':'清空',
-  'Strict Mode IPs':'严格模式 IP','Refresh':'刷新',
+  'Filter List':'过滤清单','Clear':'清空','Refresh':'刷新',
   'Current: Blacklist mode - saving automatically':'当前：黑名单模式 - 自动保存中',
   'Current: Whitelist mode - saving automatically':'当前：白名单模式 - 自动保存中',
   'Current: Blacklist mode - click mode to save immediately':'当前：黑名单模式 - 点击模式立即保存',
@@ -1223,6 +1199,21 @@ Object.assign(I18N_ZH,{
   'fd':'fd',
   'none':'\u65e0',
   'whitelist override blacklist':'\u767d\u540d\u5355\u8986\u76d6\u9ed1\u540d\u5355'
+});
+Object.assign(I18N_ZH,{
+  'Upstream DNS':'\u4e0a\u6e38 DNS',
+  'Auto':'\u81ea\u52a8',
+  'Custom':'\u81ea\u5b9a\u4e49',
+  'Custom DNS, e.g. 8.8.8.8':'\u81ea\u5b9a\u4e49 DNS\uff0c\u4f8b\u5982 8.8.8.8',
+  'Reset DNS Stats':'\u6e05\u96f6 DNS \u7edf\u8ba1',
+  'Resetting DNS stats...':'\u6b63\u5728\u6e05\u96f6 DNS \u7edf\u8ba1...',
+  'DNS stats reset':'DNS \u7edf\u8ba1\u5df2\u6e05\u96f6',
+  'invalid upstream DNS':'\u4e0a\u6e38 DNS \u5730\u5740\u65e0\u6548',
+  'custom upstream DNS required':'\u9700\u8981\u586b\u5199\u81ea\u5b9a\u4e49\u4e0a\u6e38 DNS',
+  'Auto uses DHCP DNS from the connected WiFi; public DNS can avoid stale slow/fail counters from a bad router DNS.':'\u81ea\u52a8\u4f7f\u7528\u5df2\u8fde\u63a5 WiFi \u5206\u914d\u7684 DHCP DNS\uff1b\u516c\u5171 DNS \u53ef\u4ee5\u907f\u514d\u8def\u7531\u5668 DNS \u5f02\u5e38\u5bfc\u81f4\u7684 slow/fail \u7d2f\u8ba1\u8bef\u5224\u3002',
+  'Using Ali DNS 223.5.5.5.':'\u4f7f\u7528\u963f\u91cc DNS 223.5.5.5\u3002',
+  'Using Tencent DNS 119.29.29.29.':'\u4f7f\u7528\u817e\u8baf DNS 119.29.29.29\u3002',
+  'Enter a custom upstream DNS IPv4 address.':'\u8f93\u5165\u81ea\u5b9a\u4e49\u4e0a\u6e38 DNS IPv4 \u5730\u5740\u3002'
 });
 const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
 Object.assign(I18N_EN,{
@@ -2506,7 +2497,7 @@ async function saveAP(){
   if(pass&&pass.length<8){$('ap-status').textContent='Password min 8 chars';$('ap-status').style.color='var(--err)';return;}
   try{const r=await fetch('/ap_config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'ssid='+encodeURIComponent(ssid)+'&pass='+encodeURIComponent(pass)+'&hidden='+hidden});
     const d=await r.json();
-    if(d.ok){$('ap-status').textContent='Saved! Reboot to apply.';$('ap-status').style.color='var(--ok)';$('ap-pass').value='';}
+    if(d.ok){$('ap-status').textContent=d.msg||'Saved! AP starts on CH1 and auto matches STA after WiFi connects.';$('ap-status').style.color='var(--ok)';$('ap-pass').value='';}
     else{$('ap-status').textContent=d.error||'Error';$('ap-status').style.color='var(--err)';}
   }catch(e){$('ap-status').textContent='Error';$('ap-status').style.color='var(--err)';}
 }
@@ -2517,6 +2508,11 @@ async function loadApStatus(){
     if(d.ssid)$('ap-ssid').value=d.ssid;
     $('ap-clients').textContent=d.clients+' client'+(d.clients!==1?'s':'');
     if(typeof d.hidden!=='undefined')$('ap-hidden').checked=!!d.hidden;
+    if($('ap-status')){
+      const sync=d.last_channel_sync_ms?(' \u2022 sync '+(d.last_channel_sync_ok?'ok':'fail')+' CH'+(d.last_channel_sync_target||'?')):'';
+      $('ap-status').textContent='AP CH'+(d.channel||'?')+' \u2022 auto match STA'+sync;
+      $('ap-status').style.color='var(--tx3)';
+    }
     if(d.stored){$('ap-stored').textContent='saved';$('ap-stored').style.color='var(--ok)';}
     else{$('ap-stored').textContent='firmware default';$('ap-stored').style.color='var(--tx3)';}
     }catch(e){}
@@ -2532,13 +2528,27 @@ function rssiIcon(r){
   if(r>=-70) return '\u2587\u2587\u2581\u2581';
   return '\u2587\u2581\u2581\u2581';
 }
+function wifiAuthLabel(a){
+  const n=Number(a);
+  if(n===0)return 'OPEN';
+  if(n===1)return 'WEP';
+  if(n===2)return 'WPA';
+  if(n===3)return 'WPA2';
+  if(n===4)return 'WPA/WPA2';
+  if(n===5)return 'ENT';
+  if(n===6)return 'WPA3';
+  if(n===7)return 'WPA2/WPA3';
+  if(n===8)return 'WAPI';
+  if(n===9)return 'WPA3-ENT';
+  return 'AUTH'+(Number.isFinite(n)?n:'?');
+}
 async function scanWifi(){
   $('scan-btn').textContent='Scanning...';$('scan-btn').disabled=true;
   try{
     const r=await fetch('/wifi_scan');const d=await r.json();
     const el=$('wifi-nets');
     if(!d.networks.length){el.innerHTML='<div style="padding:8px;font-size:11px;color:var(--tx3);text-align:center">No networks found</div>';el.style.display='block';}
-    else{el.innerHTML=d.networks.map(n=>'<div onclick="pickWifi(\''+n.ssid.replace(/'/g,"\\'")+'\')" style="padding:6px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd);font-size:12px" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'\'"><span>'+(n.enc?'\uD83D\uDD12 ':'')+n.ssid+'</span><span style="color:var(--tx3);font-size:10px">'+rssiIcon(n.rssi)+' '+n.rssi+'dBm CH'+n.ch+'</span></div>').join('');el.style.display='block';}
+    else{el.innerHTML=d.networks.map(n=>'<div data-wifi-ssid="'+escapeHtml(n.ssid)+'" style="padding:6px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd);font-size:12px" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'\'"><span>'+(n.enc?'\uD83D\uDD12 ':'')+escapeHtml(n.ssid)+'</span><span style="color:var(--tx3);font-size:10px">'+rssiIcon(n.rssi)+' '+n.rssi+'dBm CH'+n.ch+' '+wifiAuthLabel(n.auth)+'</span></div>').join('');el.querySelectorAll('[data-wifi-ssid]').forEach(row=>row.onclick=()=>pickWifi(row.dataset.wifiSsid||''));el.style.display='block';}
   }catch(e){$('wifi-status').textContent='Scan failed';$('wifi-status').style.color='var(--err)';}
   $('scan-btn').textContent='Scan';$('scan-btn').disabled=false;
 }
@@ -2554,18 +2564,25 @@ function renderWifiSlots(){
   const nets=wifiSlotCache.networks||[];
   const max=wifiSlotCache.max||4;
   const active=wifiSlotCache.active;
+  const connectedSsid=wifiStatusCache.connected?String(wifiStatusCache.ssid||''):'';
+  const tryingIdx=(!wifiStatusCache.connected&&wifiStatusCache.connecting)?active:-1;
   cnt.textContent='('+nets.length+'/'+max+')';
   if(!nets.length){
     list.innerHTML='<div style="font-size:11px;color:var(--tx3);padding:6px 0">No networks saved.</div>';
   }else{
     list.innerHTML=nets.map(n=>{
-      const isActive=n.idx===active;
-      const dot='<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(isActive?'var(--ok)':'var(--tx3)')+';margin-right:6px"></span>';
+      const isConnected=connectedSsid&&n.ssid===connectedSsid;
+      const isTrying=n.idx===tryingIdx;
+      const dotColor=isConnected?'var(--ok)':(isTrying?'var(--warn)':'var(--tx3)');
+      const dot='<span title="'+(isConnected?'connected':(isTrying?'trying':'saved'))+'" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+dotColor+';margin-right:6px"></span>';
       const tag=n.static?'<span style="font-size:10px;color:var(--tx3);margin-left:6px">[static]</span>':'';
+      const state=isConnected?'<span style="font-size:10px;color:var(--ok);margin-left:6px">[connected]</span>':(isTrying?'<span style="font-size:10px;color:var(--warn);margin-left:6px">[trying]</span>':'');
+      const connectLabel=isConnected?'Reconnect':'Connect';
       return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12px">'+
-        '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+dot+escapeHtml(n.ssid)+tag+'</div>'+
-        '<button class="sniff-btn" onclick="editWifiSlot('+n.idx+')" style="padding:4px 8px;font-size:11px">Edit</button>'+
-        '<button class="sniff-btn" onclick="deleteWifiSlot('+n.idx+')" style="padding:4px 8px;font-size:11px;background:var(--errBg);border-color:var(--errBd);color:var(--err)">Delete</button>'+
+        '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+dot+escapeHtml(n.ssid)+tag+state+'</div>'+
+        '<button class="sniff-btn" onclick="connectWifiSlot('+n.idx+')" style="padding:4px 8px;font-size:11px;border-color:var(--accBd);color:var(--acc)">'+trText(connectLabel)+'</button>'+
+        '<button class="sniff-btn" onclick="editWifiSlot('+n.idx+')" style="padding:4px 8px;font-size:11px">'+trText('Edit')+'</button>'+
+        '<button class="sniff-btn" onclick="deleteWifiSlot('+n.idx+')" style="padding:4px 8px;font-size:11px;background:var(--errBg);border-color:var(--errBd);color:var(--err)">'+trText('Delete')+'</button>'+
       '</div>';
     }).join('');
   }
@@ -2590,15 +2607,20 @@ async function loadWifiStatus(){
     dashboardStaIp=d.connected&&d.ip?d.ip:'';
     if(typeof d.active==='number')wifiSlotCache.active=d.active;
     renderWifiSlots();
+    const stName=d.wifi_status_name||('status '+(d.wifi_status===undefined?'?':d.wifi_status));
+    const stCode=d.wifi_status===undefined?'?':d.wifi_status;
+    const age=d.attempt_age_s===undefined?'':(' \u2022 '+d.attempt_age_s+'s');
+    const reason=(d.disconnect_reason_name&&d.disconnect_reason_name!=='none')?(' \u2022 '+d.disconnect_reason_name+'('+d.disconnect_reason+')'):'';
     if(d.connected){
       setText('wifi-status',(d.ip&&d.ip!==location.hostname)?('Connected: '+(d.ssid||'')+' \u2022 '+d.ip+' \u2022 switch to that WiFi and open this IP'):('Connected: '+(d.ssid||'')+' \u2022 '+d.ip));
       $('wifi-status').style.color='var(--ok)';
     }
     else if(d.connecting&&d.ssid){
-      setText('wifi-status','Connecting to '+d.ssid+'...');$('wifi-status').style.color='var(--acc)';
+      setText('wifi-status','Connecting to '+d.ssid+age+' \u2022 '+stName+'('+stCode+')'+reason);$('wifi-status').style.color='var(--warn)';
     }
     else if(d.count>0){
-      setText('wifi-status',d.count+' saved \u2022 trying to connect...');
+      const retry=d.retry_in_s!==undefined?(' \u2022 retry in '+d.retry_in_s+'s'):'';
+      setText('wifi-status',d.count+' saved'+retry+' \u2022 '+stName+'('+stCode+')'+reason);
       $('wifi-status').style.color='var(--tx3)';
     }
     else{
@@ -2607,6 +2629,26 @@ async function loadWifiStatus(){
     }
     }catch(e){}
   });
+}
+async function connectWifiSlot(idx){
+  const n=(wifiSlotCache.networks||[]).find(x=>x.idx===idx);
+  if(!n)return;
+  try{
+    $('wifi-status').textContent=trText('Connecting to ')+n.ssid+'...';
+    $('wifi-status').style.color='var(--acc)';
+    const r=await fetch('/wifi_connect',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'idx='+idx});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||d.ok===false)throw new Error(d.error||'connect failed');
+    wifiSlotCache.active=idx;
+    wifiStatusCache={connected:false,connecting:true,ssid:n.ssid,active:idx};
+    renderWifiSlots();
+    setTimeout(loadWifiStatus,500);
+    setTimeout(loadWifiStatus,2500);
+    setTimeout(loadWifiStatus,6500);
+  }catch(e){
+    $('wifi-status').textContent=e.message||'Connect failed';
+    $('wifi-status').style.color='var(--err)';
+  }
 }
 function editWifiSlot(idx){
   const n=(wifiSlotCache.networks||[]).find(x=>x.idx===idx);
@@ -2653,9 +2695,7 @@ async function saveWifi(){
   }
   let effectivePass=pass;
   if(isEdit&&!pass){
-    const orig=(wifiSlotCache.networks||[]).find(x=>x.idx===editIdx);
-    if(orig&&!orig.hasPass)effectivePass='';
-    else if(!pass){$('wifi-status').textContent='Password required';$('wifi-status').style.color='var(--err)';return;}
+    effectivePass='';
   }
   let body='ssid='+encodeURIComponent(ssid)+'&pass='+encodeURIComponent(effectivePass);
   if(isEdit)body+='&idx='+editIdx;
@@ -2677,7 +2717,7 @@ async function saveWifi(){
 // 鈹€鈹€ STA-AP Gateway / DNS 鈹€鈹€
 let gatewayMode=0;
 let gatewayDnsSaving=false;
-let gatewayDnsBlackDirty=false,gatewayDnsWhiteDirty=false,gatewayDnsCidrDirty=false;
+let gatewayDnsBlackDirty=false,gatewayDnsWhiteDirty=false;
 let gatewayDnsLastBlack=null,gatewayDnsLastWhite=null,gatewayDnsLastCidr=null;
 let gatewayAdvancedUserOpen=false;
 const gatewayDnsCacheKey='dashGatewayDnsStateV1';
@@ -2691,7 +2731,7 @@ function gatewayDnsEditing(id){
   return el&&document.activeElement===el;
 }
 function initGatewayDnsEditing(){
-  const black=$('gw-blacklist'),white=$('gw-whitelist'),cidr=$('gw-cidr');
+  const black=$('gw-blacklist'),white=$('gw-whitelist');
   if(black&&!black.dataset.dirtyHooked){
     black.dataset.dirtyHooked='1';
     black.addEventListener('input',()=>{gatewayDnsBlackDirty=true;updateGatewayProfileButtons();});
@@ -2699,10 +2739,6 @@ function initGatewayDnsEditing(){
   if(white&&!white.dataset.dirtyHooked){
     white.dataset.dirtyHooked='1';
     white.addEventListener('input',()=>{gatewayDnsWhiteDirty=true;updateGatewayProfileButtons();});
-  }
-  if(cidr&&!cidr.dataset.dirtyHooked){
-    cidr.dataset.dirtyHooked='1';
-    cidr.addEventListener('input',()=>{gatewayDnsCidrDirty=true;});
   }
 }
 function updateGatewayTextarea(id,next,last,dirty,forceApply){
@@ -2719,11 +2755,7 @@ function updateGatewayTextarea(id,next,last,dirty,forceApply){
   return next;
 }
 function toggleGatewayAdvanced(open,forceActive){
-  const active=!!forceActive;
-  gatewayAdvancedUserOpen=!!open||active;
-  const panel=$('gw-advanced-panel'),sw=$('gw-advanced');
-  if(sw)sw.checked=gatewayAdvancedUserOpen;
-  if(panel)panel.style.display=gatewayAdvancedUserOpen?'block':'none';
+  gatewayAdvancedUserOpen=false;
 }
 function normalizeGatewayList(v){
   return gatewayListItems(v).join('\n');
@@ -2741,15 +2773,23 @@ function gatewayListHasAll(current,template){
   const cur=new Set(gatewayListItems(current));
   return gatewayListItems(template).every(x=>cur.has(x));
 }
+function gatewayListHasAny(current,template){
+  const cur=new Set(gatewayListItems(current));
+  return gatewayListItems(template).some(x=>cur.has(x));
+}
 function mergeGatewayList(current,template){
   return gatewayListItems((current||'')+'\n'+(template||'')).join('\n');
+}
+function removeGatewayList(current,template){
+  const drop=new Set(gatewayListItems(template));
+  return gatewayListItems(current).filter(x=>!drop.has(x)).join('\n');
 }
 function updateGatewayProfileButtons(){
   const white=$('gw-whitelist')?$('gw-whitelist').value:'';
   const safe=gatewayListHasAll(white,gatewayProfileSafeWhitelist);
   const aggressive=gatewayListHasAll(white,gatewayProfileAggressiveWhitelist);
   const sb=$('gw-profile-safe'),ab=$('gw-profile-aggressive'),desc=$('gw-profile-desc');
-  if(sb)sb.classList.toggle('active',safe);
+  if(sb)sb.classList.toggle('active',safe&&!aggressive);
   if(ab)ab.classList.toggle('active',aggressive);
   if(desc){
     desc.textContent=aggressive?gatewayProfileDescAggressive:(safe?gatewayProfileDescSafe:'Custom DNS profile');
@@ -2766,10 +2806,14 @@ function writeGatewayDnsCache(d){
   try{
     if(!d||d.ok===false)return;
     localStorage.setItem(gatewayDnsCacheKey,JSON.stringify({
-      enabled:!!d.enabled,mode:d.mode||0,strict:!!d.strict,
-      blacklist:d.blacklist||'',whitelist:d.whitelist||'',cidr:d.cidr||'',
-      black_count:d.black_count||0,white_count:d.white_count||0,cidr_count:d.cidr_count||0,
-      black_max:d.black_max||100,white_max:d.white_max||200,cidr_max:d.cidr_max||64
+      enabled:!!d.enabled,mode:0,strict:false,
+      blacklist:d.blacklist||'',whitelist:d.whitelist||'',cidr:'',
+      upstream_mode:(d.upstream_mode!==undefined?d.upstream_mode:0),
+      upstream_custom:d.upstream_custom||'',
+      upstream_dhcp:d.upstream_dhcp||'',
+      upstream_effective:d.upstream_effective||'',
+      black_count:d.black_count||0,white_count:d.white_count||0,
+      black_max:d.black_max||100,white_max:d.white_max||200
     }));
   }catch(e){}
 }
@@ -2778,12 +2822,15 @@ function applyGatewayProfile(profile){
   const aggressive=profile==='aggressive';
   if($('gw-enabled'))$('gw-enabled').checked=true;
   if($('gw-blacklist'))$('gw-blacklist').value=gatewayTeslaBlacklist;
-  if($('gw-whitelist'))$('gw-whitelist').value=mergeGatewayList($('gw-whitelist').value,aggressive?gatewayProfileAggressiveWhitelist:gatewayProfileSafeWhitelist);
-  if($('gw-strict'))$('gw-strict').checked=false;
-  if($('gw-cidr'))$('gw-cidr').value='';
+  if($('gw-whitelist')){
+    let current=$('gw-whitelist').value;
+    if(!aggressive&&gatewayListHasAny(current,'hermes-prd.vn.cloud.tesla.cn\nhermes-stream-prd.vn.cloud.tesla.cn'))
+      current=removeGatewayList(current,'hermes-prd.vn.cloud.tesla.cn\nhermes-stream-prd.vn.cloud.tesla.cn');
+    $('gw-whitelist').value=mergeGatewayList(current,aggressive?gatewayProfileAggressiveWhitelist:gatewayProfileSafeWhitelist);
+  }
   setGatewayMode(0,false);
   toggleGatewayAdvanced(false,false);
-  gatewayDnsBlackDirty=true;gatewayDnsWhiteDirty=true;gatewayDnsCidrDirty=true;
+  gatewayDnsBlackDirty=true;gatewayDnsWhiteDirty=true;
   updateGatewayProfileButtons();
   saveGatewayDns().catch(()=>{});
 }
@@ -2792,24 +2839,24 @@ function applyGatewayDnsState(d,opts){
   opts=opts||{};
   initGatewayDnsEditing();
   $('gw-enabled').checked=!!d.enabled;
-  $('gw-strict').checked=!!d.strict;
+  if($('gw-upstream-mode'))$('gw-upstream-mode').value=String(d.upstream_mode!==undefined?d.upstream_mode:0);
+  if($('gw-upstream-custom')&&d.upstream_custom!==undefined)$('gw-upstream-custom').value=d.upstream_custom||'';
+  toggleGatewayUpstreamCustom(d);
   if(d.blacklist!==undefined)gatewayDnsLastBlack=updateGatewayTextarea('gw-blacklist',d.blacklist,gatewayDnsLastBlack,opts.saved?false:gatewayDnsBlackDirty,!!opts.saved);
   if(d.whitelist!==undefined)gatewayDnsLastWhite=updateGatewayTextarea('gw-whitelist',d.whitelist,gatewayDnsLastWhite,opts.saved?false:gatewayDnsWhiteDirty,!!opts.saved);
-  if(d.cidr!==undefined)gatewayDnsLastCidr=updateGatewayTextarea('gw-cidr',d.cidr,gatewayDnsLastCidr,opts.saved?false:gatewayDnsCidrDirty,!!opts.saved);
-  if(opts.saved){gatewayDnsBlackDirty=false;gatewayDnsWhiteDirty=false;gatewayDnsCidrDirty=false;}
-  setGatewayMode(d.mode||0);
-  toggleGatewayAdvanced(gatewayAdvancedUserOpen,!!(d.strict||(d.mode||0)!==0||(d.cidr&&String(d.cidr).trim())));
+  if(opts.saved){gatewayDnsBlackDirty=false;gatewayDnsWhiteDirty=false;}
+  setGatewayMode(0);
   updateGatewayProfileButtons();
   var ce=$('gw-list-counts');
   if(ce){
-    var bc=d.black_count||0,bm=d.black_max||100,wc=d.white_count||0,wm=d.white_max||200,cc=d.cidr_count||0,cm=d.cidr_max||64;
-    ce.textContent='Whitelist '+wc+'/'+wm+' \u2022 Blacklist '+bc+'/'+bm+' \u2022 CIDR '+cc+'/'+cm;
-    ce.style.color=(wc>=wm||bc>=bm||cc>=cm)?'var(--err)':'var(--tx3)';
+    var bc=d.black_count||0,bm=d.black_max||100,wc=d.white_count||0,wm=d.white_max||200;
+    ce.textContent='Whitelist '+wc+'/'+wm+' \u2022 Blacklist '+bc+'/'+bm;
+    ce.style.color=(wc>=wm||bc>=bm)?'var(--err)':'var(--tx3)';
   }
   if(!opts.cached)writeGatewayDnsCache(d);
 }
 function setGatewayMode(mode,persist){
-  gatewayMode=mode?1:0;
+  gatewayMode=0;
   const b=$('gw-mode-black'),w=$('gw-mode-white');
   if(b&&w){
     b.classList.toggle('active',gatewayMode===0);
@@ -2819,38 +2866,82 @@ function setGatewayMode(mode,persist){
   }
   const hint=$('gw-mode-hint');
   if(hint){
-    hint.textContent=(gatewayMode===0?'Current: Blacklist mode':'Current: Whitelist mode')+(persist?' - saving automatically':' - click mode to save immediately');
+    hint.textContent='Current: Blacklist mode'+(persist?' - saving automatically':' - click mode to save immediately');
     hint.style.color=persist?'var(--acc)':'var(--tx3)';
   }
   if(persist)saveGatewayDns().catch(()=>{});
+}
+function setGatewayDiag(id,text,color){
+  const el=$(id);if(!el)return;
+  el.textContent=text;
+  el.style.color=color||'var(--tx)';
+}
+function gatewayDnsSlowColor(d){
+  if((d.dns_slow_2000ms||0)>0)return 'var(--err)';
+  if((d.dns_slow_1000ms||0)>0||(d.dns_slow_500ms||0)>0)return 'var(--warn)';
+  return 'var(--ok)';
+}
+function gatewayUpstreamModeLabel(v){
+  v=String(v||'auto').toLowerCase();
+  if(v==='ali')return 'Ali';
+  if(v==='tencent')return 'Tencent';
+  if(v==='custom')return trText('Custom');
+  return trText('Auto');
+}
+function toggleGatewayUpstreamCustom(d){
+  const sel=$('gw-upstream-mode'),inp=$('gw-upstream-custom'),hint=$('gw-upstream-hint');
+  const mode=sel?Number(sel.value||0):0;
+  if(inp){
+    const custom=mode===3;
+    inp.disabled=!custom;
+    inp.style.opacity=custom?'1':'0.55';
+  }
+  if(hint){
+    let text='Auto uses DHCP DNS from the connected WiFi; public DNS can avoid stale slow/fail counters from a bad router DNS.';
+    if(mode===1)text='Using Ali DNS 223.5.5.5.';
+    else if(mode===2)text='Using Tencent DNS 119.29.29.29.';
+    else if(mode===3)text='Enter a custom upstream DNS IPv4 address.';
+    hint.textContent=text;
+    applyDashboardI18n(hint);
+  }
 }
 async function loadGatewayStatus(){
   return runPoll('gateway_status',async()=>{
     try{
       const d=await fetchPollJson('/gateway_status',2000);
       if(!$('gw-status'))return;
-      var statusText=(d.enabled?'Enabled':'Disabled')+' \u2022 NAT '+(d.nat?'on':'waiting')+' \u2022 blocked '+(d.blocked||0);
-      if(d.strict)statusText+=' \u2022 strict (allow '+(d.allowed_ips||0)+' / block '+(d.blocked_ips||0)+')';
-      if(d.cidr_rules)statusText+=' \u2022 CIDR '+d.cidr_rules;
+      const clients=d.ap_clients||0;
+      var statusText=(d.enabled?'Gateway ON':'Gateway OFF')+' \u2022 NAT '+(d.nat?'READY':'WAITING')+' \u2022 AP clients '+clients+' \u2022 blocked '+(d.blocked||0);
+      if((d.dns_pending_full||0)>0)statusText+=' \u2022 pending FULL '+d.dns_pending_full;
       if(d.dns_resp_cache)statusText+=' \u2022 DNS cache '+(d.dns_resp_hits||0)+'/'+((d.dns_resp_hits||0)+(d.dns_resp_misses||0));
       $('gw-status').textContent=statusText;
-      $('gw-status').style.color=d.enabled?(d.nat?'var(--ok)':'var(--acc)'):'var(--tx3)';
-      setText('gw-diag-ap',(d.ap_ip||'0.0.0.0'));
-      setText('gw-diag-sta',(d.sta_connected?(d.sta_ip||'0.0.0.0'):'offline'));
-      setText('gw-diag-nat',trText(d.napt_compiled?'compiled':'not compiled')+' / '+trText(d.nat?'on':'waiting'));
-      setText('gw-diag-dns',trText(d.dns_task_active?'task':'no task')+' / '+trText(d.dns_bind_ok?'bind ok':'bind wait')+' / '+trText('fd')+' '+(d.dns_sock===undefined?'--':d.dns_sock));
-      setText('gw-diag-upstream',d.upstream_dns||'none');
-      setText('gw-diag-clients',(d.ap_clients||0)+' client'+((d.ap_clients||0)===1?'':'s'));
-      var sp=$('gw-strict-panel');if(sp)sp.style.display=d.strict?'block':'none';
-      var ss=$('gw-strict-stats');if(ss)ss.textContent='allowed '+(d.allowed_ips||0)+' \u2022 blocked '+(d.blocked_ips||0);
+      $('gw-status').style.color=!d.enabled?'var(--tx3)':((d.dns_pending_full||0)>0?'var(--err)':(d.nat?'var(--ok)':'var(--warn)'));
+      const apCh=d.ap_channel?('CH'+d.ap_channel):'CH?';
+      const staCh=d.sta_channel?('CH'+d.sta_channel):'CH?';
+      const staRssi=(d.sta_rssi===null||d.sta_rssi===undefined)?'RSSI ?':('RSSI '+d.sta_rssi+' dBm');
+      setGatewayDiag('gw-diag-ap',(d.ap_ip||'0.0.0.0')+' \u2022 '+apCh+' \u2022 '+clients+' client'+(clients===1?'':'s'),clients?'var(--ok)':'var(--tx)');
+      setGatewayDiag('gw-diag-sta',d.sta_connected?((d.sta_ip||'0.0.0.0')+' \u2022 '+staRssi+' \u2022 '+staCh):'offline',''+(d.sta_connected?'var(--ok)':'var(--tx3)'));
+      setGatewayDiag('gw-diag-nat',(d.napt_compiled?'compiled':'not compiled')+' / '+(d.nat?'READY':'WAITING'),d.nat?'var(--ok)':(d.enabled?'var(--warn)':'var(--tx3)'));
+      setGatewayDiag('gw-diag-radio',apCh+' / STA '+staCh+' \u2022 '+(d.same_channel?'same':'cross'),d.same_channel?'var(--ok)':(d.sta_connected?'var(--warn)':'var(--tx3)'));
+      setGatewayDiag('gw-diag-dns',(d.dns_task_active?'task':'no task')+' / '+(d.dns_bind_ok?'bind ok':'bind wait')+' / fd '+(d.dns_sock===undefined?'--':d.dns_sock),d.dns_task_active&&d.dns_bind_ok?'var(--ok)':'var(--warn)');
+      setGatewayDiag('gw-diag-slow','last '+(d.dns_latency_last_ms||0)+' ms \u2022 avg '+(d.dns_latency_avg_ms||0)+' ms \u2022 >500/'+(d.dns_slow_500ms||0)+' >1s/'+(d.dns_slow_1000ms||0)+' >2s/'+(d.dns_slow_2000ms||0),gatewayDnsSlowColor(d));
+      setGatewayDiag('gw-diag-pending',(d.dns_pending||0)+'/'+(d.dns_pending_capacity||64)+' \u2022 max '+(d.dns_pending_max||0)+' \u2022 full '+(d.dns_pending_full||0)+' \u2022 timeout '+(d.dns_timeouts||0),((d.dns_pending_full||0)>0||(d.dns_timeouts||0)>0)?'var(--err)':'var(--ok)');
+      const upModeName=String(d.upstream_dns_mode_name||'auto').toLowerCase();
+      const upMode=gatewayUpstreamModeLabel(upModeName);
+      var upText=(d.upstream_dns||'none')+' \u2022 '+upMode;
+      if(upModeName==='auto')upText+=' \u2022 DHCP '+(d.upstream_dns_dhcp||'none');
+      else if(upModeName==='custom')upText+=' \u2022 custom '+(d.upstream_dns_custom||'none');
+      upText+=' \u2022 fail '+(d.dns_upstream_fails||0);
+      setGatewayDiag('gw-diag-upstream',upText,(d.dns_upstream_fails||0)>0?'var(--warn)':'var(--tx)');
+      setGatewayDiag('gw-diag-clients',clients+' client'+(clients===1?'':'s'),clients?'var(--ok)':'var(--tx3)');
     }catch(e){
       if($('gw-status')){$('gw-status').textContent='Gateway not available';$('gw-status').style.color='var(--tx3)';}
-      ['gw-diag-ap','gw-diag-sta','gw-diag-nat','gw-diag-dns','gw-diag-upstream','gw-diag-clients'].forEach(id=>setText(id,'--'));
+      ['gw-diag-ap','gw-diag-sta','gw-diag-nat','gw-diag-radio','gw-diag-dns','gw-diag-slow','gw-diag-pending','gw-diag-upstream','gw-diag-clients'].forEach(id=>setGatewayDiag(id,'--','var(--tx3)'));
     }
   });
 }
 async function loadGatewayDns(force){
-  if(gatewayDnsSaving&&!force)return;
+  if(gatewayDnsSaving)return;
   try{
     const r=await fetch('/gateway_dns');if(!r.ok)throw new Error('unavailable');
     const d=await r.json();
@@ -2861,24 +2952,35 @@ function loadGatewayDnsCached(){
   const d=readGatewayDnsCache();
   if(d)applyGatewayDnsState(d,{cached:true,saved:true});
 }
+async function resetGatewayDnsStats(){
+  const msg=$('gw-msg');
+  try{
+    if(msg){msg.textContent='Resetting DNS stats...';msg.style.color='var(--tx3)';applyDashboardI18n(msg);}
+    const r=await fetch('/gateway_dns_stats_reset',{method:'POST'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    await r.json().catch(()=>({}));
+    if(msg){msg.textContent='DNS stats reset';msg.style.color='var(--ok)';applyDashboardI18n(msg);}
+    loadGatewayStatus();
+  }catch(e){
+    if(msg){msg.textContent=e&&e.message?e.message:'Error';msg.style.color='var(--err)';}
+  }
+}
 async function saveGatewayDns(){
   const msg=$('gw-msg');
   try{
     gatewayDnsSaving=true;
     if(msg){msg.textContent='Saving...';msg.style.color='var(--tx3)';}
     document.querySelectorAll('.gateway-mode-btn').forEach(el=>el.classList.add('saving'));
-    const advanced=!!($('gw-advanced')&&$('gw-advanced').checked);
-    const mode=advanced?gatewayMode:0;
-    const strict=advanced&&$('gw-strict')&&$('gw-strict').checked?1:0;
-    const cidr=advanced&&$('gw-cidr')?$('gw-cidr').value:'';
-    const body='enabled='+($('gw-enabled').checked?1:0)+'&mode='+mode+'&strict='+strict+'&blacklist='+encodeURIComponent($('gw-blacklist').value)+'&whitelist='+encodeURIComponent($('gw-whitelist').value)+'&cidr='+encodeURIComponent(cidr);
+    const upstreamMode=$('gw-upstream-mode')?$('gw-upstream-mode').value:'0';
+    const upstreamCustom=$('gw-upstream-custom')?$('gw-upstream-custom').value:'';
+    const body='enabled='+($('gw-enabled').checked?1:0)+'&mode=0&strict=0&blacklist='+encodeURIComponent($('gw-blacklist').value)+'&whitelist='+encodeURIComponent($('gw-whitelist').value)+'&cidr=&upstream_mode='+encodeURIComponent(upstreamMode)+'&upstream_custom='+encodeURIComponent(upstreamCustom);
     const r=await fetch('/gateway_dns',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
     const d=await r.json().catch(()=>({}));
     if(!r.ok||d.ok===false)throw new Error(d.error||'save failed');
     applyGatewayDnsState(d,{saved:true});
     if(msg){msg.textContent='Saved';msg.style.color='var(--ok)';}
     const hint=$('gw-mode-hint');
-    if(hint){hint.textContent=(gatewayMode===0?'Current: Blacklist mode':'Current: Whitelist mode')+' - saved';hint.style.color='var(--ok)';}
+    if(hint){hint.textContent='Current: Blacklist mode - saved';hint.style.color='var(--ok)';}
     loadGatewayStatus();setTimeout(loadGatewayBlocked,250);
   }catch(e){if(msg){msg.textContent=e.message||'Error';msg.style.color='var(--err)';}}
   finally{gatewayDnsSaving=false;document.querySelectorAll('.gateway-mode-btn').forEach(el=>el.classList.remove('saving'));}
@@ -2917,7 +3019,7 @@ async function testGatewayDns(){
     if(!r.ok)throw new Error('HTTP '+r.status);
     const d=await r.json();
     const verdict=d.blocked?trText('would be blocked'):trText('would be allowed');
-    const mode=d.mode===0?trText('Blacklist'):trText('Whitelist');
+    const mode=trText('Blacklist');
     const reason=trText(d.reason||'');
     const gwState=d.enabled?'':' ('+trText('gateway disabled')+')';
     if(el){
