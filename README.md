@@ -1,179 +1,312 @@
-# EV Open Can Mod
+﻿# T-2CAN / EVtools ESP32-S3 CAN Dashboard
 
-[Documentation](https://ev-open-can-tools.github.io/ev-open-can-tools/) | [Plugin repo](https://github.com/ev-open-can-tools/ev-open-can-tools-plugins) | [Community Discord](https://discord.gg/ZTQKAUTd2F)
+> DEV branch README for the Waveshare ESP32-S3 RS485/CAN build.  
+> This repository is a local vehicle-CAN research firmware with WebUI, OTA, AP+STA+NAPT gateway, Tesla DNS filtering, and dashboard diagnostics.
 
-EV Open Can Mod is an open-source project for supported vehicles and ESP32 or Feather CAN hardware.
+---
 
-At a basic level, the firmware sits on the vehicle CAN bus, watches selected frames, and can apply real-time changes based on the selected build or installed plugins.
+## 中文说明
 
-For most people, the easiest way to use this project is with an ESP32 dashboard build. That gives you a local web interface for setup, WiFi, plugins, updates, diagnostics, and basic runtime control.
+### 1. 项目定位
 
-## Star History
+本项目基于 `ev-open-can-tools` 的 ESP-IDF Dashboard 架构，当前 DEV 版本主要适配：
 
-<a href="https://www.star-history.com/?repos=ev-open-can-tools%2Fev-open-can-tools&type=timeline&logscale=&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=ev-open-can-tools/ev-open-can-tools&type=timeline&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=ev-open-can-tools/ev-open-can-tools&type=timeline&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=ev-open-can-tools/ev-open-can-tools&type=timeline&legend=top-left" />
- </picture>
-</a>
+- 开发板：Waveshare ESP32-S3 RS485/CAN
+- CAN 驱动：ESP32-S3 内置 TWAI
+- 默认构建环境：`waveshare_ESP32_S3_RS485_CAN`
+- 默认硬件模式：HW3，可在 WebUI 中切换 Legacy / HW3 / HW4
+- WebUI 入口：连接设备热点后打开 `http://100.100.1.1/`
+- 默认热点：`EVtools`
+- 默认热点密码：`12345678`
+- 默认 OTA 用户名：`admin`
+- 默认 OTA 密码：`12345678`
 
-## Before You Start
+> 安全提醒：本项目会监听和修改车辆 CAN 帧。任何 CAN 注入都可能影响车辆行为。请只在你完全理解风险、车辆安全受控、符合当地法规的条件下测试。
 
-This project is **not** plug and play.
+### 2. DEV 版本主要功能
 
-It is meant for people who want to learn, test, and experiment carefully. You do **not** need to be a developer to explore the project, read the docs, use the dashboard, or join the community. But you **do** need to be comfortable following instructions, checking your hardware, and understanding that mistakes on a vehicle CAN bus can be serious.
+#### 固件与 OTA
 
-If you are completely new, start with these:
+- 修复真实 OTA 上传流程，避免旧版本“返回成功但没有写入固件”的假成功问题。
+- WebUI OTA 改为直接上传 `.bin` 文件。
+- OTA 成功条件改为固件确实写入完成后才返回成功。
+- 保留车主弹窗底部版本与构建时间戳：`Version` + `OTA timestamp`。
+- 构建时自动写入当前 OTA timestamp，方便区分 OTA 是否真的生效。
+- 支持普通 OTA 固件：`.pio/build/waveshare_ESP32_S3_RS485_CAN/firmware.bin`。
+- 支持合并输出 16MB 全量线刷包，从 `0x0` 写入。
 
-- Read the [Documentation](https://ev-open-can-tools.github.io/ev-open-can-tools/)
-- Join the [Community Discord](https://discord.gg/ZTQKAUTd2F)
-- Look at the [Build and Flash Guide](https://ev-open-can-tools.github.io/ev-open-can-tools/docs/building.html)
-- Use an ESP32 dashboard build if your hardware supports it
+#### WiFi / AP / STA / NAPT
 
-## Safety Warning
+- ESP32-S3 同时运行 AP 热点和 STA 客户端。
+- AP 客户端默认网关为 `100.100.1.1`。
+- STA 连接上游 WiFi 后，为 AP 客户端启用 STA-AP NAT 路由。
+- 支持保存多个上游 WiFi。
+- 未连接时按固定间隔轮询已保存 WiFi。
+- 不再自动全量扫描附近 WiFi，避免扫描影响 AP+STA+NAPT 转发稳定性。
+- 保留手动扫描和手动连接按钮。
+- WiFi 连接超时已缩短为 10 秒，失败后固定等待 5 秒继续轮询保存网络。
+- WebUI 显示 AP channel / STA channel / same or cross，便于判断单射频跨信道影响。
 
-> **Warning:** Modifying CAN bus traffic can cause dangerous behavior or permanently damage a vehicle.
-> 
-> The CAN bus touches safety-critical systems including steering, braking, airbags, and gateway functions. If you do not fully understand the frames you are changing, do not install or use this firmware on a vehicle.
-> 
-> This project is for testing and educational use only. You are responsible for complying with local laws, safety requirements, and any warranty or road-use implications in your jurisdiction.
+#### DNS 网关与 Tesla 过滤
 
-## Who This Project Is For
+- AP 客户端 DNS 指向 ESP32 网关，由固件内置 DNS Proxy 处理。
+- DNS response cache 提升到 128 条。
+- DNS 过滤简化为高效规则：
+  - 白名单优先放行；
+  - 黑名单根域名及其子域名阻断；
+  - 其他域名默认放行。
+- 默认黑名单覆盖 Tesla 根域名，例如 `tesla.cn`、`tesla.com`、`teslamotors.com`、`tesla.services`。
+- 支持保守 / 激进白名单模板，模板采用“合并”逻辑，不覆盖用户手动添加的域名。
+- 删除/隐藏 Strict DNS、CIDR 例外、纯白名单模式等专家过滤残留，减少误操作和热路径负担。
+- 增加 DNS 统计清零按钮，避免旧的 slow / timeout / fail 计数误导判断。
+- 支持上游 DNS 选择：自动、阿里 `223.5.5.5`、腾讯 `119.29.29.29`、自定义 IPv4。
+- WebUI 显示 DNS latency、slow counters、pending、timeout、upstream fail、cache hit/miss。
 
-This project can be useful for different kinds of people:
+#### WebUI 与车机适配
 
-- **Curious users** who want to understand what the tool does and follow development
-- **Hardware users** who want to flash a supported board and use the dashboard
-- **Testers** who want to try builds, compare behavior, and report findings
-- **Advanced users** who want to inspect CAN traffic, create plugins, or contribute code and documentation
+- 增加 UI Mode：Auto / Car / Phone。
+- Auto 模式会根据横屏、大触控屏等特征自动进入 Car UI。
+- Car UI 禁用不兼容车机浏览器的 select 交互，改为按钮化操作。
+- Car UI 放大按钮和间距，降低动画与轮询频率。
+- 增加左侧车机快速导航：Status / HW / Speed / WiFi / DNS / System / CAN。
+- 系统状态界面增加更多硬件状态监测。
+- CPU / 内存 / PSRAM / SPIFFS 等占用显示为进度条。
+- 进度条按比例变色：30% 内绿色，60% 内黄色，80% 以上红色。
+- 系统界面由单列优化为多列布局，桌面和车机大屏更易读。
+- Network Performance Mode 降低 WebUI 轮询，减少对 AP+STA+NAPT 的干扰。
 
-Not everyone needs to write code to be useful here. Testing, documenting, sharing recordings, and reporting clear findings are valuable contributions too.
+#### CAN / FSD / AP Auto Restore
 
-## What You Can Do
+- 支持 Legacy / HW3 / HW4 handler 模式切换。
+- Waveshare 默认 HW3 模式。
+- 保留 HW3 自定义限速 / speed profile 相关控制。
+- AP/EAP Auto Restore 增加 WebUI 开关与状态显示。
+- AP Auto Restore 逻辑考虑刹车、挡位、方向盘角度、快速转向、TC/VDC/车身稳定介入等条件，避免在不安全状态下触发。
+- 支持 CAN Sniffer、CAN Recorder、日志、诊断开关。
+- 诊断类功能默认关闭，需要用户手动打开，避免影响网络和主循环性能。
 
-Depending on your hardware and build, the project can provide:
+### 3. 分区与固件输出
 
-- Vehicle-side features you can activate via [plugins](https://github.com/ev-open-can-tools/ev-open-can-tools-plugins)
-- A local ESP32 dashboard with runtime hardware mode switching, live status, CAN sniffer, CAN recorder, controller stats, live log, stop or resume injection, and reboot control
-- WiFi and OTA features including hotspot mode, WiFi internet, GitHub release updates, beta channel support, auto-update on boot, and manual `.bin` upload
-- A plugin system that supports install by URL, file upload, or pasted JSON, plus a browser-based Plugin Editor and rule testing tools
-- Persistent runtime settings for dashboard-related configuration
+当前 Waveshare 16MB 分区布局：
 
-## Best Starting Point
+| Name | Type | SubType | Offset | Size |
+| --- | --- | --- | --- | --- |
+| nvs | data | nvs | `0x9000` | `0x10000` |
+| otadata | data | ota | `0x19000` | `0x2000` |
+| app0 | app | ota_0 | `0x20000` | `0x400000` |
+| app1 | app | ota_1 | `0x420000` | `0x400000` |
+| spiffs | data | spiffs | `0x820000` | `0x7C0000` |
+| coredump | data | coredump | `0xFE0000` | `0x20000` |
 
-If you are not sure where to begin, use this path:
+常用固件：
 
-1. Pick a supported **ESP32 dashboard** board.
-2. Follow the [Build and Flash Guide](https://ev-open-can-tools.github.io/ev-open-can-tools/docs/building.html).
-3. Connect to the device hotspot after first boot.
-4. Open the dashboard at `http://100.100.1.1/`.
-5. Use the dashboard to configure WiFi, CAN pins if needed, updates, and plugins.
-6. Read the [Dashboard Guide](https://ev-open-can-tools.github.io/ev-open-can-tools/docs/dashboard.html) before changing anything important.
+- OTA 文件：`.pio/build/waveshare_ESP32_S3_RS485_CAN/firmware.bin`
+- 16MB 全量包：通常输出到 `dist/`，从 `0x0` 写入
 
-This is the easiest and most user-friendly setup path in the project.
+### 4. 构建与下载
 
-## Supported Environments
+推荐使用 PowerShell：
 
-| PlatformIO env | Board / target | CAN interface | Dashboard |
-| --- | --- | --- | --- |
-| `esp32_twai` | Generic ESP32 dev board | TWAI | Yes |
-| `lilygo_tcan485_hw3` | LILYGO TCAN485 | TWAI | Yes |
-| `m5stack-atomic-can-base` | M5Stack Atom CAN Base | TWAI | Yes |
-| `m5stack-atoms3-mini-can-base` | M5Stack AtomS3 Mini CAN Base | TWAI | Yes |
-| `esp32_feather_v2_mcp2515` | Feather ESP32 V2 + external MCP2515 | SPI MCP2515 | Yes |
-| `esp32_ext_mcp2515` | ESP32-S3 + external MCP2515 | SPI MCP2515 | Yes |
-| `waveshare_ESP32_S3_RS485_CAN` | Waveshare ESP32-S3 RS485/CAN | TWAI | Yes |
-
-ESP32 dashboard builds are the full-featured path. They use pinned ESP-IDF v6.0.1 through PlatformIO and include the web UI, plugin engine, WiFi, OTA, and persistent runtime settings.
-
-Arduino-only boards that cannot use ESP-IDF live in [`legacy-arduino/`](legacy-arduino/):
-
-| PlatformIO env | Board / target | CAN interface | Dashboard |
-| --- | --- | --- | --- |
-| `feather_rp2040_can` | Adafruit Feather RP2040 CAN | MCP2515 | No |
-| `feather_m4_can` | Adafruit Feather M4 CAN Express | Native CAN | No |
-
-Non-dashboard legacy builds keep the core CAN modification logic but do not provide the web management interface.
-
-## Quick Start For More Technical Users
-
-If you already know what you are doing, the basic flow is:
-
-1. Choose your target environment from `platformio.ini`
-2. Copy `platformio_profile.example.h` to `platformio_profile.h`
-3. Set your board, vehicle mode, and initial dashboard credentials in `platformio_profile.h`
-4. Build the firmware
-5. Flash the board
-6. Connect to the dashboard if your target supports it
-
-Example:
-
-```bash
-pio run -e esp32_ext_mcp2515
-pio run -e esp32_ext_mcp2515 -t upload
+```powershell
+pio run -e waveshare_ESP32_S3_RS485_CAN
 ```
 
-Legacy Arduino-only boards are built from `legacy-arduino/`:
+普通下载：
 
-```bash
-cd legacy-arduino
-pio run -e feather_rp2040_can
-pio run -e feather_m4_can
+```powershell
+pio run -e waveshare_ESP32_S3_RS485_CAN -t upload --upload-port COM14
 ```
 
-For a fuller setup flow and board-specific notes, see [Build & Flash](https://ev-open-can-tools.github.io/ev-open-can-tools/docs/building.html).
+清除后下载：
 
-## Documentation
-
-- [Documentation index](https://ev-open-can-tools.github.io/ev-open-can-tools/docs/index.html)
-- [Dashboard guide](https://ev-open-can-tools.github.io/ev-open-can-tools/docs/dashboard.html)
-- [Build and flash guide](https://ev-open-can-tools.github.io/ev-open-can-tools/docs/building.html)
-- [Plugin system reference](https://ev-open-can-tools.github.io/ev-open-can-tools/docs/plugins.html)
-- [Release notes](CHANGELOG.md)
-
-## Community
-
-The Discord is not only for developers.
-
-It is also a place for:
-
-- setup help
-- hardware questions
-- testing feedback
-- CAN recordings and observations
-- plugin testing
-- documentation feedback
-
-If you are learning, testing, or comparing results, you are welcome there too.
-
-## Support & Gift
-
-If you find this project valuable, consider sending a gift with Monero to support its development:
-
-```
-46CJEjnN74N83AZHHYKX3mD9kkV6UJYVjN58PTWvQ6VU8Vvn3tmyExkaC2kq9asD6SZY9weaZqx5o9nf1MxkKbmTKWLUeRD
+```powershell
+pio run -e waveshare_ESP32_S3_RS485_CAN -t erase --upload-port COM14
+pio run -e waveshare_ESP32_S3_RS485_CAN -t upload --upload-port COM14
 ```
 
-Gifts help sustain the project and fund further development.
+如果你的串口不是 `COM14`，请先查看：
 
-## Versioning
+```powershell
+pio device list
+```
 
-- The project version is tracked in [`VERSION`](VERSION) using Semantic Versioning
-- Release notes are tracked in [`CHANGELOG.md`](CHANGELOG.md)
-- Ongoing work should be added to the `Unreleased` section before merge
+### 5. 本地配置文件
 
-## Third-Party Libraries
+构建需要本地 `platformio_profile.h`。该文件包含热点名、热点密码、OTA 用户名、OTA 密码等本地配置，默认不会提交到 Git。
 
-This project depends on the following open-source libraries. Their full license texts are in [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES).
+最小示例：
 
-| Library | License | Copyright |
-| --- | --- | --- |
-| [autowp/arduino-mcp2515](https://github.com/autowp/arduino-mcp2515) | MIT | (c) 2013 Seeed Technology Inc., (c) 2016 Dmitry |
-| [adafruit/Adafruit_CAN](https://github.com/adafruit/Adafruit_CAN) | MIT | (c) 2017 Sandeep Mistry |
-| [espressif/esp-idf](https://github.com/espressif/esp-idf) (TWAI driver) | Apache 2.0 | (c) 2015-2025 Espressif Systems (Shanghai) CO LTD |
-| [bblanchon/ArduinoJson](https://github.com/bblanchon/ArduinoJson) | MIT | (c) 2014-2024 Benoit BLANCHON |
+```cpp
+#pragma once
+#define DRIVER_TWAI
+#define DASH_SSID "EVtools"
+#define DASH_PASS "12345678"
+#define DASH_OTA_USER "admin"
+#define DASH_OTA_PASS "12345678"
+```
 
-## License
+### 6. 分支建议
 
-This project is licensed under the **GNU General Public License v3.0**. See the [GPL-3.0 License](https://www.gnu.org/licenses/gpl-3.0.html) for details.
+- `main`：稳定可刷机版本。
+- `dev`：当前集成测试版本，功能成熟后再合并 main。
+- `codex/net-apsta-napt-dns`：WiFi / DNS / AP+STA+NAPT 优化来源分支。
+- `ap-auto-restore`：AP/EAP Auto Restore 来源分支。
+- `WEBUI`：车机 WebUI 优化来源分支。
+- `codex/HW4`：HW4 FSD 激活优化测试分支。
+
+---
+
+## English
+
+### 1. Project Scope
+
+This DEV branch is an ESP-IDF Dashboard firmware derived from `ev-open-can-tools`, tuned for the Waveshare ESP32-S3 RS485/CAN board.
+
+- Board: Waveshare ESP32-S3 RS485/CAN
+- CAN driver: ESP32-S3 built-in TWAI
+- Main PlatformIO env: `waveshare_ESP32_S3_RS485_CAN`
+- Default vehicle mode: HW3, switchable in WebUI between Legacy / HW3 / HW4
+- Dashboard URL: connect to the device hotspot, then open `http://100.100.1.1/`
+- Default hotspot SSID: `EVtools`
+- Default hotspot password: `12345678`
+- Default OTA user: `admin`
+- Default OTA password: `12345678`
+
+> Safety warning: this firmware can observe and modify vehicle CAN frames. CAN injection can affect vehicle behavior. Test only in a controlled environment, with full understanding of the risks and applicable laws.
+
+### 2. Main DEV Features
+
+#### Firmware And OTA
+
+- Fixes the real OTA upload path so the device no longer reports a fake success without writing firmware.
+- WebUI OTA uploads raw `.bin` files directly.
+- `/update` returns success only after firmware writing is actually complete.
+- Owner popup keeps `Version` and `OTA timestamp` for verification.
+- Build scripts update OTA timestamp automatically on each firmware build.
+- Supports regular OTA firmware output: `.pio/build/waveshare_ESP32_S3_RS485_CAN/firmware.bin`.
+- Supports merged 16MB full-flash image generation for flashing from `0x0`.
+
+#### WiFi / AP / STA / NAPT
+
+- Runs ESP32-S3 SoftAP and STA at the same time.
+- AP clients use `100.100.1.1` as gateway and DNS.
+- Enables STA-to-AP NAT routing after the upstream WiFi is connected.
+- Supports multiple saved upstream WiFi networks.
+- Rotates through saved networks while disconnected.
+- Avoids automatic full WiFi scanning during reconnect, reducing AP+STA+NAPT disruption.
+- Keeps manual scan and manual connect controls.
+- Uses a 10-second STA connection timeout and a fixed 5-second retry interval.
+- Shows AP channel, STA channel, and same/cross-channel status in WebUI.
+
+#### DNS Gateway And Tesla Filtering
+
+- AP client DNS is handled by the ESP32 DNS proxy.
+- DNS response cache size is 128 entries.
+- DNS filtering is simplified for performance:
+  - whitelist overrides blacklist;
+  - blacklisted root domains and their subdomains are blocked;
+  - unrelated domains are allowed.
+- Default Tesla root-domain blacklist includes `tesla.cn`, `tesla.com`, `teslamotors.com`, and `tesla.services`.
+- Conservative and aggressive whitelist templates merge into the current list instead of replacing user entries.
+- Strict DNS, CIDR exceptions, and whitelist-only expert options are removed/hidden to reduce complexity.
+- Adds a DNS stats reset button.
+- Supports upstream DNS selection: Auto, Ali `223.5.5.5`, Tencent `119.29.29.29`, and custom IPv4.
+- WebUI displays DNS latency, slow counters, pending queries, timeouts, upstream failures, and cache hits/misses.
+
+#### WebUI And In-Car Browser Support
+
+- Adds UI Mode: Auto / Car / Phone.
+- Auto mode detects wide landscape touch screens and switches to Car UI.
+- Car UI avoids problematic `<select>` controls and uses button-based controls instead.
+- Car UI increases button size and spacing, reduces animations and polling.
+- Adds a side navigation bar for Status / HW / Speed / WiFi / DNS / System / CAN.
+- Expands system status monitoring.
+- CPU, heap, PSRAM, SPIFFS, and related metrics are shown with progress bars.
+- Progress bars use green / yellow / red thresholds: green under 30%, yellow under 60%, red above 80%.
+- System panels are optimized into a multi-column layout for desktop and vehicle screens.
+- Network Performance Mode reduces WebUI polling load during AP+STA+NAPT forwarding.
+
+#### CAN / FSD / AP Auto Restore
+
+- Supports Legacy / HW3 / HW4 handler modes.
+- Waveshare build defaults to HW3.
+- Keeps HW3 custom speed and speed profile controls.
+- Adds WebUI switch and status for AP/EAP Auto Restore.
+- AP Auto Restore checks brake, gear, steering angle, fast steering, TC/VDC/stability activity, and retry timing before triggering.
+- Supports CAN Sniffer, CAN Recorder, logs, and diagnostics.
+- Heavy diagnostics are off by default and must be enabled manually.
+
+### 3. Partition Layout And Firmware Outputs
+
+Current Waveshare 16MB partition layout:
+
+| Name | Type | SubType | Offset | Size |
+| --- | --- | --- | --- | --- |
+| nvs | data | nvs | `0x9000` | `0x10000` |
+| otadata | data | ota | `0x19000` | `0x2000` |
+| app0 | app | ota_0 | `0x20000` | `0x400000` |
+| app1 | app | ota_1 | `0x420000` | `0x400000` |
+| spiffs | data | spiffs | `0x820000` | `0x7C0000` |
+| coredump | data | coredump | `0xFE0000` | `0x20000` |
+
+Common outputs:
+
+- OTA firmware: `.pio/build/waveshare_ESP32_S3_RS485_CAN/firmware.bin`
+- 16MB full-flash image: usually generated under `dist/`, flashed from `0x0`
+
+### 4. Build And Flash
+
+Build:
+
+```powershell
+pio run -e waveshare_ESP32_S3_RS485_CAN
+```
+
+Upload only:
+
+```powershell
+pio run -e waveshare_ESP32_S3_RS485_CAN -t upload --upload-port COM14
+```
+
+Erase and upload:
+
+```powershell
+pio run -e waveshare_ESP32_S3_RS485_CAN -t erase --upload-port COM14
+pio run -e waveshare_ESP32_S3_RS485_CAN -t upload --upload-port COM14
+```
+
+List serial ports:
+
+```powershell
+pio device list
+```
+
+### 5. Local Profile
+
+The build expects a local `platformio_profile.h`. This file stores local credentials and board choices and is not committed to Git.
+
+Minimal example:
+
+```cpp
+#pragma once
+#define DRIVER_TWAI
+#define DASH_SSID "EVtools"
+#define DASH_PASS "12345678"
+#define DASH_OTA_USER "admin"
+#define DASH_OTA_PASS "12345678"
+```
+
+### 6. Branch Model
+
+- `main`: stable flashable baseline.
+- `dev`: integrated test branch.
+- `codex/net-apsta-napt-dns`: WiFi / DNS / AP+STA+NAPT optimization source branch.
+- `ap-auto-restore`: AP/EAP Auto Restore source branch.
+- `WEBUI`: in-car WebUI optimization source branch.
+- `codex/HW4`: HW4 FSD activation test branch.
+
+---
+
+## License And Responsibility
+
+This repository keeps the original project license files where applicable. Any vehicle-side testing is your own responsibility.
