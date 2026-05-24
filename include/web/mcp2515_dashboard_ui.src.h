@@ -497,6 +497,13 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
         </div>
         <label class="tgl"><input type="checkbox" id="ap-restore-tgl" onchange="saveApRestore()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">CAN/WiFi Auto Sleep</div>
+          <div class="setting-desc">After Park + vehicle lock stays stable for 10s, turn off AP/STA WiFi and CAN injection. CAN RX wakes the device.</div>
+        </div>
+        <label class="tgl"><input type="checkbox" id="auto-sleep-tgl" onchange="saveAutoSleep()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+      </div>
     </div>
   </div>
 
@@ -973,7 +980,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
 Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-22 18:58:43 +08:00</div>
+OTA timestamp: 2026-05-24 16:58:50 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
@@ -995,7 +1002,7 @@ OTA timestamp: 2026-05-22 18:58:43 +08:00</div>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
     <div class="modal-title" id="ota-test-title">OTA Test v2</div>
     <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-22 18:58:43 +08:00</div>
+OTA timestamp: 2026-05-24 16:58:50 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
     </div>
@@ -1293,7 +1300,7 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-22 18:58:43 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-22 18:58:43 +08:00',
+  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-24 16:58:50 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-24 16:58:50 +08:00',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -1306,7 +1313,9 @@ Object.assign(I18N_ZH,{
   'bind wait':'\u7b49\u5f85\u7ed1\u5b9a',
   'fd':'fd',
   'none':'\u65e0',
-  'whitelist override blacklist':'\u767d\u540d\u5355\u8986\u76d6\u9ed1\u540d\u5355'
+  'whitelist override blacklist':'\u767d\u540d\u5355\u8986\u76d6\u9ed1\u540d\u5355',
+  'CAN/WiFi Auto Sleep':'CAN/WiFi \u81ea\u52a8\u4f11\u7720',
+  'After Park + vehicle lock stays stable for 10s, turn off AP/STA WiFi and CAN injection. CAN RX wakes the device.':'P \u6863 + \u8f66\u8f86\u9501\u5b9a\u72b6\u6001\u7a33\u5b9a 10 \u79d2\u540e\uff0c\u5173\u95ed AP/STA WiFi \u548c CAN \u6ce8\u5165\uff0cCAN RX \u5524\u9192\u8bbe\u5907\u3002'
 });
 Object.assign(I18N_ZH,{
   'Upstream DNS':'\u4e0a\u6e38 DNS',
@@ -2096,6 +2105,7 @@ function updateFsdControl(d){
   state.can=enabled;
   const tgl=$('fsd-tgl');if(tgl)tgl.checked=enabled;
   const apRestore=$('ap-restore-tgl');if(apRestore&&typeof d.apAutoRestore!=='undefined')apRestore.checked=!!d.apAutoRestore;
+  const autoSleep=$('auto-sleep-tgl');if(autoSleep&&typeof d.autoSleep!=='undefined')autoSleep.checked=!!d.autoSleep;
   setText('fsd-meta',enabled?'On':'Off');
   const st=$('fsd-status');
   if(st){
@@ -2127,6 +2137,17 @@ async function saveApRestore(){
     if(!r.ok)throw new Error('HTTP '+r.status);
   }catch(e){
     addLog('AP/EAP auto restore save failed','le');
+  }
+}
+
+async function saveAutoSleep(){
+  const t=$('auto-sleep-tgl');
+  if(!t)return;
+  try{
+    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'autoSleep='+(t.checked?'1':'0')});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+  }catch(e){
+    addLog('CAN/WiFi auto sleep save failed','le');
   }
 }
 
