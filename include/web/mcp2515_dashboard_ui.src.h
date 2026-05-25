@@ -504,6 +504,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
         </div>
         <label class="tgl"><input type="checkbox" id="auto-sleep-tgl" onchange="saveAutoSleep()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
+      <div class="info-box" id="auto-sleep-status">Sleep diag: waiting for status</div>
     </div>
   </div>
 
@@ -980,7 +981,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
 Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-24 20:57:00 +08:00</div>
+OTA timestamp: 2026-05-25 09:30:21 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
@@ -1002,7 +1003,7 @@ OTA timestamp: 2026-05-24 20:57:00 +08:00</div>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
     <div class="modal-title" id="ota-test-title">OTA Test v2</div>
     <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-24 20:57:00 +08:00</div>
+OTA timestamp: 2026-05-25 09:30:21 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
     </div>
@@ -1300,7 +1301,7 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-24 20:57:00 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-24 20:57:00 +08:00',
+  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-25 09:30:21 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-25 09:30:21 +08:00',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -1315,7 +1316,8 @@ Object.assign(I18N_ZH,{
   'none':'\u65e0',
   'whitelist override blacklist':'\u767d\u540d\u5355\u8986\u76d6\u9ed1\u540d\u5355',
   'CAN/WiFi Auto Sleep':'CAN/WiFi \u81ea\u52a8\u4f11\u7720',
-  'After Park + vehicle lock stays stable for 10s, turn off AP/STA WiFi and CAN injection. CAN RX wakes the device.':'P \u6863 + \u8f66\u8f86\u9501\u5b9a\u72b6\u6001\u7a33\u5b9a 10 \u79d2\u540e\uff0c\u5173\u95ed AP/STA WiFi \u548c CAN \u6ce8\u5165\uff0cCAN RX \u5524\u9192\u8bbe\u5907\u3002'
+  'After Park + vehicle lock stays stable for 10s, turn off AP/STA WiFi and CAN injection. CAN RX wakes the device.':'P \u6863 + \u8f66\u8f86\u9501\u5b9a\u72b6\u6001\u7a33\u5b9a 10 \u79d2\u540e\uff0c\u5173\u95ed AP/STA WiFi \u548c CAN \u6ce8\u5165\uff0cCAN RX \u5524\u9192\u8bbe\u5907\u3002',
+  'Sleep diag: waiting for status':'\u4f11\u7720\u8bca\u65ad\uff1a\u7b49\u5f85\u72b6\u6001'
 });
 Object.assign(I18N_ZH,{
   'Upstream DNS':'\u4e0a\u6e38 DNS',
@@ -2100,12 +2102,103 @@ function updateInjectButtons(active){
   }
 }
 
+function sleepZh(){return dashLang==='zh';}
+function sleepT(en,zh){return sleepZh()?zh:en;}
+function ageText(v){
+  v=Number(v);
+  return v>=0?(v+'s '+sleepT('ago','前')):sleepT('not seen','未收到');
+}
+function fmtSleepDuration(v){
+  v=Number(v);
+  if(!Number.isFinite(v)||v<0)return sleepT('unknown','未知');
+  return fmtUp(v);
+}
+function sleepStateText(v){
+  const m={off:['off','关闭'],awake:['awake','已唤醒'],pending:['pending','倒计时'],sleep:['sleep','休眠中']};
+  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
+}
+function sleepReasonText(v){
+  const m={
+    'off':['off','关闭'], 'sleeping':['sleeping','休眠中'], 'ota running':['OTA running','OTA 进行中'],
+    'waiting 0x118 gear or locked fallback':['waiting gear or lock fallback','等待档位或锁车兜底'],
+    'waiting locked fallback':['waiting locked fallback','等待锁车兜底'], 'gear not P':['gear not P','档位不是 P'],
+    'waiting lock 0x273/0x339':['waiting lock signal','等待锁车信号'], 'driver present':['driver present','驾驶员在车内'],
+    'DI drive power':['DI drive power','DI 行驶电源'], 'EPAS drive power':['EPAS drive power','EPAS 行驶电源'],
+    'pending 10s':['pending 10s','10 秒倒计时'], 'ready':['ready','已就绪']
+  };
+  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
+}
+function sleepWakeSourceText(v){
+  const m={none:['none','无'],CAN:['CAN wake','CAN 唤醒'],reboot:['reboot/power','重启/上电'],sleeping:['sleeping','休眠中']};
+  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
+}
+function sleepWakeReasonText(v){
+  const m={none:['none','无'],active:['active sleep','正在休眠'],gear:['gear wake','档位唤醒'],unlock:['unlock wake','解锁唤醒'],driver:['driver wake','驾驶员/DI 唤醒'],epas:['EPAS wake','EPAS 唤醒'],poweron:['power-on','上电'],external:['external reset','外部复位'],software:['software reset','软件复位'],brownout:['brownout','欠压复位'],deepsleep:['deep-sleep reset','深睡复位'],panic:['panic','异常复位'],task_wdt:['task watchdog','任务看门狗'],interrupt_wdt:['interrupt watchdog','中断看门狗'],other_wdt:['watchdog','看门狗']};
+  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
+}
+function gearText(v){
+  v=Number(v);
+  return ({1:'P',2:'R',3:'N',4:'D',7:'SNA'})[v]||('raw '+v);
+}
+function uiLockText(v){
+  v=Number(v);
+  return ({0:'IDLE',1:'LOCK',2:'UNLOCK',3:'REMOTE_UNLOCK',4:'REMOTE_LOCK',7:'SNA'})[v]||('raw '+v);
+}
+function vcsecVehicleLockText(v){
+  v=Number(v);
+  return ({
+    0:'SNA',1:'NFC_UNLOCKED',2:'NFC_LOCKED',3:'SELECTIVE_UNLOCKED',
+    4:'BLE_UNLOCKED',5:'BLE_LOCKED',6:'ACTIVE_SELECTIVE_UNLOCKED',
+    7:'ACTIVE_BLE_UNLOCKED',8:'ACTIVE_BLE_LOCKED',9:'ACTIVE_UI_UNLOCKED',
+    10:'ACTIVE_UI_LOCKED',11:'REMOTE_UNLOCKED',12:'REMOTE_LOCKED',
+    13:'CRASH_UNLOCKED',14:'INTERNAL_UNLOCKED',15:'INTERNAL_LOCKED'
+  })[v]||('raw '+v);
+}
+function simpleLockText(v){
+  v=Number(v);
+  return ({0:'SNA',1:'UNLOCKED',2:'LOCKED'})[v]||('raw '+v);
+}
+function boolTriText(v){
+  if(v===null||typeof v==='undefined')return sleepT('unknown','未知');
+  return v?sleepT('YES','是'):sleepT('NO','否');
+}
+function updateAutoSleepStatus(d){
+  const el=$('auto-sleep-status');
+  if(!el)return;
+  const locked=!!d.sleepLocked;
+  const ready=!!d.sleepReady;
+  const countdown=Number(d.sleepCountdownMs);
+  const cd=countdown>=0?(' • '+sleepT('sleep in ','休眠倒计时 ')+Math.ceil(countdown/1000)+'s'):'';
+  const source=sleepWakeSourceText(d.sleepLastWakeSource);
+  const reason=sleepWakeReasonText(d.sleepLastWakeReason);
+  const rebootNote=d.sleepLastEndedByReboot
+    ? sleepT('Last sleep ended by reset/power; CAN restarted on cold boot.','上次休眠后发生复位/断电；CAN 已随冷启动重新初始化。')
+    : sleepT('CAN wake is counted only when software exits sleep without reboot.','只有未重启的软件退出休眠才计为 CAN 唤醒。');
+  const lines=[
+    sleepT('Sleep','休眠')+': '+(d.autoSleep?'ON':'OFF')+' / '+sleepStateText(d.sleepState)+' • '+sleepReasonText(d.sleepReason)+cd,
+    sleepT('Ready','就绪')+': '+boolTriText(ready)+' • '+sleepT('Locked','锁车')+': '+boolTriText(locked)+' • '+sleepT('source','来源')+' '+(d.sleepLockSource||'none'),
+    'Gear 0x118: '+gearText(d.sleepGear)+' ('+ageText(d.sleepGearAge)+')',
+    'UI lock 0x273: '+uiLockText(d.sleepUiLockReq)+' ('+ageText(d.sleepUiLockAge)+')',
+    'VCSEC lock 0x339: simple '+simpleLockText(d.sleepVcsecSimple)+' / vehicle '+vcsecVehicleLockText(d.sleepVcsecLock)+' ('+ageText(d.sleepVcsecAge)+')',
+    sleepT('Driver','驾驶员')+': '+boolTriText(d.sleepDriverPresent)+' • DI power '+(typeof d.sleepDiPower==='number'?d.sleepDiPower:'--')+' • EPAS power '+(typeof d.sleepEpasPower==='number'?d.sleepEpasPower:'--'),
+    sleepT('Session','本次运行')+': '+sleepT('sleep','休眠')+' '+(d.sleepCount||0)+' • RX '+(d.sleepCurrentRxCount||0),
+    sleepT('Persistent','掉电保持')+': '+sleepT('boot','启动')+' '+(d.sleepBootCount||0)+' • '+sleepT('total sleep','累计休眠')+' '+(d.sleepTotalCount||0)+' • '+sleepT('CAN wake','CAN 唤醒')+' '+(d.sleepCanWakeCount||0)+' • '+sleepT('reboot wake','重启恢复')+' '+(d.sleepRebootWakeCount||0),
+    sleepT('Last wake','上次恢复')+': '+source+' / '+reason+' • '+sleepT('duration','时长')+' '+fmtSleepDuration(d.sleepLastDurationSec)+' • '+sleepT('sleep RX','休眠RX')+' '+(d.sleepLastRxCount||0),
+    sleepT('Reset','复位')+': '+sleepWakeReasonText(d.sleepLastReset)+' • '+sleepT('enter uptime','进入时运行')+' '+fmtSleepDuration(d.sleepLastEnterUptime)+' • '+sleepT('wake uptime','恢复时运行')+' '+fmtSleepDuration(d.sleepLastWakeUptime),
+    sleepT('Note','提示')+': '+rebootNote
+  ];
+  el.style.whiteSpace='pre-wrap';
+  el.textContent=lines.join('\n');
+  el.style.borderColor=ready?'rgba(61,186,114,.35)':locked?'rgba(245,166,35,.35)':'var(--bd)';
+}
+
 function updateFsdControl(d){
   const enabled=!!d.ci;
   state.can=enabled;
   const tgl=$('fsd-tgl');if(tgl)tgl.checked=enabled;
   const apRestore=$('ap-restore-tgl');if(apRestore&&typeof d.apAutoRestore!=='undefined')apRestore.checked=!!d.apAutoRestore;
   const autoSleep=$('auto-sleep-tgl');if(autoSleep&&typeof d.autoSleep!=='undefined')autoSleep.checked=!!d.autoSleep;
+  updateAutoSleepStatus(d);
   setText('fsd-meta',enabled?'On':'Off');
   const st=$('fsd-status');
   if(st){
