@@ -15,6 +15,9 @@
 #ifndef TWAI_TX_QUEUE_LEN
 #define TWAI_TX_QUEUE_LEN 16
 #endif
+#ifndef TWAI_READ_DRAIN_BUDGET
+#define TWAI_READ_DRAIN_BUDGET TWAI_RX_QUEUE_LEN
+#endif
 
 class TWAIDriver : public CanDriver
 {
@@ -76,7 +79,7 @@ public:
 
     bool read(CanFrame &frame) override
     {
-        for (uint8_t attempt = 0; attempt < kReadDrainBudget; attempt++)
+        for (uint16_t attempt = 0; attempt < kReadDrainBudget; attempt++)
         {
             lock();
             if (!driverOK_)
@@ -144,7 +147,7 @@ public:
 
 private:
     static constexpr uint8_t kMaxExactFilters = 32;
-    static constexpr uint8_t kReadDrainBudget = 8;
+    static constexpr uint16_t kReadDrainBudget = TWAI_READ_DRAIN_BUDGET;
     static constexpr uint32_t BUSOFF_COOLDOWN_MS = 1000;
 
     bool exactFilterMatchesLocked(uint32_t id) const
