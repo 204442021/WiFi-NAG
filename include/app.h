@@ -249,10 +249,18 @@ static bool appLoop()
         h->frameCount++;
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
         CanFrame original = frame;
-#endif
+        if (dashSleepActive)
+        {
+            // While sleeping, observe RX only for wake conditions and suppress all CAN writes.
+            dashSleepObserveFrame(original);
+        }
+        else
+        {
+            h->handleMessage(frame, *appDriver);
+            dashPostProcessFrame(original, *appDriver);
+        }
+#else
         h->handleMessage(frame, *appDriver);
-#if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
-        dashPostProcessFrame(original, *appDriver);
 #endif
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
         if (++framesThisLoop >= 32)

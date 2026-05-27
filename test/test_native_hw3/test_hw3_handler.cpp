@@ -271,18 +271,22 @@ void test_hw3_mux1_sends_exactly_1()
 
 void test_hw3_filter_ids_count()
 {
-    TEST_ASSERT_EQUAL_UINT8(6, handler.filterIdCount());
+    TEST_ASSERT_EQUAL_UINT8(10, handler.filterIdCount());
 }
 
 void test_hw3_filter_ids_values()
 {
     const uint32_t *ids = handler.filterIds();
-    TEST_ASSERT_EQUAL_UINT32(280, ids[0]);
-    TEST_ASSERT_EQUAL_UINT32(390, ids[1]);
-    TEST_ASSERT_EQUAL_UINT32(921, ids[2]);
-    TEST_ASSERT_EQUAL_UINT32(1016, ids[3]);
-    TEST_ASSERT_EQUAL_UINT32(1021, ids[4]);
-    TEST_ASSERT_EQUAL_UINT32(2047, ids[5]);
+    TEST_ASSERT_EQUAL_UINT32(49, ids[0]);
+    TEST_ASSERT_EQUAL_UINT32(280, ids[1]);
+    TEST_ASSERT_EQUAL_UINT32(390, ids[2]);
+    TEST_ASSERT_EQUAL_UINT32(627, ids[3]);
+    TEST_ASSERT_EQUAL_UINT32(825, ids[4]);
+    TEST_ASSERT_EQUAL_UINT32(921, ids[5]);
+    TEST_ASSERT_EQUAL_UINT32(929, ids[6]);
+    TEST_ASSERT_EQUAL_UINT32(1016, ids[7]);
+    TEST_ASSERT_EQUAL_UINT32(1021, ids[8]);
+    TEST_ASSERT_EQUAL_UINT32(2047, ids[9]);
 }
 
 int main()

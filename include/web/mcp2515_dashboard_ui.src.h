@@ -497,6 +497,14 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
         </div>
         <label class="tgl"><input type="checkbox" id="ap-restore-tgl" onchange="saveApRestore()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">CAN/WiFi Auto Sleep</div>
+          <div class="setting-desc">After Park + vehicle lock stays stable for 10s, turn off AP/STA WiFi and CAN injection. CAN RX wakes the device.</div>
+        </div>
+        <label class="tgl"><input type="checkbox" id="auto-sleep-tgl" onchange="saveAutoSleep()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+      </div>
+      <div class="info-box" id="auto-sleep-status">Sleep diag: waiting for status</div>
     </div>
   </div>
 
@@ -973,7 +981,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
 Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-25 09:50:58 +08:00</div>
+OTA timestamp: 2026-05-27 21:31:08 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
@@ -995,7 +1003,7 @@ OTA timestamp: 2026-05-25 09:50:58 +08:00</div>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
     <div class="modal-title" id="ota-test-title">OTA Test v2</div>
     <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-25 09:50:58 +08:00</div>
+OTA timestamp: 2026-05-27 21:31:08 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
     </div>
@@ -1038,7 +1046,7 @@ const SP4=['Chill','Normal','Hurry','Max','Sloth'];
 const $=id=>document.getElementById(id);
 let dashLang=localStorage.getItem('dashLang')||((navigator.language||'').toLowerCase().startsWith('zh')?'zh':'en');
 const I18N_ZH={
-'Light':'浅色','Dark':'深色','Waiting for CAN frames':'等待 CAN 帧','Dashboard disconnected':'仪表盘已断开','Dashboard reconnecting':'仪表盘重连中',
+'Light':'浅色','Dark':'深色','Waiting for CAN frames':'等待 CAN 帧','CAN running':'CAN 运行中','Dashboard disconnected':'仪表盘已断开','Dashboard reconnecting':'仪表盘重连中',
 'CAN Bus':'CAN 总线','Injection':'注入','Frame rate':'CAN 帧率','CAN Frame Rate':'CAN 帧率','RX Frames':'接收帧','TX Frames':'发送帧','Errors':'错误','AD Status':'AP 状态','Profile':'配置档','Offset':'偏移','Uptime':'运行时间',
 'Offline':'离线','Online':'在线','Active':'运行中','Inactive':'未激活','BLOCKED':'已阻止','Waiting AP':'等待 AP','No frames':'无帧','Sniffer paused':'嗅探暂停',
 'WiFi Hotspot':'WiFi 热点','Change the WiFi hotspot name and password':'修改 WiFi 热点名称和密码','SSID':'SSID','Password':'密码','Hidden':'隐藏','WiFi Internet':'WiFi 互联网','Not configured':'未配置','Save up to 4 networks (e.g. home + phone hotspot).':'最多保存 4 个网络（如家庭 WiFi + 手机热点）。','Add network':'添加网络','WiFi SSID':'WiFi SSID','Scan':'扫描','Save & Connect':'保存并连接','Use static IP':'使用静态 IP',
@@ -1293,7 +1301,7 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-25 09:50:58 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-25 09:50:58 +08:00',
+  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-27 21:31:08 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-27 21:31:08 +08:00',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -1306,7 +1314,10 @@ Object.assign(I18N_ZH,{
   'bind wait':'\u7b49\u5f85\u7ed1\u5b9a',
   'fd':'fd',
   'none':'\u65e0',
-  'whitelist override blacklist':'\u767d\u540d\u5355\u8986\u76d6\u9ed1\u540d\u5355'
+  'whitelist override blacklist':'\u767d\u540d\u5355\u8986\u76d6\u9ed1\u540d\u5355',
+  'CAN/WiFi Auto Sleep':'CAN/WiFi \u81ea\u52a8\u4f11\u7720',
+  'After Park + vehicle lock stays stable for 10s, turn off AP/STA WiFi and CAN injection. CAN RX wakes the device.':'P \u6863 + \u8f66\u8f86\u9501\u5b9a\u72b6\u6001\u7a33\u5b9a 10 \u79d2\u540e\uff0c\u5173\u95ed AP/STA WiFi \u548c CAN \u6ce8\u5165\uff0cCAN RX \u5524\u9192\u8bbe\u5907\u3002',
+  'Sleep diag: waiting for status':'\u4f11\u7720\u8bca\u65ad\uff1a\u7b49\u5f85\u72b6\u6001'
 });
 Object.assign(I18N_ZH,{
   'Upstream DNS':'\u4e0a\u6e38 DNS',
@@ -2091,11 +2102,111 @@ function updateInjectButtons(active){
   }
 }
 
+function sleepZh(){return dashLang==='zh';}
+function sleepT(en,zh){return sleepZh()?zh:en;}
+function ageText(v){
+  v=Number(v);
+  return v>=0?(v+'s '+sleepT('ago','前')):sleepT('not seen','未收到');
+}
+function fmtSleepDuration(v){
+  v=Number(v);
+  if(!Number.isFinite(v)||v<0)return sleepT('unknown','未知');
+  return fmtUp(v);
+}
+function sleepStateText(v){
+  const m={off:['off','关闭'],awake:['awake','已唤醒'],pending:['pending','倒计时'],sleep:['sleep','休眠中']};
+  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
+}
+function sleepReasonText(v){
+  const m={
+    'off':['off','关闭'], 'sleeping':['sleeping','休眠中'], 'ota running':['OTA running','OTA 进行中'],
+    'waiting 0x118 gear or locked fallback':['waiting gear or lock fallback','等待档位或锁车兜底'],
+    'waiting locked fallback':['waiting locked fallback','等待锁车兜底'],
+    'waiting P or park state':['waiting P or park state','等待 P 档或停车状态'],
+    'waiting park fallback':['waiting park fallback','等待停车兜底'],
+    'waiting driver empty':['waiting vehicle empty','等待车内无人'],
+    'gear not P':['gear not P','档位不是 P'],
+    'waiting lock 0x273/0x339':['waiting lock signal','等待锁车信号'], 'driver present':['driver present','驾驶员在车内'],
+    'DI drive power':['DI drive power','DI 行驶电源'], 'EPAS drive power':['EPAS drive power','EPAS 行驶电源'],
+    'pending 10s':['pending 10s','10 秒倒计时'], 'ready':['ready','已就绪']
+  };
+  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
+}
+function sleepWakeSourceText(v){
+  const m={none:['none','无'],CAN:['CAN wake','CAN 唤醒'],reboot:['reboot/power','重启/上电'],sleeping:['sleeping','休眠中']};
+  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
+}
+function sleepWakeReasonText(v){
+  const m={none:['none','无'],active:['active sleep','正在休眠'],gear:['gear wake','档位唤醒'],unlock:['unlock wake','解锁唤醒'],driver:['driver wake','驾驶员/DI 唤醒'],epas:['EPAS wake','EPAS 唤醒'],poweron:['power-on','上电'],external:['external reset','外部复位'],software:['software reset','软件复位'],brownout:['brownout','欠压复位'],deepsleep:['deep-sleep reset','深睡复位'],panic:['panic','异常复位'],task_wdt:['task watchdog','任务看门狗'],interrupt_wdt:['interrupt watchdog','中断看门狗'],other_wdt:['watchdog','看门狗']};
+  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
+}
+function sleepLockSourceText(v){
+  const m={none:['none','无'],fallback:['fallback inferred','兜底推断']};
+  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
+}
+function gearText(v){
+  v=Number(v);
+  return ({1:'P',2:'R',3:'N',4:'D',7:'SNA'})[v]||('raw '+v);
+}
+function uiLockText(v){
+  v=Number(v);
+  return ({0:'IDLE',1:'LOCK',2:'UNLOCK',3:'REMOTE_UNLOCK',4:'REMOTE_LOCK',7:'SNA'})[v]||('raw '+v);
+}
+function vcsecVehicleLockText(v){
+  v=Number(v);
+  return ({
+    0:'SNA',1:'NFC_UNLOCKED',2:'NFC_LOCKED',3:'SELECTIVE_UNLOCKED',
+    4:'BLE_UNLOCKED',5:'BLE_LOCKED',6:'ACTIVE_SELECTIVE_UNLOCKED',
+    7:'ACTIVE_BLE_UNLOCKED',8:'ACTIVE_BLE_LOCKED',9:'ACTIVE_UI_UNLOCKED',
+    10:'ACTIVE_UI_LOCKED',11:'REMOTE_UNLOCKED',12:'REMOTE_LOCKED',
+    13:'CRASH_UNLOCKED',14:'INTERNAL_UNLOCKED',15:'INTERNAL_LOCKED'
+  })[v]||('raw '+v);
+}
+function simpleLockText(v){
+  v=Number(v);
+  return ({0:'SNA',1:'UNLOCKED',2:'LOCKED'})[v]||('raw '+v);
+}
+function boolTriText(v){
+  if(v===null||typeof v==='undefined')return sleepT('unknown','未知');
+  return v?sleepT('YES','是'):sleepT('NO','否');
+}
+function updateAutoSleepStatus(d){
+  const el=$('auto-sleep-status');
+  if(!el)return;
+  const locked=!!d.sleepLocked;
+  const ready=!!d.sleepReady;
+  const park=!!d.sleepParkState;
+  const empty=!!d.sleepVehicleEmpty;
+  const countdown=Number(d.sleepCountdownMs);
+  const sep=' \u2022 ';
+  const cd=countdown>=0?(sep+sleepT('sleep in ','\u4f11\u7720\u5012\u8ba1\u65f6 ')+Math.ceil(countdown/1000)+'s'):'';
+  const stateLine=sleepT('Status','\u72b6\u6001')+': '+(d.autoSleep?'ON':'OFF')+' / '+sleepStateText(d.sleepState)+sep+sleepReasonText(d.sleepReason)+cd;
+  const lockSrc=sleepLockSourceText(d.sleepLockSource);
+  const cabin=empty?sleepT('empty','\u65e0\u4eba'):(d.sleepDriverPresent===true?sleepT('occupied','\u6709\u4eba'):sleepT('unknown','\u672a\u77e5'));
+  const sleepKind=d.sleepLockFallback?sleepT('park fallback sleep','\u505c\u8f66\u515c\u5e95\u4f11\u7720'):(locked?sleepT('lock-signal sleep','\u9501\u8f66\u4fe1\u53f7\u4f11\u7720'):sleepT('software sleep','\u8f6f\u4ef6\u4f11\u7720'));
+  const wakeKind=sleepWakeSourceText(d.sleepLastWakeSource)+' / '+sleepWakeReasonText(d.sleepLastWakeReason);
+  const lines=[
+    stateLine,
+    sleepT('Gear','\u6863\u4f4d')+': '+gearText(d.sleepGear)+sep+sleepT('Park','\u505c\u8f66')+': '+boolTriText(park)+sep+sleepT('Locked','\u9501\u8f66')+': '+boolTriText(locked)+' ('+lockSrc+')',
+    sleepT('Cabin','\u8f66\u5185')+': '+cabin,
+    sleepT('Sleep count','\u4f11\u7720\u6b21\u6570')+': '+sleepT('session','\u672c\u6b21')+' '+(d.sleepCount||0)+' / '+sleepT('total','\u7d2f\u8ba1')+' '+(d.sleepTotalCount||0),
+    sleepT('Last sleep','\u4e0a\u6b21\u4f11\u7720')+': '+fmtSleepDuration(d.sleepLastDurationSec),
+    sleepT('Wake count','\u5524\u9192\u6b21\u6570')+': CAN '+(d.sleepCanWakeCount||0)+' / '+sleepT('reboot','\u91cd\u542f')+' '+(d.sleepRebootWakeCount||0),
+    sleepT('Sleep type','\u4f11\u7720\u7c7b\u578b')+': '+sleepKind,
+    sleepT('Wake type','\u5524\u9192\u7c7b\u578b')+': '+wakeKind
+  ];
+  el.style.whiteSpace='pre-wrap';
+  el.textContent=lines.join('\n');
+  el.style.borderColor=ready?'rgba(61,186,114,.35)':locked?'rgba(245,166,35,.35)':'var(--bd)';
+}
+
 function updateFsdControl(d){
   const enabled=!!d.ci;
   state.can=enabled;
   const tgl=$('fsd-tgl');if(tgl)tgl.checked=enabled;
   const apRestore=$('ap-restore-tgl');if(apRestore&&typeof d.apAutoRestore!=='undefined')apRestore.checked=!!d.apAutoRestore;
+  const autoSleep=$('auto-sleep-tgl');if(autoSleep&&typeof d.autoSleep!=='undefined')autoSleep.checked=!!d.autoSleep;
+  updateAutoSleepStatus(d);
   setText('fsd-meta',enabled?'On':'Off');
   const st=$('fsd-status');
   if(st){
@@ -2127,6 +2238,17 @@ async function saveApRestore(){
     if(!r.ok)throw new Error('HTTP '+r.status);
   }catch(e){
     addLog('AP/EAP auto restore save failed','le');
+  }
+}
+
+async function saveAutoSleep(){
+  const t=$('auto-sleep-tgl');
+  if(!t)return;
+  try{
+    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'autoSleep='+(t.checked?'1':'0')});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+  }catch(e){
+    addLog('CAN/WiFi auto sleep save failed','le');
   }
 }
 
@@ -2694,6 +2816,8 @@ async function poll(){
     try{
       const d=await fetchPollJson('/status',5000,true);
     const on=!!d.can,armed=!!d.ci,injecting=typeof d.ia==='undefined'?armed:!!d.ia,fpsVal=Number(d.fps||0);
+    const hdrDesc=$('hdr-desc');
+    if(hdrDesc)hdrDesc.textContent=on?(trText('CAN running')+' \u2022 '+fpsVal.toFixed(1)+' Hz'):trText('Waiting for CAN frames');
     state.hw=d.hw;state.sp=clampProfileForHw(d.hw,d.sp);state.spAuto=typeof d.spAuto==='undefined'?state.spAuto:!!d.spAuto;state.can=armed;
     updateFsdControl(d);
     updateHw3SlewControl(d);
