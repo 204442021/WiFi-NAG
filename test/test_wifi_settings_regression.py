@@ -137,24 +137,16 @@ class WifiSettingsRegressionTests(unittest.TestCase):
         self.assertIn('esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);', self.runtime)
 
     def test_ap_injection_gate_setting_is_persisted_and_exposed(self) -> None:
-        expected_ui_ids = ["ap-gate-tgl"]
-        expected_ui_fields = ["saveApGate()", "updateApGateControl(d)"]
-
-        for element_id in expected_ui_ids:
-            with self.subTest(ui_id=element_id):
-                self.assertHasUiId(element_id)
+        # The dedicated AP-injection-gate UI toggle (ap-gate-tgl / saveApGate /
+        # updateApGateControl) and the legacy "apg" POST arg were removed when the
+        # control was folded into AP/EAP Auto Restore. The gate is still persisted
+        # and surfaced in the status payload, so keep covering the backend contract.
         expected_backend_fields = [
-            "INJECTION_AFTER_AP",
             '"ap_gate"',
-            'server.hasArg("apg")',
             '\\"apGate\\"',
             '\\"ia\\"',
             'dashInjectionActive()',
         ]
-
-        for field in expected_ui_fields:
-            with self.subTest(ui_field=field):
-                self.assertIn(field, self.ui)
 
         for field in expected_backend_fields:
             with self.subTest(backend_field=field):
