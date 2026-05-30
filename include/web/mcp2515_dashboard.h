@@ -1526,10 +1526,15 @@ static void dashLoadPrefs()
         prefs.putUChar("hw", hwMode);
     if (storedDefaultHw != DASH_DEFAULT_HW)
         prefs.putUChar("hw_def", DASH_DEFAULT_HW);
+#if defined(PRODUCT_WIFI_MAX)
+    canActive = false;
+    forceActivate = false;
+#else
     canActive = prefs.getBool("can", kDashInjectionDefaultEnabled);
     forceActivate = canActive;
     if (prefs.getBool("force_act", canActive) != forceActivate)
         prefs.putBool("force_act", forceActivate);
+#endif
     // 默认 false：复刻 2.5.2 真车固件行为（apInjectionGate=false 注入无条件放行）。
     apInjectionGate = prefs.getBool("ap_gate", false);
     apAutoRestore = prefs.getBool("ap_rst", false);
@@ -1846,7 +1851,19 @@ static void handleStatus()
     bool ep = dashHandler ? (bool)dashHandler->enablePrint : true;
     bool apGateOpen = dashApInjectionAllowed();
 
-    String j = "{\"hw\":";
+    String j = "{\"product\":\"";
+#if defined(PRODUCT_WIFI_MAX)
+    j += "wifi-max";
+#else
+    j += "can-fsd";
+#endif
+    j += "\",\"wifiMax\":";
+#if defined(PRODUCT_WIFI_MAX)
+    j += "true";
+#else
+    j += "false";
+#endif
+    j += ",\"hw\":";
     j += hwMode;
     j += ",\"sp\":";
     j += sp;
@@ -2116,12 +2133,21 @@ static void handleConfig()
         requestedFsdSwitch = server.arg("force") == "1";
         hasFsdSwitchArg = true;
     }
+#if defined(PRODUCT_WIFI_MAX)
+    if (hasFsdSwitchArg && (canActive || forceActivate || requestedFsdSwitch))
+    {
+        canActive = false;
+        forceActivate = false;
+        dashLog("[CFG] WIFI-MAX ignores CAN/FSD switch");
+    }
+#else
     if (hasFsdSwitchArg && ((requestedFsdSwitch != canActive) || (requestedFsdSwitch != forceActivate)))
     {
         canActive = requestedFsdSwitch;
         forceActivate = requestedFsdSwitch;
         dashLog("[CFG] FSD master switch " + String(requestedFsdSwitch ? "ON" : "OFF"));
     }
+#endif
     bool profileAutoRequested = server.hasArg("spa") && server.arg("spa") == "1";
     if (server.hasArg("sp"))
     {
@@ -4940,9 +4966,17 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
         dashLog("[WIFI] AP SSID is hidden");
     Serial.printf("[WIFI] AP: %s  IP: %s\n", apSSID, WiFi.softAPIP().toString().c_str());
 
+#if defined(PRODUCT_WIFI_MAX)
+    canActive = false;
+    forceActivate = false;
+    dashHandler = nullptr;
+    appActiveHandler = nullptr;
+    dashLog("[BOOT] WIFI-MAX mode: CAN/FSD disabled");
+#else
     dashInitHandlers();
     dashSwapHandler(hwMode);
     dashApplyFilters();
+#endif
 
 
     ArduinoOTA.setHostname("ev-open-can-tools");
@@ -5015,6 +5049,7 @@ static void mcpDashboardLoop()
 {
     if (Update.isRunning())
         return;
+#if !defined(PRODUCT_WIFI_MAX)
     dashSleepPoll();
     if (dashSleepActive)
         return;
@@ -5022,6 +5057,7 @@ static void mcpDashboardLoop()
     if (recActive && (millis() - recStartMs >= kRecMaxDurationMs))
         dashStopRecordingAndSave("time limit");
     dashCheckBusHealth();
+#endif
     if (canOnline && millis() - lastFrameMs > 10000)
     {
         canOnline = false;

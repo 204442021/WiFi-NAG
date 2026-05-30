@@ -244,6 +244,7 @@ pyrightconfig.json
 platformio_profile.h
 sdkconfig.*
 !sdkconfig.defaults
+!sdkconfig.wifi_max_ESP32_S3_CAN
 .pi-lens
 .claude
 managed_components/

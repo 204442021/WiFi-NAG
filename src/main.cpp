@@ -78,7 +78,19 @@ static bool appTwaiGpioValid(gpio_num_t pin, bool tx)
 
 static void app_main_setup()
 {
-#ifdef DRIVER_MCP2515
+#if defined(PRODUCT_WIFI_MAX) && defined(ESP32_DASHBOARD)
+    delay(1500);
+    Serial.begin(115200);
+    unsigned long t0 = millis();
+    while (!Serial && millis() - t0 < 1000)
+    {
+    }
+#ifndef NATIVE_BUILD
+    pinMode(PIN_LED, OUTPUT);
+    digitalWrite(PIN_LED, HIGH);
+#endif
+    mcpDashboardSetup(nullptr, nullptr);
+#elif defined(DRIVER_MCP2515)
     appSetup<MCP2515Driver>(std::make_unique<MCP2515Driver>(PIN_CAN_CS), "MCP25625 ready @ 500k");
 #ifdef ESP32_DASHBOARD
     mcpDashboardSetup(appHandler.get(), appDriver.get());
@@ -123,7 +135,10 @@ static void app_main_setup()
 
 static bool app_main_loop()
 {
-#ifdef DRIVER_MCP2515
+#if defined(PRODUCT_WIFI_MAX) && defined(ESP32_DASHBOARD)
+    mcpDashboardLoop();
+    return false;
+#elif defined(DRIVER_MCP2515)
     bool processed = appLoop<MCP2515Driver>();
 #ifdef ESP32_DASHBOARD
     mcpDashboardLoop();
@@ -199,7 +214,7 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(nvsErr);
 
     app_main_setup();
-#if defined(DRIVER_TWAI)
+#if defined(DRIVER_TWAI) && !defined(PRODUCT_WIFI_MAX)
     bool canTaskStarted = app_start_can_task();
     while (true)
     {

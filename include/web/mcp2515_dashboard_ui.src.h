@@ -333,6 +333,16 @@ body.ui-car *{transition:none !important;animation:none !important;scroll-behavi
   body.ui-car .card,body.ui-car .hdr,body.ui-car .ui-mode-strip{margin-left:16px;margin-right:16px}
 }
 body:not(.can-debug-on) .can-debug-panel{display:none !important}
+body.wifi-max .can-only,
+body.wifi-max #config-hardware-section,
+body.wifi-max #hw3-speed-section,
+body.wifi-max #legacy-mpp-section,
+body.wifi-max #hw3-slew-section,
+body.wifi-max #can-debug-card,
+body.wifi-max .warn-bar,
+body.wifi-max .owner-modal-card{display:none !important}
+body.wifi-max #hw-badge{font-size:0}
+body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
 </style>
 </head>
 <body>
@@ -341,12 +351,12 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
   <div class="car-side-title">EVtools</div>
   <div class="car-side-sub" id="car-side-mode">Auto UI</div>
   <button class="car-nav-btn" onclick="scrollCarSection('status-panel')">Status</button>
-  <button class="car-nav-btn" onclick="scrollCarSection('config-hardware-section')">HW</button>
-  <button class="car-nav-btn" onclick="scrollCarSection('hw3-speed-section')">Speed</button>
+  <button class="car-nav-btn can-only" onclick="scrollCarSection('config-hardware-section')">HW</button>
+  <button class="car-nav-btn can-only" onclick="scrollCarSection('hw3-speed-section')">Speed</button>
   <button class="car-nav-btn" onclick="scrollCarSection('wifi-internet-section')">WiFi</button>
   <button class="car-nav-btn" onclick="scrollCarSection('gateway-section')">DNS</button>
   <button class="car-nav-btn" onclick="scrollCarSection('system-card')">System</button>
-  <button class="car-nav-btn" onclick="scrollCarSection('can-debug-card')">CAN</button>
+  <button class="car-nav-btn can-only" onclick="scrollCarSection('can-debug-card')">CAN</button>
 </nav>
 
 <div class="hdr">
@@ -378,17 +388,17 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 <div class="fps-bar"><div class="fps-fill" id="fps-fill"></div></div>
 
 <div class="stat-grid" id="status-panel">
-  <div class="stat"><div class="stat-lbl">CAN Bus</div><div class="stat-val" id="s-can">Offline</div></div>
-  <div class="stat"><div class="stat-lbl">FSD Switch</div><div class="stat-val v-dim" id="s-inj">--</div></div>
-  <div class="stat"><div class="stat-lbl" title="Frames received per second">CAN Frame Rate</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
-  <div class="stat"><div class="stat-lbl">RX</div><div class="stat-val v-acc" id="s-rx">0</div></div>
-  <div class="stat"><div class="stat-lbl">TX</div><div class="stat-val v-acc" id="s-tx">0</div></div>
-  <div class="stat"><div class="stat-lbl">TX Errors</div><div class="stat-val v-dim" id="s-txerr">0</div></div>
-  <div class="stat"><div class="stat-lbl">Follow dist</div><div class="stat-val v-dim" id="s-fd">--</div></div>
-  <div class="stat"><div class="stat-lbl">Profile</div><div class="stat-val v-dim" id="s-prof">--</div></div>
-  <div class="stat"><div class="stat-lbl">Limit Offset</div><div class="stat-val v-dim" id="s-soff">0</div></div>
+  <div class="stat can-only"><div class="stat-lbl">CAN Bus</div><div class="stat-val" id="s-can">Offline</div></div>
+  <div class="stat can-only"><div class="stat-lbl">FSD Switch</div><div class="stat-val v-dim" id="s-inj">--</div></div>
+  <div class="stat can-only"><div class="stat-lbl" title="Frames received per second">CAN Frame Rate</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
+  <div class="stat can-only"><div class="stat-lbl">RX</div><div class="stat-val v-acc" id="s-rx">0</div></div>
+  <div class="stat can-only"><div class="stat-lbl">TX</div><div class="stat-val v-acc" id="s-tx">0</div></div>
+  <div class="stat can-only"><div class="stat-lbl">TX Errors</div><div class="stat-val v-dim" id="s-txerr">0</div></div>
+  <div class="stat can-only"><div class="stat-lbl">Follow dist</div><div class="stat-val v-dim" id="s-fd">--</div></div>
+  <div class="stat can-only"><div class="stat-lbl">Profile</div><div class="stat-val v-dim" id="s-prof">--</div></div>
+  <div class="stat can-only"><div class="stat-lbl">Limit Offset</div><div class="stat-val v-dim" id="s-soff">0</div></div>
   <div class="stat"><div class="stat-lbl">Uptime</div><div class="stat-val v-dim" id="s-up">0s</div></div>
-  <button class="btn" id="btn-fsd-toggle" onclick="toggleFsdTopButton()">Turn FSD On</button>
+  <button class="btn can-only" id="btn-fsd-toggle" onclick="toggleFsdTopButton()">Turn FSD On</button>
   <button class="btn btn-reboot" onclick="reboot()">Reboot</button>
 </div>
 
@@ -981,7 +991,7 @@ body:not(.can-debug-on) .can-debug-panel{display:none !important}
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
 Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-27 21:31:08 +08:00</div>
+OTA timestamp: 2026-05-30 18:55:24 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
@@ -1003,7 +1013,7 @@ OTA timestamp: 2026-05-27 21:31:08 +08:00</div>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
     <div class="modal-title" id="ota-test-title">OTA Test v2</div>
     <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-27 21:31:08 +08:00</div>
+OTA timestamp: 2026-05-30 18:55:24 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
     </div>
@@ -1301,7 +1311,7 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-27 21:31:08 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-27 21:31:08 +08:00',
+  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-30 18:55:24 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-30 18:55:24 +08:00',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -1523,6 +1533,16 @@ function updateUiModeUi(){
   const label=uiModeEffective==='car'?'Detected: Car':'Detected: Phone';
   const el=$('ui-mode-detected');if(el){el.textContent=(uiModeSetting==='auto'?label:('Manual: '+(uiModeEffective==='car'?'Car':'Phone')));applyDashboardI18n(el);}
   const side=$('car-side-mode');if(side){side.textContent=trText(uiModeSetting==='auto'?'Auto':'Manual')+' / '+trText(uiModeEffective==='car'?'Car':'Phone');}
+}
+function applyWifiMaxMode(d){
+  const on=!!(d&&d.wifiMax);
+  document.body.classList.toggle('wifi-max',on);
+  if(!on)return;
+  const title=document.querySelector('.hdr-title');if(title)title.textContent='EVtools WIFI-MAX';
+  const hdr=$('hdr-desc');if(hdr)hdr.textContent='WiFi repeater / DNS filter';
+  setText('hw-badge','WIFI-MAX');
+  setText('s-up',fmtUp(d.up));
+  const dot=$('dot');if(dot)dot.className='sdot dot-on';
 }
 function applyUiMode(){
   uiModeSetting=normalizeUiMode(uiModeSetting);
@@ -2001,7 +2021,7 @@ function toggleLanguage(){
     $('theme-btn').innerHTML=t==='dark'?'&#9788; '+trText('Light'):'&#9790; '+trText('Dark');
     updateLanguageButton();
     applyDashboardI18n(document.body);
-    setTimeout(showOwnerNotice,120);
+    setTimeout(()=>{if(!document.body.classList.contains('wifi-max'))showOwnerNotice();},1200);
     const obs=new MutationObserver(muts=>{
       if(dashLang!=='zh')return;
       muts.forEach(m=>{
@@ -2815,6 +2835,14 @@ async function poll(){
   return runPoll('status',async()=>{
     try{
       const d=await fetchPollJson('/status',5000,true);
+    applyWifiMaxMode(d);
+    if(d.wifiMax){
+      if(!dashboardInitialLoaded){
+        dashboardInitialLoaded=true;
+        loadWifiNetworks();loadWifiStatus();loadApStatus();loadGatewayDns();loadGatewayStatus();if(!isCarUiActive())loadGatewayBlocked();
+      }
+      return;
+    }
     const on=!!d.can,armed=!!d.ci,injecting=typeof d.ia==='undefined'?armed:!!d.ia,fpsVal=Number(d.fps||0);
     const hdrDesc=$('hdr-desc');
     if(hdrDesc)hdrDesc.textContent=on?(trText('CAN running')+' \u2022 '+fpsVal.toFixed(1)+' Hz'):trText('Waiting for CAN frames');
