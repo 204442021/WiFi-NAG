@@ -89,10 +89,11 @@
 
 ### 3. 性能配置
 
-WiFi-Max 环境使用专用 sdkconfig：
+WiFi-Max 环境使用专用 sdkconfig，并叠加 WIFI-MAX 默认优化：
 
 ```text
 sdkconfig.wifi_max_ESP32_S3_CAN
+sdkconfig.wifi_max.defaults
 ```
 
 关键配置：
@@ -105,12 +106,27 @@ sdkconfig.wifi_max_ESP32_S3_CAN
 | BLE | disabled |
 | Power Management | disabled |
 | FreeRTOS runtime stats | enabled |
-| TCP send buffer | `11520` |
-| TCP window | `11520` |
-| WiFi RX dynamic buffer | `32` |
-| WiFi TX dynamic buffer | `32` |
+| WiFi static RX buffer | `16` |
+| WiFi dynamic RX buffer | `64` |
+| WiFi dynamic TX buffer | `64` |
+| WiFi AMPDU TX/RX | enabled |
+| WiFi BA window | `12 / 12` |
+| lwIP sockets | `24` |
+| lwIP TCP/IP recv mbox | `64` |
+| TCP send buffer | `16384` |
+| TCP window | `16384` |
+| TCP/IP task stack | `4096` |
 
-这些配置用于让 WiFi / NAPT / DNS 尽量获得更多 CPU 和内存资源。
+运行时调优：
+
+- 关闭 WiFi 省电：`WIFI_PS_NONE`；
+- AP / STA 固定 20 MHz 带宽，优先稳定兼容；
+- AP 使用 802.11 g/n，STA 保留 802.11 b/g/n 兼容；
+- 发射功率设置为 ESP-IDF quarter-dBm 标尺下的 `78`，约 `19.5 dBm`；
+- WiFi / lwIP 继续运行在 Core1；
+- WebUI task 和 DNS task 在 WIFI-MAX 下放到 Core0，减少和 WiFi/lwIP 热路径互抢。
+
+这些配置用于让 WiFi / NAPT / DNS 尽量获得更多 CPU 和内存资源，同时保持车机和手机 2.4 GHz 兼容性。
 
 ### 4. 硬件限制
 
@@ -285,10 +301,11 @@ Defaults:
 
 ### 3. Performance Configuration
 
-WiFi-Max uses its own sdkconfig:
+WiFi-Max uses its own sdkconfig and an extra WIFI-MAX defaults layer:
 
 ```text
 sdkconfig.wifi_max_ESP32_S3_CAN
+sdkconfig.wifi_max.defaults
 ```
 
 Key settings:
@@ -301,10 +318,25 @@ Key settings:
 | BLE | disabled |
 | Power Management | disabled |
 | FreeRTOS runtime stats | enabled |
-| TCP send buffer | `11520` |
-| TCP window | `11520` |
-| WiFi RX dynamic buffer | `32` |
-| WiFi TX dynamic buffer | `32` |
+| WiFi static RX buffer | `16` |
+| WiFi dynamic RX buffer | `64` |
+| WiFi dynamic TX buffer | `64` |
+| WiFi AMPDU TX/RX | enabled |
+| WiFi BA window | `12 / 12` |
+| lwIP sockets | `24` |
+| lwIP TCP/IP recv mbox | `64` |
+| TCP send buffer | `16384` |
+| TCP window | `16384` |
+| TCP/IP task stack | `4096` |
+
+Runtime tuning:
+
+- WiFi power save is disabled with `WIFI_PS_NONE`.
+- AP and STA use 20 MHz bandwidth for compatibility and stability.
+- AP uses 802.11 g/n; STA keeps 802.11 b/g/n compatibility.
+- TX power is set to `78` in ESP-IDF quarter-dBm units, about `19.5 dBm`.
+- WiFi and lwIP stay on Core1.
+- WebUI and DNS tasks are placed on Core0 in WIFI-MAX builds to reduce contention with the WiFi/lwIP hot path.
 
 ### 4. Hardware Limits
 
