@@ -122,6 +122,14 @@ static constexpr uint8_t kDashGatewayUpstreamAli = 1;
 static constexpr uint8_t kDashGatewayUpstreamTencent = 2;
 static constexpr uint8_t kDashGatewayUpstreamCustom = 3;
 
+#if defined(PRODUCT_WIFI_MAX)
+static constexpr int kDashGatewayDnsTaskCore = 0;
+static constexpr int kDashGatewayDnsTaskPriority = 3;
+#else
+static constexpr int kDashGatewayDnsTaskCore = 1;
+static constexpr int kDashGatewayDnsTaskPriority = 1;
+#endif
+
 static uint32_t dashGatewaySelectedUpstreamDns();
 
 static const char kDashGatewayDefaultBlacklist[] =
@@ -1289,7 +1297,9 @@ static void dashGatewayStartDns()
     }
     gatewayDnsBindOk = true;
     ESP_LOGI(kDashGatewayTag, "DNS socket bound to UDP 53 (fd=%d)", gatewayDnsSock);
-    xTaskCreatePinnedToCore(dashGatewayDnsTask, "gw_dns", 6144, nullptr, 1, &gatewayDnsTaskHandle, 1);
+    xTaskCreatePinnedToCore(dashGatewayDnsTask, "gw_dns", 6144, nullptr,
+                            kDashGatewayDnsTaskPriority, &gatewayDnsTaskHandle,
+                            kDashGatewayDnsTaskCore);
 }
 
 static bool gatewayApDnsConfigured = false; // guard: only configure DHCP/DNS once

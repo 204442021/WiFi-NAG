@@ -129,10 +129,12 @@ static bool dashAutoSleepEnabled = false;
 static bool dashSleepActive = false;
 static bool dashSleepWakeRequested = false;
 static const char *dashSleepWakeReason = "none";
+#if !defined(PRODUCT_WIFI_MAX)
 static bool dashSleepSavedCanActive = false;
 static bool dashSleepSavedForceActivate = false;
-static unsigned long dashSleepCandidateSinceMs = 0;
 static unsigned long dashSleepEnteredMs = 0;
+#endif
+static unsigned long dashSleepCandidateSinceMs = 0;
 static uint32_t dashSleepEnterCount = 0;
 static uint32_t dashSleepPersistBootCount = 0;
 static uint32_t dashSleepPersistTotalCount = 0;
@@ -267,12 +269,15 @@ static void dashClearWifiNetwork(DashWifiNetwork &n)
     n.dns[0] = 0;
 }
 static void dashRotateAndConnect();
+#if !defined(PRODUCT_WIFI_MAX)
 static void dashSwapHandler(uint8_t mode);
 static void dashApplyFilters();
+#endif
 static void dashApplyRuntimeState();
 static void dashClearLegacyOptionPrefs();
 static void dashLog(const String &s);
 
+#if !defined(PRODUCT_WIFI_MAX)
 // CAN recorder
 #ifndef REC_CAP
 #define REC_CAP 8000
@@ -292,7 +297,9 @@ static volatile bool recActive = false;
 static volatile int recCount = 0;
 static bool recSaved = false;
 static unsigned long recStartMs = 0;
+#endif
 
+#if !defined(PRODUCT_WIFI_MAX)
 // CAN sniffer ring buffer
 #define SNIFFER_CAP 30
 struct SniffFrame
@@ -305,6 +312,7 @@ struct SniffFrame
 static SniffFrame sniffBuf[SNIFFER_CAP];
 static int sniffHead = 0;
 static int sniffCount = 0;
+#endif
 
 enum DashWriteProbeState : uint8_t
 {
@@ -331,6 +339,7 @@ struct DashWriteProbe
 };
 static DashWriteProbe dashWriteProbe;
 
+#if !defined(PRODUCT_WIFI_MAX)
 struct DashApRestoreState
 {
     bool gearSeen = false;
@@ -359,7 +368,9 @@ struct DashApRestoreState
 };
 static DashApRestoreState apRestoreState;
 static constexpr unsigned long kDashApRestoreTxCooldownMs = 1000;
+#endif
 
+#if !defined(PRODUCT_WIFI_MAX)
 static int8_t dashFrameMux(const CanFrame &frame)
 {
     if ((frame.id == 1006 || frame.id == 1021) && frame.dlc > 0)
@@ -432,15 +443,6 @@ static bool dashEnsureRecBuffer()
     }
     Serial.println("[REC] Buffer allocated in internal RAM");
     return true;
-}
-
-static void dashReleaseRecBuffer()
-{
-    if (!recBuf || recActive)
-        return;
-    heap_caps_free(recBuf);
-    recBuf = nullptr;
-    recBufInPsram = false;
 }
 
 static bool dashSaveRecordingToSpiffs(int n)
@@ -626,6 +628,7 @@ static void sniffPush(const CanFrame &f)
     if (sniffCount < SNIFFER_CAP)
         sniffCount++;
 }
+#endif
 
 #define LOG_CAP 80
 struct LogEntry
@@ -677,6 +680,7 @@ static void dashDrainLogRing()
 }
 
 // Public hooks
+#if !defined(PRODUCT_WIFI_MAX)
 static void mcpDashOnFrame(const CanFrame &f)
 {
     unsigned long now = millis();
@@ -738,6 +742,7 @@ static void mcpDashOnTxFrame(const CanFrame &frame, bool ok)
     memset(dashWriteProbe.rxData, 0, sizeof(dashWriteProbe.rxData));
     memcpy(dashWriteProbe.txData, frame.data, dashWriteProbe.txDlc);
 }
+#endif
 
 // JSON escape for log strings
 static String jsonEscape(const String &s)
@@ -779,6 +784,7 @@ static bool dashInjectionActive()
     return canActive && dashApInjectionAllowed();
 }
 
+#if !defined(PRODUCT_WIFI_MAX)
 static bool dashApRestoreBraking()
 {
     return (apRestoreState.brakeSeen && apRestoreState.brakePedalRaw == 1) ||
@@ -791,6 +797,7 @@ static bool dashApRestoreStabilityBlocked()
            (apRestoreState.anyVdcActive == 1 || apRestoreState.vdcControlActive > 0 ||
             apRestoreState.tcActive);
 }
+#endif
 
 static uint32_t dashReadLeBits(const CanFrame &frame, uint8_t startBit, uint8_t length)
 {
@@ -934,6 +941,7 @@ static void dashSleepLoadPersistentDiag(Preferences &p)
     dashSleepPersistDiag(p);
 }
 
+#if !defined(PRODUCT_WIFI_MAX)
 static void dashSleepPersistEnterDiag()
 {
     dashSleepPersistTotalCount++;
@@ -952,7 +960,9 @@ static void dashSleepPersistEnterDiag()
     dashSleepPersistDiag(p);
     p.end();
 }
+#endif
 
+#if !defined(PRODUCT_WIFI_MAX)
 static void dashSleepPersistWakeDiag(const char *reason)
 {
     dashSleepPersistCanWakeCount++;
@@ -970,6 +980,7 @@ static void dashSleepPersistWakeDiag(const char *reason)
     dashSleepPersistDiag(p);
     p.end();
 }
+#endif
 
 static bool dashSleepVcsecStatusLocked(uint8_t status);
 static bool dashSleepVcsecStatusUnlocked(uint8_t status);
@@ -1236,6 +1247,7 @@ static void dashSleepObserveFrame(const CanFrame &frame)
     }
 }
 
+#if !defined(PRODUCT_WIFI_MAX)
 static void dashTryApAutoRestore(const CanFrame &trigger, CanDriver &driver)
 {
     if (trigger.id != 0x389 || !apAutoRestore)
@@ -1312,6 +1324,13 @@ static void dashPostProcessFrame(const CanFrame &original, CanDriver &driver)
     (void)driver;
 #endif
 }
+#else
+static void dashPostProcessFrame(const CanFrame &original, CanDriver &driver)
+{
+    (void)original;
+    (void)driver;
+}
+#endif
 
 static bool dashCheckNagDisabled()
 {
@@ -1454,6 +1473,26 @@ static bool dashApConfigValid(const char *ssid, const char *pass)
     size_t passLen = strlen(pass);
     return ssidLen > 0 && ssidLen <= kDashMaxSsidLen && dashApPasswordLengthValid(passLen);
 }
+
+#if defined(ESP_PLATFORM) && defined(PRODUCT_WIFI_MAX)
+static void dashApplyWifiMaxRadioTuning()
+{
+    static bool logged = false;
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW20);
+    esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW20);
+    esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+    esp_wifi_set_max_tx_power(78); // 19.5 dBm, within ESP-IDF's quarter-dBm scale.
+    if (!logged)
+    {
+        logged = true;
+        dashLog("[WIFI] WIFI-MAX radio tuning: HT20, AP 11g/n, STA 11b/g/n, max TX power");
+    }
+}
+#else
+static void dashApplyWifiMaxRadioTuning() {}
+#endif
 
 static void dashUseDefaultApConfig()
 {
@@ -1737,6 +1776,7 @@ static void dashLoadPrefs()
 
 // MCP2515-only: fine-grained filter register reload on HW mode switch.
 // Other builds use dashDriver->setFilters() in dashSwapHandler instead.
+#if !defined(PRODUCT_WIFI_MAX)
 static void dashApplyFilters()
 {
 #if defined(DRIVER_ESP32_EXT_MCP2515)
@@ -1808,6 +1848,7 @@ static void dashCheckBusHealth()
 static void dashCheckBusHealth()
 {
 }
+#endif
 #endif
 static WebServer server(80);
 
@@ -2109,6 +2150,26 @@ static void handleStatus()
 
 static void handleConfig()
 {
+#if defined(PRODUCT_WIFI_MAX)
+    bool changed = false;
+    if (canActive || forceActivate || hwMode != 1 || apAutoRestore || dashAutoSleepEnabled)
+    {
+        canActive = false;
+        forceActivate = false;
+        hwMode = 1;
+        apAutoRestore = false;
+        dashAutoSleepEnabled = false;
+        changed = true;
+    }
+    if (changed)
+    {
+        dashApplyRuntimeState();
+        dashSavePrefs();
+        dashLog("[CFG] WIFI-MAX ignores CAN/FSD configuration");
+    }
+    server.send(200, "application/json", "{\"ok\":true,\"canDisabled\":true}");
+    return;
+#else
     bool hwChanged = false;
     if (server.hasArg("hw"))
     {
@@ -2302,6 +2363,7 @@ static void handleConfig()
     dashApplyRuntimeState();
     dashSavePrefs();
     server.send(200, "application/json", "{\"ok\":true}");
+#endif
 }
 
 static void handleLoggingConfig()
@@ -2317,6 +2379,7 @@ static void handleLoggingConfig()
     server.send(200, "application/json", "{\"ok\":true}");
 }
 
+#if !defined(PRODUCT_WIFI_MAX)
 static void handleFrames()
 {
     String j = "{\"frames\":[";
@@ -2343,6 +2406,7 @@ static void handleFrames()
     j += "]}";
     server.send(200, "application/json", j);
 }
+#endif
 
 static void handleLog()
 {
@@ -2371,6 +2435,7 @@ static void handleLog()
     server.send(200, "application/json", j);
 }
 
+#if !defined(PRODUCT_WIFI_MAX)
 static void handleResetStats()
 {
     rxCount = 0;
@@ -2441,6 +2506,7 @@ static void handleDisable()
     dashSetCanActive(false, "dashboard");
     server.send(200, "text/plain", "Injection stopped.");
 }
+#endif
 
 static void handleReboot()
 {
@@ -2511,34 +2577,6 @@ static void handleOtaUpload()
 
 // CAN RUNTIME MANAGEMENT
 
-static String dashFrameDataJson(const CanFrame &frame)
-{
-    String j = "[";
-    for (uint8_t i = 0; i < 8; i++)
-    {
-        if (i)
-            j += ",";
-        j += String(frame.data[i]);
-    }
-    j += "]";
-    return j;
-}
-
-static String dashFrameDataHex(const CanFrame &frame)
-{
-    String out;
-    for (uint8_t i = 0; i < 8; i++)
-    {
-        if (i)
-            out += " ";
-        if (frame.data[i] < 16)
-            out += "0";
-        out += String(frame.data[i], HEX);
-    }
-    out.toUpperCase();
-    return out;
-}
-
 // ── WIFI STA ────────────────────────────────────────────────────
 
 static bool dashStartAccessPoint(bool withSta)
@@ -2546,6 +2584,7 @@ static bool dashStartAccessPoint(bool withSta)
     WiFi.persistent(false);
     WiFi.mode(withSta ? WIFI_AP_STA : WIFI_AP);
     WiFi.setSleep(false);
+    dashApplyWifiMaxRadioTuning();
 
     IPAddress apIp(100, 100, 1, 1);
     IPAddress apMask(255, 255, 255, 0);
@@ -2577,7 +2616,10 @@ static void dashBeginSTA()
     // Without this, esp_wifi_set_config(WIFI_IF_STA, ...) inside WiFi.begin()
     // can fail silently when the device is in AP-only mode.
     if (WiFi.getMode() != WIFI_AP_STA)
+    {
         WiFi.mode(WIFI_AP_STA);
+        dashApplyWifiMaxRadioTuning();
+    }
 
     if (staStaticIP && (uint32_t)staIP != 0)
     {
@@ -2676,7 +2718,10 @@ static void dashScheduleSTAConnect(unsigned long delayMs)
 static void dashPrepareWifiScan()
 {
     if (WiFi.getMode() != WIFI_AP_STA)
+    {
         WiFi.mode(WIFI_AP_STA);
+        dashApplyWifiMaxRadioTuning();
+    }
     WiFi.setSleep(false);
 }
 
@@ -2848,6 +2893,7 @@ static void dashCheckWifi()
 // AP beacon, so we do NOT scan more often than kDashScanMinIntervalMs even if
 // the WebUI keeps polling. Cached JSON is returned for repeat calls inside the
 // window, and a 429 with retry-after is returned if the cache is empty.
+#if !defined(PRODUCT_WIFI_MAX)
 static void dashEnterLowPowerSleep()
 {
     if (dashSleepActive)
@@ -2939,6 +2985,7 @@ static void dashSleepPoll()
     if (now - dashSleepCandidateSinceMs >= kDashAutoSleepDelayMs)
         dashEnterLowPowerSleep();
 }
+#endif
 
 static String dashCachedScanJson;
 static unsigned long dashLastScanAt = 0;
@@ -3758,7 +3805,9 @@ static void dashSerialPrintHelp()
     Serial.println("Commands:");
     Serial.println("  help           show this help");
     Serial.println("  system_status  print CPU/heap/WiFi summary");
+#if !defined(PRODUCT_WIFI_MAX)
     Serial.println("  can_status     print CAN/injection summary");
+#endif
     Serial.println("  task_stats     sample FreeRTOS tasks for 1s asynchronously");
     Serial.println();
 }
@@ -3819,6 +3868,7 @@ static void dashSerialPrintSystemStatus()
     Serial.println();
 }
 
+#if !defined(PRODUCT_WIFI_MAX)
 static void dashSerialPrintCanStatus()
 {
     unsigned long fpsX10 = static_cast<unsigned long>(fps * 10.0f + 0.5f);
@@ -3844,6 +3894,7 @@ static void dashSerialPrintCanStatus()
                   adEnabled ? "yes" : "no",
                   gtwAp);    Serial.println();
 }
+#endif
 
 #if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
 static TaskStatus_t dashSerialTaskBefore[kMaxTasksForStats];
@@ -3899,8 +3950,10 @@ static void dashSerialRunCommand(char *cmd)
         dashSerialPrintHelp();
     else if (strcmp(start, "system_status") == 0 || strcmp(start, "sys") == 0)
         dashSerialPrintSystemStatus();
+#if !defined(PRODUCT_WIFI_MAX)
     else if (strcmp(start, "can_status") == 0 || strcmp(start, "can") == 0)
         dashSerialPrintCanStatus();
+#endif
     else if (strcmp(start, "task_stats") == 0 || strcmp(start, "tasks") == 0)
         dashSerialStartTaskStats();
     else if (*start)
@@ -3953,6 +4006,7 @@ static void dashSerialDiagnosticsPoll()
 static void dashSerialDiagnosticsPoll() {}
 #endif
 
+#if !defined(PRODUCT_WIFI_MAX)
 static bool dashCanGpioReserved(int pin)
 {
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
@@ -4050,13 +4104,17 @@ static void handleCanPinsSave()
 
 // ── Settings Backup / Restore ───────────────────────────────────
 
+#endif
+
 static void handleSettingsExport()
 {
     Preferences p;
     String apSsid = "", apPass = "", wSsid = "", wPass = "";
     String wIp = "", wGw = "", wMask = "", wDns = "";
     bool wStatic = false, beta = false, autoUpdate = false, apHid = false;
-    bool h3Slew = false, eprn = true;
+    bool eprn = true;
+#if !defined(PRODUCT_WIFI_MAX)
+    bool h3Slew = false;
     uint8_t h3SlewRate = kHw3SlewRateDefault;
     uint8_t storedHw = hwMode;
     bool storedCan = canActive;
@@ -4073,13 +4131,16 @@ static void handleSettingsExport()
         h3CustomTargets[i] = hw3CustomTarget[i];
     for (uint8_t i = 0; i < kHw3HighSpeedBucketCount; i++)
         h3HighSpeedTargets[i] = hw3HighSpeedTarget[i];
+#endif
 
     if (p.begin(PREFS_NS, false))
     {
+#if !defined(PRODUCT_WIFI_MAX)
         storedHw = p.getUChar("hw", hwMode);
         storedCan = p.getBool("can", canActive);
         spAuto = p.getBool("sp_auto", dashSpeedProfileAuto);
         spSel = p.getUChar("sp_sel", dashManualSpeedProfile);
+#endif
         eprn = p.getBool("eprn", true);
         if (p.isKey("ap_ssid"))
             apSsid = p.getString("ap_ssid", "");
@@ -4101,6 +4162,7 @@ static void handleSettingsExport()
             wDns = p.getString("wifi_dns", "");
         beta = p.getBool("update_beta", p.getBool("upd_beta", false));
         autoUpdate = p.getBool("auto_upd", false);
+#if !defined(PRODUCT_WIFI_MAX)
         h3Slew = p.getBool("h3_slw", false);
         h3SlewRate = dashLoadHw3SlewRate(p.getUChar("h3_srt", kHw3SlewRateDefault));
         h3Custom = p.getBool("h3_cust", hw3CustomSpeed);
@@ -4117,8 +4179,10 @@ static void handleSettingsExport()
             snprintf(k, sizeof(k), "h3_ht%u", (unsigned)i);
             h3HighSpeedTargets[i] = p.getUChar(k, h3HighSpeedTargets[i]);
         }
+#endif
         p.end();
     }
+#if !defined(PRODUCT_WIFI_MAX)
     Preferences cp;
     if (cp.begin("can", true))
     {
@@ -4126,11 +4190,17 @@ static void handleSettingsExport()
         canRx = cp.getChar("rx", -1);
         cp.end();
     }
+#endif
 
     String j = "{\"version\":\"" FIRMWARE_VERSION "\"";
+#if defined(PRODUCT_WIFI_MAX)
+    j += ",\"product\":\"wifi-max\"";
+    j += ",\"device\":{\"dashboardLog\":" + String(eprn ? "true" : "false") + "}";
+#else
     j += ",\"device\":{\"hw\":" + String(storedHw) + ",\"can\":" + String(storedCan ? "true" : "false");
     j += ",\"speedProfileAuto\":" + String(spAuto ? "true" : "false") + ",\"speedProfile\":" + String(spSel);
     j += ",\"dashboardLog\":" + String(eprn ? "true" : "false") + "}";
+#endif
     j += ",\"ap\":{\"ssid\":\"" + jsonEscape(apSsid) + "\",\"pass\":\"" + jsonEscape(apPass) + "\",\"hidden\":" + String(apHid ? "true" : "false") + "}";
     j += ",\"wifi\":{\"ssid\":\"" + jsonEscape(wSsid) + "\",\"pass\":\"" + jsonEscape(wPass) + "\"";
     j += ",\"static\":" + String(wStatic ? "true" : "false");
@@ -4149,6 +4219,7 @@ static void handleSettingsExport()
     }
     j += "]";
     j += ",\"wifiPreferred\":" + String(wifiActiveSlot >= 0 ? wifiActiveSlot : 0);
+#if !defined(PRODUCT_WIFI_MAX)
     j += ",\"hw3\":{\"offsetSlew\":" + String(h3Slew ? "true" : "false") + ",\"slewRate\":" + String(h3SlewRate);
     j += ",\"custom\":" + String(h3Custom ? "true" : "false");
     j += ",\"highSpeed\":" + String(h3HighSpeed ? "true" : "false") + ",\"encoding\":" + String(h3Enc);
@@ -4168,6 +4239,7 @@ static void handleSettingsExport()
     }
     j += "]}";
     j += ",\"can\":{\"tx\":" + String(canTx) + ",\"rx\":" + String(canRx) + "}";
+#endif
     j += ",\"updates\":{\"beta\":" + String(beta ? "true" : "false") + ",\"auto\":" + String(autoUpdate ? "true" : "false") + "}";
     j += ",\"beta\":" + String(beta ? "true" : "false");
 #if defined(ESP_PLATFORM) && defined(DASH_STA_AP_GATEWAY)
@@ -4207,6 +4279,7 @@ static void handleSettingsImport()
 
     if (doc["device"].is<JsonObject>())
     {
+#if !defined(PRODUCT_WIFI_MAX)
         if (doc["device"]["hw"].is<int>())
         {
             int hw = doc["device"]["hw"].as<int>();
@@ -4226,6 +4299,7 @@ static void handleSettingsImport()
             uint8_t targetHw = p.getUChar("hw", hwMode);
             p.putUChar("sp_sel", dashClampSpeedProfileForHw(targetHw, doc["device"]["speedProfile"].as<int>()));
         }
+#endif
         if (doc["device"]["dashboardLog"].is<bool>())
             p.putBool("eprn", doc["device"]["dashboardLog"].as<bool>());
     }
@@ -4302,7 +4376,9 @@ static void handleSettingsImport()
     {
         p.putBool("update_beta", doc["beta"].as<bool>());
         p.putBool("upd_beta", doc["beta"].as<bool>());
-    }    if (doc["hw3"].is<JsonObject>())
+    }
+#if !defined(PRODUCT_WIFI_MAX)
+    if (doc["hw3"].is<JsonObject>())
     {
         if (doc["hw3"]["offsetSlew"].is<bool>())
             p.putBool("h3_slw", doc["hw3"]["offsetSlew"].as<bool>());
@@ -4338,8 +4414,10 @@ static void handleSettingsImport()
             }
         }
     }
+#endif
     p.end();
 
+#if !defined(PRODUCT_WIFI_MAX)
     if (doc["can"].is<JsonObject>())
     {
         int tx = doc["can"]["tx"] | -1;
@@ -4356,6 +4434,7 @@ static void handleSettingsImport()
             cp.end();
         }
     }
+#endif
 
 #if defined(ESP_PLATFORM) && defined(DASH_STA_AP_GATEWAY)
     if (doc["gateway"].is<JsonObject>())
@@ -4900,6 +4979,7 @@ static void webTask(void *)
     }
 }
 
+#if !defined(PRODUCT_WIFI_MAX)
 static CarManagerBase *handlerPool[3] = {};
 
 static void dashInitHandlers()
@@ -4935,6 +5015,7 @@ static void dashSwapHandler(uint8_t mode)
         hwName = "HW4";
     dashLog("[CFG] Handler switched to " + String(hwName));
 }
+#endif
 
 #if defined(DRIVER_ESP32_EXT_MCP2515)
 static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver, MCP2515 *mcp)
@@ -4948,11 +5029,15 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     dashHandler = handler;
     dashDriver = driver;
 #endif
+#if !defined(PRODUCT_WIFI_MAX)
     if (dashDriver)
         dashDriver->onSendFrame = mcpDashOnTxFrame;
+#endif
     startMs = millis();
     fpsLastMs = millis();
+#if !defined(PRODUCT_WIFI_MAX)
     dashResetWriteProbe();
+#endif
 
     if (!SPIFFS.begin(true))
         dashLog("[WARN] SPIFFS mount failed");
@@ -4993,20 +5078,22 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     server.on("/status", HTTP_GET, handleStatus);
     server.on("/config", HTTP_POST, handleConfig);
     server.on("/logging", HTTP_POST, handleLoggingConfig);
+#if !defined(PRODUCT_WIFI_MAX)
     server.on("/frames", HTTP_GET, handleFrames);
-    server.on("/log", HTTP_GET, handleLog);
     server.on("/reset_stats", HTTP_POST, handleResetStats);
     server.on("/rec_start", HTTP_POST, handleRecStart);
     server.on("/rec_stop", HTTP_POST, handleRecStop);
     server.on("/rec_status", HTTP_GET, handleRecStatus);
     server.on("/rec_download", HTTP_GET, handleRecDownload);
     server.on("/disable", HTTP_POST, handleDisable);
+    server.on("/can_pins", HTTP_GET, handleCanPins);
+    server.on("/can_pins", HTTP_POST, handleCanPinsSave);
+#endif
+    server.on("/log", HTTP_GET, handleLog);
     server.on("/reboot", HTTP_POST, handleReboot);
     server.on("/update", HTTP_POST, handleOtaResult, handleOtaUpload);
     server.on("/ap_config", HTTP_POST, handleApConfig);
     server.on("/ap_status", HTTP_GET, handleApStatus);
-    server.on("/can_pins", HTTP_GET, handleCanPins);
-    server.on("/can_pins", HTTP_POST, handleCanPinsSave);
     server.on("/settings_export", HTTP_GET, handleSettingsExport);
     server.on("/settings_import", HTTP_POST, handleSettingsImport);
     server.on("/wifi_scan", HTTP_GET, handleWifiScan);
@@ -5039,7 +5126,11 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
 #if CONFIG_FREERTOS_UNICORE
     xTaskCreate(webTask, "web", 8192, nullptr, 1, nullptr);
 #else
+#if defined(PRODUCT_WIFI_MAX)
+    xTaskCreatePinnedToCore(webTask, "web", 8192, nullptr, 1, nullptr, 0);
+#else
     xTaskCreatePinnedToCore(webTask, "web", 8192, nullptr, 1, nullptr, 1);
+#endif
 #endif
     Serial.println("[WEB] Dashboard: http://" + WiFi.softAPIP().toString());
     dashLog("[BOOT] ev-open-can-tools ready");
@@ -5053,7 +5144,9 @@ static void mcpDashboardLoop()
     dashSleepPoll();
     if (dashSleepActive)
         return;
+#endif
     dashSerialDiagnosticsPoll();
+#if !defined(PRODUCT_WIFI_MAX)
     if (recActive && (millis() - recStartMs >= kRecMaxDurationMs))
         dashStopRecordingAndSave("time limit");
     dashCheckBusHealth();

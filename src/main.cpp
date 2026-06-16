@@ -34,11 +34,13 @@
 #ifndef TWAI_RX_PIN
 #define TWAI_RX_PIN GPIO_NUM_4
 #endif
+#elif defined(DASH_CAN_DISABLED)
+// WiFi-only product builds intentionally do not include or initialize a CAN driver.
 #else
 #error "Define DRIVER_MCP2515, DRIVER_ESP32_EXT_MCP2515, DRIVER_SAME51, or DRIVER_TWAI in build_flags"
 #endif
 
-#if defined(ESP_PLATFORM) && defined(DRIVER_TWAI)
+#if defined(ESP_PLATFORM) && defined(DRIVER_TWAI) && !defined(DASH_CAN_DISABLED)
 static bool appTwaiGpioReserved(gpio_num_t pin)
 {
     int p = static_cast<int>(pin);
@@ -161,7 +163,7 @@ static bool app_main_loop()
 #endif
 }
 
-#if defined(ESP_PLATFORM) && defined(DRIVER_TWAI)
+#if defined(ESP_PLATFORM) && defined(DRIVER_TWAI) && !defined(DASH_CAN_DISABLED)
 #ifndef APP_CAN_TASK_STACK
 #define APP_CAN_TASK_STACK 6144
 #endif
@@ -214,7 +216,7 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(nvsErr);
 
     app_main_setup();
-#if defined(DRIVER_TWAI) && !defined(PRODUCT_WIFI_MAX)
+#if defined(DRIVER_TWAI) && !defined(PRODUCT_WIFI_MAX) && !defined(DASH_CAN_DISABLED)
     bool canTaskStarted = app_start_can_task();
     while (true)
     {

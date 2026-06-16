@@ -334,6 +334,7 @@ body.ui-car *{transition:none !important;animation:none !important;scroll-behavi
 }
 body:not(.can-debug-on) .can-debug-panel{display:none !important}
 body.wifi-max .can-only,
+body.wifi-max .fps-bar,
 body.wifi-max #config-hardware-section,
 body.wifi-max #hw3-speed-section,
 body.wifi-max #legacy-mpp-section,
@@ -991,7 +992,7 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
 Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-30 18:55:24 +08:00</div>
+OTA timestamp: 2026-06-16 20:38:40 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
@@ -1013,7 +1014,7 @@ OTA timestamp: 2026-05-30 18:55:24 +08:00</div>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
     <div class="modal-title" id="ota-test-title">OTA Test v2</div>
     <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
-OTA timestamp: 2026-05-30 18:55:24 +08:00</div>
+OTA timestamp: 2026-06-16 20:38:40 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
     </div>
@@ -1311,7 +1312,7 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-05-30 18:55:24 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-05-30 18:55:24 +08:00',
+  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-06-16 20:38:40 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-06-16 20:38:40 +08:00',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -1538,6 +1539,12 @@ function applyWifiMaxMode(d){
   const on=!!(d&&d.wifiMax);
   document.body.classList.toggle('wifi-max',on);
   if(!on)return;
+  if(canDebugEnabled){
+    canDebugEnabled=false;
+    localStorage.setItem('canDebug','0');
+    stopCanDebugPolling();
+    setCanDebugUi();
+  }
   const title=document.querySelector('.hdr-title');if(title)title.textContent='EVtools WIFI-MAX';
   const hdr=$('hdr-desc');if(hdr)hdr.textContent='WiFi repeater / DNS filter';
   setText('hw-badge','WIFI-MAX');
@@ -1647,6 +1654,7 @@ function positionCanDebugPanels(){
   });
 }
 function startCanDebugPolling(){
+  if(document.body&&document.body.classList.contains('wifi-max'))return;
   if(canDebugPollTimers.length||dashboardPollStopped)return;
   canDebugPollTimers.push(setInterval(pollLog,5000));
   canDebugPollTimers.push(setInterval(pollSniffer,1000));
@@ -1663,6 +1671,7 @@ function applyCanDebug(){
   else stopCanDebugPolling();
 }
 function toggleCanDebug(){
+  if(document.body&&document.body.classList.contains('wifi-max'))return;
   canDebugEnabled=!!$('can-debug-tgl').checked;
   localStorage.setItem('canDebug',canDebugEnabled?'1':'0');
   applyCanDebug();
@@ -3016,7 +3025,8 @@ function wifiAuthLabel(a){
 async function scanWifi(){
   $('scan-btn').textContent='Scanning...';$('scan-btn').disabled=true;
   try{
-    const r=await fetch('/wifi_scan');const d=await r.json();
+    const r=await fetch('/wifi_scan?force=1');const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'scan failed');
     const el=$('wifi-nets');
     if(!d.networks.length){el.innerHTML='<div style="padding:8px;font-size:11px;color:var(--tx3);text-align:center">No networks found</div>';el.style.display='block';}
     else{el.innerHTML=d.networks.map(n=>'<div data-wifi-ssid="'+escapeHtml(n.ssid)+'" style="padding:6px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd);font-size:12px" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'\'"><span>'+(n.enc?'\uD83D\uDD12 ':'')+escapeHtml(n.ssid)+'</span><span style="color:var(--tx3);font-size:10px">'+rssiIcon(n.rssi)+' '+n.rssi+'dBm CH'+n.ch+' '+wifiAuthLabel(n.auth)+'</span></div>').join('');el.querySelectorAll('[data-wifi-ssid]').forEach(row=>row.onclick=()=>pickWifi(row.dataset.wifiSsid||''));el.style.display='block';}

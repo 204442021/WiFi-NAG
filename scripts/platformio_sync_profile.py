@@ -173,10 +173,11 @@ config_text = config_path.read_text(encoding="utf-8")
 active = _active_defines(config_text)
 project_defines = _project_option_defines(env)
 uses_dashboard = "ESP32_DASHBOARD" in project_defines
+can_disabled = "DASH_CAN_DISABLED" in project_defines
 
 _DASH_HW_MAP = {"LEGACY": 0, "HW3": 1, "HW4": 2}
 
-profile_driver = _pick_one(active, DRIVER_DEFINES, "driver define")
+profile_driver = None if can_disabled else _pick_one(active, DRIVER_DEFINES, "driver define")
 uses_dashboard_hw = uses_dashboard
 if uses_dashboard_hw:
     selected_vehicle = _pick_dashboard_default(active, VEHICLE_DEFINES, "HW3")
@@ -213,7 +214,12 @@ env_defines = _normalize_cppdefines(env.get("CPPDEFINES"))
 env_driver = [name for name in DRIVER_DEFINES if name in project_defines]
 env_vehicle = [name for name in VEHICLE_DEFINES if name in env_defines]
 
-if len(env_driver) != 1:
+if can_disabled and env_driver:
+    raise UserError(
+        f"PlatformIO env '{env['PIOENV']}' defines DASH_CAN_DISABLED and a CAN driver "
+        f"({', '.join(env_driver)}). Remove the driver build flag for a WiFi-only build."
+    )
+if not can_disabled and len(env_driver) != 1:
     raise UserError(
         f"PlatformIO env '{env['PIOENV']}' must define exactly one CAN driver: "
         f"{', '.join(DRIVER_DEFINES)}."
@@ -262,14 +268,18 @@ if version_path.exists():
 print(
     f"Synced {display_config_path.as_posix()} defines for {env['PIOENV']}: "
     + (
-        f"DASH_DEFAULT_HW={_DASH_HW_MAP[selected_vehicle]} ({selected_vehicle})"
-        if uses_dashboard_hw
-        else selected_vehicle
+        "CAN disabled"
+        if can_disabled
+        else (
+            f"DASH_DEFAULT_HW={_DASH_HW_MAP[selected_vehicle]} ({selected_vehicle})"
+            if uses_dashboard_hw
+            else selected_vehicle
+        )
     )
     + (f", {', '.join(selected_options)}" if selected_options else "")
     + (
         f" (profile driver {profile_driver}, env driver {env_driver[0]})"
-        if profile_driver != env_driver[0]
+        if (not can_disabled and profile_driver != env_driver[0])
         else ""
     )
 )
