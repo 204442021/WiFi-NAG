@@ -122,7 +122,7 @@ static constexpr uint8_t kDashGatewayUpstreamAli = 1;
 static constexpr uint8_t kDashGatewayUpstreamTencent = 2;
 static constexpr uint8_t kDashGatewayUpstreamCustom = 3;
 
-#if defined(PRODUCT_WIFI_MAX)
+#if defined(DASH_WIFI_PERF_TUNING)
 static constexpr int kDashGatewayDnsTaskCore = 0;
 static constexpr int kDashGatewayDnsTaskPriority = 3;
 #else

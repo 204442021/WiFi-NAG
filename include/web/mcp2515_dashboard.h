@@ -126,6 +126,14 @@ static bool forceActivate = false;
 static bool apInjectionGate = false;
 static bool apAutoRestore = false;
 static bool dashAutoSleepEnabled = false;
+#if defined(NAG_KILLER)
+// User-facing Nag killer switch (WebUI). Actual CAN echo TX is additionally
+// gated by canActive (the global CAN/injection master switch), so nothing is
+// transmitted until CAN injection is enabled.
+static bool nagKillerEnabled = true;
+#else
+static bool nagKillerEnabled = false;
+#endif
 static bool dashSleepActive = false;
 static bool dashSleepWakeRequested = false;
 static const char *dashSleepWakeReason = "none";
@@ -1291,11 +1299,31 @@ static void dashTryApAutoRestore(const CanFrame &trigger, CanDriver &driver)
     dashLog("[AP] Auto-restore " + String(ok ? "TX OK" : "TX FAIL"));
 }
 
+#if defined(NAG_KILLER)
+// Parallel Nag-killer hook. Runs on every received frame regardless of the
+// selected vehicle handler (Legacy/HW3/HW4), so Autosteer nag suppression
+// coexists with normal CAN/diagnostic behavior. The reused NagHandler only acts
+// on CAN 880 (0x370) and internally honors nagKillerActive && nagKillerRuntime;
+// here we add the global canActive gate so the WebUI "CAN off" switch (and the
+// default CAN-off boot state) suppresses all Nag echo TX.
+static NagHandler dashNagHandler;
+static void dashNagOnFrame(const CanFrame &original, CanDriver &driver)
+{
+    if (!canActive)
+        return;
+    CanFrame frame = original;
+    dashNagHandler.handleMessage(frame, driver);
+}
+#endif
+
 static void dashPostProcessFrame(const CanFrame &original, CanDriver &driver)
 {
     dashSleepObserveFrame(original);
     if (dashSleepActive)
         return;
+#if defined(NAG_KILLER)
+    dashNagOnFrame(original, driver);
+#endif
 #if defined(DASH_FSD_252_COMPAT) && DASH_FSD_252_COMPAT
     dashTryApAutoRestore(original, driver);
 
@@ -1374,7 +1402,11 @@ static void dashApplyRuntimeState()
     emergencyVehicleDetectionRuntime = false;
     isaSpeedChimeSuppressRuntime = false;
     enhancedAutopilotRuntime = false;
+#if defined(NAG_KILLER)
+    nagKillerRuntime = nagKillerEnabled;
+#else
     nagKillerRuntime = false;
+#endif
 
     if (dashHandler)
     {
@@ -1403,6 +1435,9 @@ static void dashSavePrefs()
     prefs.putBool("force_act", forceActivate);
     prefs.putBool("ap_gate", apInjectionGate);
     prefs.putBool("ap_rst", apAutoRestore);
+#if defined(NAG_KILLER)
+    prefs.putBool("nag_en", nagKillerEnabled);
+#endif
     prefs.putBool("auto_sleep", dashAutoSleepEnabled);
     prefs.putBool("sp_auto", dashSpeedProfileAuto);
     prefs.putUChar("sp_sel", dashManualSpeedProfile);
@@ -1474,7 +1509,7 @@ static bool dashApConfigValid(const char *ssid, const char *pass)
     return ssidLen > 0 && ssidLen <= kDashMaxSsidLen && dashApPasswordLengthValid(passLen);
 }
 
-#if defined(ESP_PLATFORM) && defined(PRODUCT_WIFI_MAX)
+#if defined(ESP_PLATFORM) && defined(DASH_WIFI_PERF_TUNING)
 static void dashApplyWifiMaxRadioTuning()
 {
     static bool logged = false;
@@ -1577,6 +1612,9 @@ static void dashLoadPrefs()
     // 默认 false：复刻 2.5.2 真车固件行为（apInjectionGate=false 注入无条件放行）。
     apInjectionGate = prefs.getBool("ap_gate", false);
     apAutoRestore = prefs.getBool("ap_rst", false);
+#if defined(NAG_KILLER)
+    nagKillerEnabled = prefs.getBool("nag_en", true);
+#endif
     dashAutoSleepEnabled = prefs.getBool("auto_sleep", false);
     dashSpeedProfileAuto = prefs.getBool("sp_auto", true);
     dashManualSpeedProfile = dashClampSpeedProfileForHw(hwMode, prefs.getUChar("sp_sel", 1));
@@ -1903,6 +1941,12 @@ static void handleStatus()
     j += "true";
 #else
     j += "false";
+#endif
+#if defined(NAG_KILLER) && !defined(PRODUCT_WIFI_MAX)
+    j += ",\"nagKiller\":";
+    j += nagKillerEnabled ? "true" : "false";
+    j += ",\"nagEcho\":";
+    j += String((uint32_t)dashNagHandler.nagEchoCount);
 #endif
     j += ",\"hw\":";
     j += hwMode;
@@ -2235,6 +2279,17 @@ static void handleConfig()
             dashLog("[CFG] AP/EAP auto-restore " + String(v ? "ON" : "OFF"));
         }
     }
+#if defined(NAG_KILLER)
+    if (server.hasArg("nagKiller"))
+    {
+        bool v = server.arg("nagKiller") == "1";
+        if (v != nagKillerEnabled)
+        {
+            nagKillerEnabled = v;
+            dashLog("[CFG] Nag killer " + String(v ? "ON" : "OFF"));
+        }
+    }
+#endif
     if (server.hasArg("autoSleep"))
     {
         bool v = server.arg("autoSleep") == "1";
@@ -5007,7 +5062,29 @@ static void dashSwapHandler(uint8_t mode)
     // For MCP2515 (ext) dashApplyFilters() will also fine-tune the hardware
     // filter registers. For TWAI and old MCP2515 this abstract call is enough.
     if (dashDriver)
+    {
+#if defined(NAG_KILLER)
+        // Nag runs as a parallel hook on every frame, so CAN 880 (0x370) must
+        // pass the driver's acceptance filter even when the selected vehicle
+        // handler doesn't list it. Append 880 to the filter set for this swap.
+        const uint32_t *baseIds = next->filterIds();
+        uint8_t baseCount = next->filterIdCount();
+        uint32_t mergedIds[16];
+        uint8_t mergedCount = 0;
+        bool has880 = false;
+        for (uint8_t i = 0; i < baseCount && mergedCount < 15; i++)
+        {
+            mergedIds[mergedCount++] = baseIds[i];
+            if (baseIds[i] == 880)
+                has880 = true;
+        }
+        if (!has880)
+            mergedIds[mergedCount++] = 880;
+        dashDriver->setFilters(mergedIds, mergedCount);
+#else
         dashDriver->setFilters(next->filterIds(), next->filterIdCount());
+#endif
+    }
     const char *hwName = "LEGACY";
     if (mode == 1)
         hwName = "HW3";
@@ -5126,7 +5203,7 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
 #if CONFIG_FREERTOS_UNICORE
     xTaskCreate(webTask, "web", 8192, nullptr, 1, nullptr);
 #else
-#if defined(PRODUCT_WIFI_MAX)
+#if defined(DASH_WIFI_PERF_TUNING)
     xTaskCreatePinnedToCore(webTask, "web", 8192, nullptr, 1, nullptr, 0);
 #else
     xTaskCreatePinnedToCore(webTask, "web", 8192, nullptr, 1, nullptr, 1);

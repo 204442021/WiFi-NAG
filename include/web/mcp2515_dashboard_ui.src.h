@@ -508,6 +508,13 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
         </div>
         <label class="tgl"><input type="checkbox" id="ap-restore-tgl" onchange="saveApRestore()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
+      <div class="setting-row" id="nag-killer-row">
+        <div class="setting-info">
+          <div class="setting-name">Nag Killer</div>
+          <div class="setting-desc">Suppress Autosteer hands-on nag via CAN 880 (0x370) counter+1 echo. Requires CAN/FSD switch ON. <span id="nag-echo-meta">echo: --</span></div>
+        </div>
+        <label class="tgl"><input type="checkbox" id="nag-killer-tgl" onchange="saveNagKiller()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+      </div>
       <div class="setting-row">
         <div class="setting-info">
           <div class="setting-name">CAN/WiFi Auto Sleep</div>
@@ -992,7 +999,7 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
 Version: 3.0.0-beta.5
-OTA timestamp: 2026-06-16 20:51:03 +08:00</div>
+OTA timestamp: 2026-06-17 13:21:13 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
@@ -1014,7 +1021,7 @@ OTA timestamp: 2026-06-16 20:51:03 +08:00</div>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
     <div class="modal-title" id="ota-test-title">OTA Test v2</div>
     <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
-OTA timestamp: 2026-06-16 20:51:03 +08:00</div>
+OTA timestamp: 2026-06-17 13:21:13 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
     </div>
@@ -1312,7 +1319,7 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-06-16 20:51:03 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-06-16 20:51:03 +08:00',
+  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-06-17 13:21:13 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-06-17 13:21:13 +08:00',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -2234,6 +2241,8 @@ function updateFsdControl(d){
   state.can=enabled;
   const tgl=$('fsd-tgl');if(tgl)tgl.checked=enabled;
   const apRestore=$('ap-restore-tgl');if(apRestore&&typeof d.apAutoRestore!=='undefined')apRestore.checked=!!d.apAutoRestore;
+  const nagTgl=$('nag-killer-tgl');if(nagTgl&&typeof d.nagKiller!=='undefined')nagTgl.checked=!!d.nagKiller;
+  const nagMeta=$('nag-echo-meta');if(nagMeta&&typeof d.nagEcho!=='undefined')nagMeta.textContent='echo: '+d.nagEcho;
   const autoSleep=$('auto-sleep-tgl');if(autoSleep&&typeof d.autoSleep!=='undefined')autoSleep.checked=!!d.autoSleep;
   updateAutoSleepStatus(d);
   setText('fsd-meta',enabled?'On':'Off');
@@ -2267,6 +2276,17 @@ async function saveApRestore(){
     if(!r.ok)throw new Error('HTTP '+r.status);
   }catch(e){
     addLog('AP/EAP auto restore save failed','le');
+  }
+}
+
+async function saveNagKiller(){
+  const t=$('nag-killer-tgl');
+  if(!t)return;
+  try{
+    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'nagKiller='+(t.checked?'1':'0')});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+  }catch(e){
+    addLog('Nag killer save failed','le');
   }
 }
 
