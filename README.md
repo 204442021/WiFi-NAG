@@ -80,7 +80,6 @@
 #### OTA
 
 - 支持 WebUI 上传 `.bin` 固件 OTA。
-- OTA timestamp 会在构建时自动写入 UI，用于确认 OTA 是否真的生效。
 - OTA 文件为：
 
 ```text
@@ -292,7 +291,6 @@ Defaults:
 #### OTA
 
 - Supports WebUI `.bin` firmware upload.
-- OTA timestamp is written at build time so OTA results can be verified.
 - OTA firmware path:
 
 ```text

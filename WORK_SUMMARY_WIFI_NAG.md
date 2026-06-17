@@ -30,16 +30,15 @@ Integrate Nag functionality, starting with Mode A.
 Evaluate Mode B / Mode C later.
 ```
 
-## 2. Build Artifact Warning
+## 2. WebUI Generated Header Warning
 
-The following two files may be changed automatically by the OTA timestamp / WebUI build pipeline:
+The following generated header may change when the dashboard source is minified:
 
 ```text
-include\web\mcp2515_dashboard_ui.src.h
 include\web\mcp2515_dashboard_ui.h
 ```
 
-Treat timestamp-only or gzip-regeneration-only diffs in these files as build artifacts. Do not use them as functional evidence when reviewing branch changes or preparing commits.
+The old build-time stamp auto-update pipeline has been removed. Review functional UI changes in `include\web\mcp2515_dashboard_ui.src.h`; treat `include\web\mcp2515_dashboard_ui.h` as generated output from the minifier.
 
 At the time of handoff, these were the only modified files in `idf_webui_build_ascii`:
 
@@ -348,7 +347,7 @@ include/web/mcp2515_dashboard_ui.src.h
 include/web/mcp2515_dashboard_ui.h
 ```
 
-still receive OTA timestamp/minify changes during `pio run`. Review functional UI changes in `mcp2515_dashboard_ui.src.h`; treat timestamp-only/minified churn as generated output.
+no longer receive build-time stamp changes during `pio run`. Review functional UI changes in `mcp2515_dashboard_ui.src.h`; treat minified header churn as generated output.
 
 Backend changes now applied:
 
@@ -619,7 +618,7 @@ Note:
 
 ```text
 This pass was built and tested but not downloaded to the board in this turn.
-OTA timestamp and include/web/mcp2515_dashboard_ui.h regeneration are build artifacts.
+include/web/mcp2515_dashboard_ui.h regeneration is a build artifact. The old build-time stamp auto-update has been removed.
 ```
 
 ## 17. 2026-06-17 Update: Nag Killer A_V2 Optimization

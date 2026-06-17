@@ -1380,6 +1380,8 @@ static String dashNagStatusJson(bool includeOk)
     j += dashNagNmString(nag->av2MinCenti());
     j += ",\"av2MaxNm\":";
     j += dashNagNmString(nag->av2MaxCenti());
+    j += ",\"liveTorqueNm\":";
+    j += dashNagNmString(nag->lastObservedCenti());
     j += ",\"lastTorqueNm\":";
     j += dashNagNmString(nag->lastInjectedCenti());
     j += ",\"echo\":";
@@ -2200,6 +2202,8 @@ static void handleStatus()
         j += dashNagNmString(nag->av2MinCenti());
         j += ",\"nagAv2MaxNm\":";
         j += dashNagNmString(nag->av2MaxCenti());
+        j += ",\"nagLiveTorqueNm\":";
+        j += dashNagNmString(nag->lastObservedCenti());
         j += ",\"nagLastTorqueNm\":";
         j += dashNagNmString(nag->lastInjectedCenti());
         j += ",\"nagOwnEchoSkip\":";

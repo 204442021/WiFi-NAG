@@ -112,6 +112,17 @@ void test_nag_does_not_echo_when_disabled()
     TEST_ASSERT_EQUAL(0, mock.sent.size());
 }
 
+void test_nag_tracks_live_torque_even_when_disabled()
+{
+    handler.nagKillerActive = false;
+    CanFrame f = makeEpasFrame(0, -0.80, 0x0C);
+    NagHandler::writeTorqueRaw(f, NagHandler::centiNmToRaw(-80));
+    handler.handleMessage(f, mock);
+    TEST_ASSERT_EQUAL(0, mock.sent.size());
+    TEST_ASSERT_EQUAL_INT16(-80, handler.lastObservedCenti());
+    TEST_ASSERT_FLOAT_WITHIN(0.01, -0.80, handler.lastObservedNm());
+}
+
 void test_nag_ignores_non_880_id()
 {
     CanFrame f = makeEpasFrame(0, 0.33, 0x0C);
@@ -455,6 +466,7 @@ int main()
     RUN_TEST(test_nag_does_not_echo_when_handson_2);
     RUN_TEST(test_nag_does_not_echo_when_handson_3);
     RUN_TEST(test_nag_does_not_echo_when_disabled);
+    RUN_TEST(test_nag_tracks_live_torque_even_when_disabled);
     RUN_TEST(test_nag_ignores_non_880_id);
     RUN_TEST(test_nag_ignores_short_dlc);
 

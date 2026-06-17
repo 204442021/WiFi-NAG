@@ -15,22 +15,24 @@ static const char DASH_HTML[] PROGMEM = R"HTML(
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 [data-theme="dark"]{
-  --bg:#0d0d0d;--bg2:var(--bg);--card:#161616;--card2:#1e1e1e;
-  --bd:#2a2a2a;--bd2:#333;
-  --tx:#f0f0f0;--tx2:#999;--tx3:#555;
-  --acc:#5b8fff;--accBg:rgba(91,143,255,.1);--accBd:rgba(91,143,255,.25);
+  --bg:#101113;--bg2:#15171a;--card:#1b1e23;--card2:#242832;
+  --bd:#303641;--bd2:#45505e;
+  --tx:#f7f4ec;--tx2:#b9c0cb;--tx3:#7f8997;
+  --acc:#78a8ff;--accBg:rgba(120,168,255,.13);--accBd:rgba(120,168,255,.36);
   --ok:#3dba72;--okBg:rgba(61,186,114,.1);
   --err:#ff4f4f;--errBg:rgba(255,79,79,.08);--errBd:rgba(255,79,79,.2);
-  --warn:#f5a623;
+  --warn:#f5a623;--gold:#d8b45f;--goldBg:rgba(216,180,95,.12);--goldBd:rgba(216,180,95,.28);
+  --shadow:0 14px 34px rgba(0,0,0,.25);
 }
 [data-theme="light"]{
-  --bg:#f5f5f5;--bg2:var(--bg);--card:#fff;--card2:#f0f0f0;
-  --bd:#e0e0e0;--bd2:#ccc;
-  --tx:#111;--tx2:#555;--tx3:#999;
-  --acc:#2563eb;--accBg:rgba(37,99,235,.08);--accBd:rgba(37,99,235,.2);
+  --bg:#fbf7ed;--bg2:#f6eedf;--card:#fffdfa;--card2:#f3ead9;
+  --bd:#e5dac7;--bd2:#cabda8;
+  --tx:#151922;--tx2:#5f6975;--tx3:#9098a3;
+  --acc:#2563eb;--accBg:rgba(37,99,235,.08);--accBd:rgba(37,99,235,.22);
   --ok:#16a34a;--okBg:rgba(22,163,74,.08);
   --err:#dc2626;--errBg:rgba(220,38,38,.06);--errBd:rgba(220,38,38,.18);
-  --warn:#d97706;
+  --warn:#d97706;--gold:#a66b13;--goldBg:rgba(166,107,19,.1);--goldBd:rgba(166,107,19,.22);
+  --shadow:0 12px 28px rgba(86,68,38,.09);
 }
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -45,9 +47,9 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 .hdr-top{display:flex;align-items:center;justify-content:space-between}
 .hdr-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .hdr-title{font-size:20px;font-weight:700;color:var(--tx)}
-.hw-badge{padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600;
+.hw-badge{padding:3px 8px;border-radius:7px;font-size:11px;font-weight:700;
   background:var(--accBg);border:1px solid var(--accBd);color:var(--acc)}
-.gtw-badge{padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600;
+.gtw-badge{padding:3px 8px;border-radius:7px;font-size:11px;font-weight:700;
   background:var(--card);border:1px solid var(--bd2);color:var(--tx2)}
 .gtw-badge.known{color:var(--ok);border-color:rgba(61,186,114,.25);background:var(--okBg)}
 .theme-btn{padding:6px 10px;border:1px solid var(--bd2);border-radius:8px;
@@ -66,7 +68,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 
 /* Status grid */
 .stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:14px 16px 0}
-.stat{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 12px}
+.stat{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;box-shadow:0 1px 0 rgba(255,255,255,.035) inset}
 .stat-lbl{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px}
 .stat-val{font-size:14px;font-weight:600;color:var(--tx)}
 .v-ok{color:var(--ok)}.v-err{color:var(--err)}.v-acc{color:var(--acc)}.v-dim{color:var(--tx3)}.v-warn{color:var(--warn)}
@@ -104,7 +106,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 hr{border:none;border-top:1px solid var(--bd);margin:16px}
 
 /* Cards */
-.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin:0 16px 12px;overflow:hidden}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;margin:0 16px 12px;overflow:hidden;box-shadow:var(--shadow)}
 .card-hdr{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;column-gap:8px;margin-bottom:14px}
 .card-title{font-size:13px;font-weight:600;color:var(--tx);text-transform:uppercase;letter-spacing:.5px;min-width:0}
 .card-meta{font-size:11px;color:var(--tx3);justify-self:end;text-align:right;min-width:0}
@@ -128,12 +130,12 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .subsec.collapsed .subsec-body{display:none}
 
 /* HW seg */
-.hw-seg{display:flex;background:var(--card2);border:1px solid var(--bd);border-radius:9px;padding:3px;gap:2px}
+.hw-seg{display:flex;background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:3px;gap:2px}
 .hw-btn{flex:1;padding:8px;border:none;border-radius:7px;font-size:12px;font-weight:600;
   cursor:pointer;background:transparent;color:var(--tx2);transition:all .18s;font-family:inherit}
 .hw-btn.active{background:var(--card);color:var(--acc);border:1px solid var(--accBd);
-  box-shadow:0 1px 4px rgba(0,0,0,.15)}
-.hw-btn:hover:not(.active){background:var(--bd);color:var(--tx)}
+  box-shadow:0 1px 8px rgba(0,0,0,.10)}
+.hw-btn:hover:not(.active){background:var(--card2);color:var(--tx)}
 .profile-wrap{margin-top:12px}
 .profile-label{font-size:11px;color:var(--tx3);margin-bottom:6px}
 .profile-group.hidden{display:none}
@@ -166,12 +168,18 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .sniff-input{flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:8px;
   padding:7px 10px;color:var(--tx);font-size:12px;font-family:inherit;transition:border .2s}
 .sniff-input{width:100%;min-width:0;box-sizing:border-box;} 
-.sniff-input:focus{outline:none;border-color:var(--acc)}
+.sniff-input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--accBg)}
 .sniff-input::placeholder{color:var(--tx3)}
-.sniff-btn{padding:7px 12px;background:transparent;border:1px solid var(--bd);border-radius:8px;
+.sniff-btn{padding:7px 12px;background:var(--card);border:1px solid var(--bd);border-radius:8px;
   color:var(--tx2);font-size:11px;font-weight:600;cursor:pointer;transition:all .18s;font-family:inherit}
 .sniff-btn.paused{border-color:var(--warn);color:var(--warn)}
 .sniff-btn:hover:not(.paused){border-color:var(--bd2);color:var(--tx)}
+.nag-mode-control{width:168px;flex:0 0 168px}
+.nag-range-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;width:260px;max-width:100%}
+.nag-range-grid .sniff-input{text-align:right}
+.nag-range-grid .sniff-btn{white-space:nowrap}
+.nag-torque-status{display:inline-flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.nag-status-pill{display:inline-flex;padding:2px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg2);color:var(--tx2);line-height:1.4}
 .gateway-profile-btn.active,.gateway-upstream-btn.active,.hw3-enc-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
 .sniff-box{background:var(--bg);border:1px solid var(--bd);border-radius:9px;
   max-height:250px;overflow-y:auto;font-family:'SF Mono','Courier New',monospace}
@@ -220,6 +228,8 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .stat-grid>.btn{min-height:auto;padding:10px 12px;border-radius:10px;background:var(--card);text-align:left;
   display:flex;align-items:flex-start;justify-content:flex-start;font-size:14px;font-weight:600;letter-spacing:0;line-height:1.35}
 .stat-grid>.btn:hover{background:var(--card2)}
+body.wifi-nag .stat-grid>.btn{min-height:48px;padding:8px 12px}
+body.wifi-nag .stat-grid>.btn-reboot{align-items:center;justify-content:center;text-align:center}
 
 /* Confirm modal */
 .modal-backdrop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
@@ -290,24 +300,31 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .ui-mode-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
 .ui-mode-detected{font-size:10px;color:var(--tx3);margin-left:auto}
 .car-side{display:none}
+.nag-nav-only{display:none !important}
 .hw3-enc-buttons{display:none;gap:6px;flex-wrap:wrap}
-body.ui-car{width:100vw;max-width:none;margin:0;padding-left:180px;font-size:16px;line-height:1.55}
-body.ui-car .car-side{position:fixed;left:0;top:0;bottom:0;width:168px;display:flex;flex-direction:column;gap:8px;
-  padding:14px 10px;background:linear-gradient(180deg,var(--card),var(--bg));border-right:1px solid var(--bd);z-index:1000}
-body.ui-car .car-side-title{font-size:16px;font-weight:800;color:var(--tx);margin:4px 6px 6px}
-body.ui-car .car-side-sub{font-size:10px;color:var(--tx3);margin:-5px 6px 6px;line-height:1.35}
-body.ui-car .car-nav-btn{min-height:46px;padding:10px 12px;border:1px solid var(--bd);border-radius:11px;background:var(--card2);
-  color:var(--tx2);font-size:13px;font-weight:800;text-align:left;font-family:inherit;cursor:pointer}
-body.ui-car .car-nav-btn:active,body.ui-car .car-nav-btn:hover{border-color:var(--acc);color:var(--acc);background:var(--accBg)}
+body.ui-car{width:100vw;max-width:none;margin:0;padding-left:204px;font-size:16px;line-height:1.55}
+body.ui-car .car-side{position:fixed;left:0;top:0;bottom:0;width:188px;display:flex;flex-direction:column;gap:9px;
+  padding:16px 12px;background:linear-gradient(180deg,var(--card),var(--bg2));border-right:1px solid var(--bd);z-index:1000;box-shadow:8px 0 28px rgba(0,0,0,.05)}
+body.ui-car .car-side-title{font-size:17px;font-weight:900;color:var(--tx);margin:4px 8px 2px;letter-spacing:.2px}
+body.ui-car .car-side-sub{font-size:10px;color:var(--tx3);margin:0 8px 10px;line-height:1.35}
+body.ui-car .car-nav-btn{min-height:50px;padding:10px 12px;border:1px solid var(--bd);border-radius:12px;background:var(--card);
+  color:var(--tx2);font-size:13px;font-weight:800;text-align:left;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:10px;
+  box-shadow:0 1px 0 rgba(255,255,255,.04) inset;transition:border .16s,background .16s,color .16s,transform .16s}
+body.ui-car .car-nav-icon{width:28px;height:28px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 28px;border:1px solid var(--bd);background:var(--bg2);color:var(--gold)}
+body.ui-car .car-nav-icon svg{width:16px;height:16px;display:block;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+body.ui-car .car-nav-btn:active,body.ui-car .car-nav-btn:hover{border-color:var(--accBd);color:var(--acc);background:var(--accBg);transform:translateX(1px)}
+body.ui-car .car-nav-btn:active .car-nav-icon,body.ui-car .car-nav-btn:hover .car-nav-icon{border-color:var(--accBd);color:var(--acc);background:var(--card)}
+body.ui-car .car-nav-btn:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accBg),0 0 0 1px var(--accBd) inset}
 body.ui-car .hdr{padding:18px 24px 0}
 body.ui-car .hdr-title{font-size:24px}
 body.ui-car .theme-btn,body.ui-car .sniff-btn,body.ui-car .btn,body.ui-car .hw-btn,body.ui-car .ui-mode-btn{min-height:44px;font-size:14px;padding:10px 14px;border-radius:11px}
 body.ui-car .ui-mode-strip{margin:12px 24px 0;padding:10px 12px;gap:10px}
 body.ui-car .stat-grid{margin:16px 24px 0;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
-body.ui-car .stat{padding:12px 14px;border-radius:13px}
+body.ui-car .stat{padding:12px 14px;border-radius:12px;box-shadow:0 1px 0 rgba(255,255,255,.04) inset}
 body.ui-car .stat-lbl{font-size:11px}
 body.ui-car .stat-val{font-size:16px}
-body.ui-car .card{margin:0 24px 14px;padding:18px;border-radius:15px}
+body.ui-car .card{margin:0 24px 14px;padding:18px;border-radius:12px}
 body.ui-car .card-title{font-size:15px}
 body.ui-car .card-meta,body.ui-car .subsec-meta{font-size:12px}
 body.ui-car .subsec{margin-top:18px;padding-top:16px}
@@ -353,10 +370,48 @@ body.wifi-nag .can-debug-panel,
 body.wifi-nag .owner-modal-card{display:none !important}
 .nag-only{display:none !important}
 body.wifi-nag .nag-only.setting-row{display:flex !important}
+body.wifi-nag .nag-nav-only{display:flex !important}
 body.wifi-nag #hw-badge{font-size:0}
 body.wifi-nag #hw-badge::after{content:'WIFI-NAG';font-size:11px}
 body.wifi-nag .car-nav-btn.can-only[onclick*="config-hardware-section"],
 body.wifi-nag .car-nav-btn.can-only[onclick*="hw3-speed-section"]{display:none !important}
+body.wifi-nag .hdr-title{font-weight:800;letter-spacing:.2px}
+body.wifi-nag .hw-badge{border-color:var(--goldBd);background:var(--goldBg);color:var(--gold)}
+body.wifi-nag #config-hardware-section{padding-top:2px;border-top:0}
+body.wifi-nag #config-hardware-section .subsec-head{padding:10px 0 8px;border-bottom:1px solid var(--bd)}
+body.wifi-nag #btn-fsd-toggle,
+body.wifi-nag #config-card>.card-hdr .card-min-btn,
+body.wifi-nag #config-hardware-section>.subsec-head .subsec-btn{display:none !important}
+body.wifi-nag #can-write-row{padding-top:14px}
+body.wifi-nag #can-write-row .setting-name,
+body.wifi-nag #nag-mode-row .setting-name,
+body.wifi-nag #nag-av2-row .setting-name{font-weight:700}
+body.wifi-nag #can-write-row .setting-desc,
+body.wifi-nag #nag-mode-row .setting-desc,
+body.wifi-nag #nag-av2-row .setting-desc{line-height:1.55}
+body.wifi-nag #nag-echo-meta{display:inline-flex;margin-top:4px;padding:2px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg2);color:var(--tx2)}
+body.wifi-nag #nag-mode-seg .hw-btn.active{color:var(--gold);border-color:var(--goldBd);background:var(--goldBg)}
+body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
+@media (max-width:560px){
+  body{font-size:13px}
+  .hdr{padding:16px 12px 0}
+  .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:12px 12px 0}
+  .stat-grid>.btn{grid-column:span 1;justify-content:center;text-align:center}
+  .card{margin-left:12px;margin-right:12px;padding:14px;border-radius:9px}
+  .card-hdr{grid-template-columns:minmax(0,1fr) minmax(0,auto) auto;row-gap:8px}
+  .card-meta{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card-min-btn{grid-column:3;grid-row:1}
+  .setting-row{gap:10px}
+  body.wifi-nag #can-write-row,
+  body.wifi-nag #nag-mode-row,
+  body.wifi-nag #nag-av2-row{flex-direction:column;align-items:stretch}
+  body.wifi-nag #can-write-row .tgl{align-self:flex-end;margin-left:0;margin-top:-4px}
+  .nag-mode-control{width:100% !important;flex:0 0 auto !important}
+  .nag-mode-control .hw-btn{min-height:40px;font-size:13px}
+  .nag-range-grid{width:100%;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+  .nag-range-grid .sniff-btn{grid-column:1 / -1;min-height:40px}
+  .nag-range-grid .sniff-input{min-height:40px;font-size:14px}
+}
 </style>
 </head>
 <body>
@@ -364,12 +419,11 @@ body.wifi-nag .car-nav-btn.can-only[onclick*="hw3-speed-section"]{display:none !
 <nav class="car-side" aria-label="Car quick navigation">
   <div class="car-side-title">EVtools</div>
   <div class="car-side-sub" id="car-side-mode">Auto UI</div>
-  <button class="car-nav-btn" onclick="scrollCarSection('status-panel')">Status</button>
-  <button class="car-nav-btn can-only" onclick="scrollCarSection('config-hardware-section')">HW</button>
-  <button class="car-nav-btn can-only" onclick="scrollCarSection('hw3-speed-section')">Speed</button>
-  <button class="car-nav-btn" onclick="scrollCarSection('wifi-internet-section')">WiFi</button>
-  <button class="car-nav-btn" onclick="scrollCarSection('gateway-section')">DNS</button>
-  <button class="car-nav-btn" onclick="scrollCarSection('system-card')">System</button>
+  <button class="car-nav-btn" onclick="scrollCarSection('status-panel')"><span class="car-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 13h4l2-6 4 10 2-4h4"/></svg></span><span>状态显示</span></button>
+  <button class="car-nav-btn nag-nav-only" onclick="scrollCarSection('config-hardware-section')"><span class="car-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"/><path d="M9 12l2 2 4-5"/></svg></span><span>NAG KILLER</span></button>
+  <button class="car-nav-btn" onclick="scrollCarSection('wifi-hotspot-section')"><span class="car-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5a11 11 0 0 1 14 0"/><path d="M8.5 16a6 6 0 0 1 7 0"/><path d="M12 19h.01"/></svg></span><span>WIFI设置</span></button>
+  <button class="car-nav-btn" onclick="scrollCarSection('gateway-section')"><span class="car-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h10"/><path d="M4 17h7"/><path d="M17 15l3 3"/><path d="M20 15l-3 3"/></svg></span><span>DNS过滤</span></button>
+  <button class="car-nav-btn" onclick="scrollCarSection('system-card')"><span class="car-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M4.6 7.5l2.6 1.5"/><path d="M16.8 15l2.6 1.5"/><path d="M19.4 7.5L16.8 9"/><path d="M7.2 15l-2.6 1.5"/><circle cx="12" cy="12" r="4"/></svg></span><span>系统状态</span></button>
 </nav>
 
 <div class="hdr">
@@ -525,7 +579,7 @@ body.wifi-nag .car-nav-btn.can-only[onclick*="hw3-speed-section"]{display:none !
           <div class="setting-name">Nag Mode</div>
           <div class="setting-desc" id="nag-mode-meta">A = fixed +1.80 Nm. A_V2 warms up, then sweeps inside the range.</div>
         </div>
-        <div class="hw-seg" style="width:168px;flex:0 0 168px" id="nag-mode-seg">
+        <div class="hw-seg nag-mode-control" id="nag-mode-seg">
           <button class="hw-btn active" data-v="0" onclick="setNagMode(0)">A</button>
           <button class="hw-btn" data-v="4" onclick="setNagMode(4)">A_V2</button>
         </div>
@@ -533,9 +587,15 @@ body.wifi-nag .car-nav-btn.can-only[onclick*="hw3-speed-section"]{display:none !
       <div class="setting-row nag-only" id="nag-av2-row">
         <div class="setting-info">
           <div class="setting-name">A_V2 Range</div>
-          <div class="setting-desc">Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed. <span id="nag-av2-meta">last: --</span></div>
+          <div class="setting-desc">Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.
+            <span class="nag-torque-status">
+              <span class="nag-status-pill" id="nag-live-meta">实时: --</span>
+              <span class="nag-status-pill" id="nag-write-meta">写入: --</span>
+              <span class="nag-status-pill" id="nag-av2-meta">skip: --</span>
+            </span>
+          </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;width:260px;max-width:100%">
+        <div class="nag-range-grid">
           <input class="sniff-input" id="nag-av2-min" type="number" min="-1.8" max="1.8" step="0.01" value="-1.80" onchange="saveNagAv2()">
           <input class="sniff-input" id="nag-av2-max" type="number" min="-1.8" max="1.8" step="0.01" value="1.80" onchange="saveNagAv2()">
           <button class="sniff-btn" onclick="saveNagAv2()">Save</button>
@@ -920,8 +980,7 @@ body.wifi-nag .car-nav-btn.can-only[onclick*="hw3-speed-section"]{display:none !
 <span class="ok">&#x2705;</span> DNS &#x8FC7;&#x6EE4;&#x4E0E;&#x89E3;&#x6790;&#x6548;&#x7387;
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
-Version: 3.0.0-beta.5
-OTA timestamp: 2026-06-17 19:24:33 +08:00</div>
+Version: 3.0.0-beta.5</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
@@ -942,8 +1001,7 @@ OTA timestamp: 2026-06-17 19:24:33 +08:00</div>
 <div class="modal-backdrop" id="ota-test-modal" onclick="otaTestBackdrop(event)">
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
     <div class="modal-title" id="ota-test-title">OTA Test v2</div>
-    <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
-OTA timestamp: 2026-06-17 19:24:33 +08:00</div>
+    <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
     </div>
@@ -1237,7 +1295,7 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-06-17 19:24:33 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-06-17 19:24:33 +08:00',
+  'Version: 3.0.0-beta.5':'\u7248\u672c\uff1a3.0.0-beta.5',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -1254,6 +1312,18 @@ Object.assign(I18N_ZH,{
   'CAN/WiFi Auto Sleep':'CAN/WiFi \u81ea\u52a8\u4f11\u7720',
   'After Park + vehicle lock stays stable for 10s, turn off AP/STA WiFi and CAN injection. CAN RX wakes the device.':'P \u6863 + \u8f66\u8f86\u9501\u5b9a\u72b6\u6001\u7a33\u5b9a 10 \u79d2\u540e\uff0c\u5173\u95ed AP/STA WiFi \u548c CAN \u6ce8\u5165\uff0cCAN RX \u5524\u9192\u8bbe\u5907\u3002',
   'Sleep diag: waiting for status':'\u4f11\u7720\u8bca\u65ad\uff1a\u7b49\u5f85\u72b6\u6001'
+});
+Object.assign(I18N_ZH,{
+  'Nag Mode':'Nag \u6a21\u5f0f',
+  'A = fixed +1.80 Nm. A_V2 warms up, then sweeps inside the range.':'A = \u56fa\u5b9a +1.80 Nm\uff1bA_V2 \u9884\u70ed\u540e\u5728\u8303\u56f4\u5185\u5faa\u73af\u626b\u63cf\u3002',
+  'A: fixed +1.80 Nm echo':'A\uff1a\u56fa\u5b9a +1.80 Nm echo',
+  'A_V2: warmup + sweep':'A_V2\uff1a\u9884\u70ed + \u626b\u63cf',
+  'A_V2 Range':'A_V2 \u8303\u56f4',
+  'Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.':'Nm \u7aef\u70b9\u9650\u5236\u5728 -1.80 .. +1.80\uff0c\u53cd\u5411\u65f6\u81ea\u52a8\u4ea4\u6362\u3002',
+  'OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'OFF = \u53ea\u8bfb CAN \u76d1\u542c\uff1bON = \u5141\u8bb8 Nag 880 (0x370) counter+1 echo \u5199\u5165\u3002',
+  'Save':'\u4fdd\u5b58',
+  'Offline':'\u79bb\u7ebf',
+  'CAN WRITE ON':'\u5199\u5165\u5f00\u542f'
 });
 Object.assign(I18N_ZH,{
   'Upstream DNS':'\u4e0a\u6e38 DNS',
@@ -1450,6 +1520,9 @@ function expandCarEssentials(){
   ['system-card','config-card'].forEach(id=>setCollapsedPanel($(id),false,true));
   ['config-hardware-section','hw3-speed-section','wifi-internet-section','gateway-section'].forEach(id=>setCollapsedPanel($(id),false,true));
 }
+function expandWifiNagDefaults(){
+  ['config-card','config-hardware-section','wifi-hotspot-section','wifi-internet-section','gateway-section'].forEach(id=>setCollapsedPanel($(id),false,true));
+}
 function updateUiModeUi(){
   document.querySelectorAll('.ui-mode-btn').forEach(btn=>{
     const active=(btn.dataset.uiMode||'auto')===uiModeSetting;
@@ -1471,13 +1544,13 @@ function applyWifiMaxMode(d){
     setText('hw-badge','WIFI-NAG');
     setText('s-inj-lbl','CAN Write');
     const hwTitle=document.querySelector('#config-hardware-section .subsec-title');
-    if(hwTitle&&hwTitle.childNodes.length)hwTitle.childNodes[0].nodeValue='CAN Write ';
+    if(hwTitle&&hwTitle.childNodes.length)hwTitle.childNodes[0].nodeValue=trText('CAN Write')+' ';
     const hwMeta=document.querySelector('#config-hardware-section .subsec-meta');
     if(hwMeta)hwMeta.textContent='Read-only when off; Nag 0x370 echo when on';
     if(!wifiNagInitialUiApplied){
       wifiNagInitialUiApplied=true;
-      stopSystemMonitor();
-      setCollapsedPanel($('system-card'),true,false);
+      setCollapsedPanel($('system-card'),false,false);
+      expandWifiNagDefaults();
     }
     canDebugEnabled=false;
     localStorage.setItem('canDebug','0');
@@ -2144,11 +2217,12 @@ function updateNagControl(d){
   const seg=$('nag-mode-seg');if(seg)updSeg(seg,mode,'hw-btn');
   const minInp=$('nag-av2-min');if(minInp&&document.activeElement!==minInp)minInp.value=state.nagAv2Min.toFixed(2);
   const maxInp=$('nag-av2-max');if(maxInp&&document.activeElement!==maxInp)maxInp.value=state.nagAv2Max.toFixed(2);
-  const meta=$('nag-mode-meta');if(meta)meta.textContent=(mode===4?'A_V2: warmup + sweep':'A: fixed +1.80 Nm echo');
-  const av2=$('nag-av2-meta');if(av2){
-    const last=Number(d.nagLastTorqueNm||0);
-    av2.textContent='last: '+last.toFixed(2)+' Nm, skip: '+(d.nagOwnEchoSkip||0);
-  }
+  const meta=$('nag-mode-meta');if(meta)meta.textContent=trText(mode===4?'A_V2: warmup + sweep':'A: fixed +1.80 Nm echo');
+  const live=Number(d.nagLiveTorqueNm||0);
+  const last=Number(d.nagLastTorqueNm||0);
+  const liveMeta=$('nag-live-meta');if(liveMeta)liveMeta.textContent=(dashLang==='zh'?'\u5b9e\u65f6: ':'live: ')+live.toFixed(2)+' Nm';
+  const writeMeta=$('nag-write-meta');if(writeMeta)writeMeta.textContent=(dashLang==='zh'?'\u5199\u5165: ':'write: ')+last.toFixed(2)+' Nm';
+  const av2=$('nag-av2-meta');if(av2)av2.textContent='skip: '+(d.nagOwnEchoSkip||0);
 }
 
 async function setNagMode(mode){

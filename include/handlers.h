@@ -602,6 +602,7 @@ struct NagHandler : public CarManagerBase
     Shared<uint8_t> nagMode{MODE_A};
     Shared<int16_t> av2MinCentiNm{-180};
     Shared<int16_t> av2MaxCentiNm{180};
+    Shared<int16_t> lastObservedCentiNm{0};
     Shared<int16_t> lastInjectedCentiNm{0};
 
     static constexpr uint32_t kAv2WarmupMs = 10000;
@@ -725,6 +726,8 @@ struct NagHandler : public CarManagerBase
     int16_t av2MaxCenti() const { return (int16_t)av2MaxCentiNm; }
     float av2MinNm() const { return centiNmToNm(av2MinCenti()); }
     float av2MaxNm() const { return centiNmToNm(av2MaxCenti()); }
+    int16_t lastObservedCenti() const { return (int16_t)lastObservedCentiNm; }
+    float lastObservedNm() const { return centiNmToNm(lastObservedCenti()); }
     int16_t lastInjectedCenti() const { return (int16_t)lastInjectedCentiNm; }
     float lastInjectedNm() const { return centiNmToNm(lastInjectedCenti()); }
 
@@ -767,6 +770,7 @@ struct NagHandler : public CarManagerBase
             return;
 
         uint8_t handsOn = (frame.data[4] >> 6) & 0x03;
+        lastObservedCentiNm = rawToCentiNm(readTorqueRaw(frame));
 
         if (!nagKillerActive || !nagKillerRuntime)
             return;
