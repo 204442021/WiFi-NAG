@@ -365,6 +365,7 @@ body.wifi-nag .nag-hide,
 body.wifi-nag #hw3-speed-section,
 body.wifi-nag #legacy-mpp-section,
 body.wifi-nag #hw3-slew-section,
+body.wifi-nag #firmware-update-card,
 body.wifi-nag #can-debug-card,
 body.wifi-nag .can-debug-panel,
 body.wifi-nag .owner-modal-card{display:none !important}
@@ -457,7 +458,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
 <div class="stat-grid" id="status-panel">
   <div class="stat can-only"><div class="stat-lbl">CAN Bus</div><div class="stat-val" id="s-can">Offline</div></div>
   <div class="stat can-only"><div class="stat-lbl" id="s-inj-lbl">CAN TX</div><div class="stat-val v-dim" id="s-inj">--</div></div>
-  <div class="stat can-only"><div class="stat-lbl" title="Frames received per second">CAN Frame Rate</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
+  <div class="stat can-only"><div class="stat-lbl" title="Frames received per second / total RX">CAN Frames</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
   <div class="stat can-only"><div class="stat-lbl">RX</div><div class="stat-val v-acc" id="s-rx">0</div></div>
   <div class="stat can-only"><div class="stat-lbl">TX</div><div class="stat-val v-acc" id="s-tx">0</div></div>
   <div class="stat can-only"><div class="stat-lbl">TX Errors</div><div class="stat-val v-dim" id="s-txerr">0</div></div>
@@ -930,7 +931,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
   </div>
 </div>
 
-<div class="card">
+<div class="card" id="firmware-update-card">
   <div class="card-hdr">
     <div class="card-title">Firmware Update <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Manual firmware upload only. Select a local .bin and flash it to the device.">i</span></div>
     <div class="card-meta" id="fw-ver">Manual OTA</div>
@@ -1009,17 +1010,6 @@ Version: 3.0.0-beta.5</div>
 </div>
 
 
-<div class="foot" id="dash-foot"ev-open-can-tools &bull; loading...</div>
-<div class="foot" style="margin-top:4px">
-  <a href="https://github.com/ev-open-can-tools/ev-open-can-tools" target="_blank" rel="noopener" style="color:var(--acc);text-decoration:none">GitHub</a>
-  &bull;
-  <a href="https://discord.gg/ZTQKAUTd2F" target="_blank" rel="noopener" style="color:var(--acc);text-decoration:none">Discord</a>
-</div>
-<div class="foot" style="margin-top:8px;font-size:10px">
-  <div style="margin-bottom:4px">Gift with Monero</div>
-  <div style="word-break:break-all;color:var(--tx2)">46CJEjnN74N83AZHHYKX3mD9kkV6UJYVjN58PTWvQ6VU8Vvn3tmyExkaC2kq9asD6SZY9weaZqx5o9nf1MxkKbmTKWLUeRD</div>
-</div>
-
 <script>
 const HW=['Legacy','HW3','HW4'];
 const SP3=['Chill','Normal','Hurry'];
@@ -1027,8 +1017,8 @@ const SP4=['Chill','Normal','Hurry','Max','Sloth'];
 const $=id=>document.getElementById(id);
 let dashLang=localStorage.getItem('dashLang')||((navigator.language||'').toLowerCase().startsWith('zh')?'zh':'en');
 const I18N_ZH={
-'Light':'浅色','Dark':'深色','Waiting for CAN frames':'等待 CAN 帧','CAN running':'CAN 运行中','Dashboard disconnected':'仪表盘已断开','Dashboard reconnecting':'仪表盘重连中',
-'CAN Bus':'CAN 总线','Injection':'注入','Frame rate':'CAN 帧率','CAN Frame Rate':'CAN 帧率','RX Frames':'接收帧','TX Frames':'发送帧','Errors':'错误','AD Status':'AP 状态','Profile':'配置档','Offset':'偏移','Uptime':'运行时间',
+'Light':'浅色','Dark':'深色','Waiting for CAN frames':'等待 CAN 帧','CAN running':'CAN 通讯正常','CAN OK':'通讯正常','CAN waiting':'等待 CAN 帧','RX total':'接收累计','Dashboard disconnected':'仪表盘已断开','Dashboard reconnecting':'仪表盘重连中',
+'CAN Bus':'CAN 总线','Injection':'注入','Frame rate':'CAN 帧率','CAN Frame Rate':'CAN 帧率','CAN Frames':'CAN 帧','Frames received per second / total RX':'每秒接收帧 / 接收累计','RX Frames':'接收帧','TX Frames':'发送帧','Errors':'错误','AD Status':'AP 状态','Profile':'配置档','Offset':'偏移','Uptime':'运行时间',
 'Offline':'离线','Online':'在线','Active':'运行中','Inactive':'未激活','BLOCKED':'已阻止','Waiting AP':'等待 AP','No frames':'无帧','Sniffer paused':'嗅探暂停',
 'WiFi Hotspot':'WiFi 热点','Change the WiFi hotspot name and password':'修改 WiFi 热点名称和密码','SSID':'SSID','Password':'密码','Hidden':'隐藏','WiFi Internet':'WiFi 互联网','Not configured':'未配置','Save up to 4 networks (e.g. home + phone hotspot).':'最多保存 4 个网络（如家庭 WiFi + 手机热点）。','Add network':'添加网络','WiFi SSID':'WiFi SSID','Scan':'扫描','Save & Connect':'保存并连接','Use static IP':'使用静态 IP',
 'STA-AP Gateway':'STA-AP 网关','Gateway status unavailable':'网关状态不可用','Gateway':'网关','Enable STA-AP NAT routing for hotspot clients when WiFi Internet is connected.':'WiFi 互联网连接后，为热点客户端启用 STA-AP NAT 路由。','Conservative Mode':'保守模式','Aggressive Mode':'激进模式','Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.':'保守模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手。','Aggressive Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant / app vehicle control.':'激进模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手 / 控车。','Custom DNS profile':'自定义 DNS 配置','Blacklist':'黑名单','Whitelist':'白名单','Save DNS':'保存 DNS','Blocked':'阻断记录','DNS Filter List':'DNS 过滤清单','Add to Whitelist':'加入白名单','Blacklisted':'黑名单','Already whitelisted':'已在白名单','Clear':'清空','No blocked domains recorded':'没有阻断记录','Cleared':'已清空','Gateway not available':'网关不可用','domain is blacklisted':'域名在黑名单中，禁止加入白名单','cannot add domain':'无法加入域名',
@@ -1036,7 +1026,7 @@ const I18N_ZH={
 'Firmware Update':'固件更新','Beta Channel':'Beta 通道','Include pre-release / beta firmware versions':'包含预发布 / beta 固件版本','Auto-Update on Boot':'启动后自动更新','Check and install updates automatically ~15 s after WiFi connects':'WiFi 连接约 15 秒后自动检查并安装更新','Check for Updates':'检查更新','Manual firmware upload':'手动上传固件','Tap to select firmware .bin':'点击选择固件 .bin','Or drag and drop a file here':'或将文件拖放到这里','Uploading...':'上传中...','Flash Firmware':'刷写固件','Reset OTA Credentials':'重置 OTA 凭据',
   'System Health':'系统状态','System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','CAN Debug':'CAN 调试','CAN调试':'CAN 调试','Enable CAN debug tools':'启用 CAN 调试工具','Shows firmware update, logs, sniffer and recorder panels':'显示固件更新、日志、嗅探器和记录器面板','Chip':'芯片','CPU':'CPU','CPU Load':'CPU 负载','Task Load':'任务负载','task':'任务','core':'核心','cpu%':'CPU%','stack':'栈余量','state':'状态','Task stats unavailable':'任务负载不可用','Core 0':'核心 0','Core 1':'核心 1','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Heap RAM':'堆内存','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','On':'开启','Off':'关闭','off':'关闭','not enabled':'未启用','unavailable':'不可用','offline':'离线','not present':'不存在','STA online':'STA 在线','STA offline':'STA 离线','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','warming up':'采样中',
 'CAN':'CAN','Pause':'暂停','Resume':'继续','Ready':'就绪','Saved':'已保存','Recording...':'记录中...',
-'Cancel':'取消','Continue':'继续','Confirm':'确认','Copy':'复制','Open GitHub Issue':'打开 GitHub Issue','Close':'关闭','Show':'显示','Hide':'隐藏','Loading...':'加载中...','Saving...':'保存中...','Saved! Reboot to apply.':'已保存！重启后生效。','Saved':'已保存','Error':'错误','Save failed':'保存失败','Connection error':'连接错误','Connection to ':'到 ',
+'Cancel':'取消','Continue':'继续','Confirm':'确认','Copy':'复制','Close':'关闭','Show':'显示','Hide':'隐藏','Loading...':'加载中...','Saving...':'保存中...','Saved! Reboot to apply.':'已保存！重启后生效。','Saved':'已保存','Error':'错误','Save failed':'保存失败','Connection error':'连接错误','Connection to ':'到 ',
 'Enabled':'已启用','Disabled':'已禁用','on':'开启','waiting':'等待中','blocked':'已阻断','NAT':'NAT','Connected':'已连接','Connecting to ':'正在连接 ','Connect':'连接','Reconnect':'重连','Connect failed':'连接失败','Delete':'删除','Edit':'编辑','No networks saved.':'未保存网络。','firmware default':'固件默认','saved':'已保存'
 };
 Object.assign(I18N_ZH,{
@@ -1214,10 +1204,6 @@ Object.assign(I18N_ZH,{
   'Restore settings':'还原设置','Restore':'还原',
   'Export failed':'导出失败','Invalid JSON':'JSON 格式错误',
   'Restored. Rebooting...':'已还原，重启中...','Import failed':'导入失败','Upload failed':'上传失败',
-  // Support
-  'Copy a status summary before opening a GitHub issue':'在提交 GitHub 问题前复制一份状态摘要',
-  'Collect a support summary and open a GitHub issue with the details prefilled.':'收集支持信息摘要，并以预填详情打开 GitHub 问题。',
-  'Copy this text, then open the GitHub issue form.':'复制下方文本后再打开 GitHub 问题表单。',
   'Copied to clipboard':'已复制到剪贴板','Copy failed':'复制失败',
   'Copied support details. Paste them into the support question.':'已复制支持信息，请粘贴到问题描述中。',
   // Firmware update
@@ -1900,9 +1886,24 @@ document.addEventListener('click',e=>{
 function toggleTheme(){
   const html=document.documentElement;
   const isDark=html.getAttribute('data-theme')==='dark';
-  html.setAttribute('data-theme',isDark?'light':'dark');
-  $('theme-btn').innerHTML=isDark?'&#9790; '+trText('Dark'):'&#9788; '+trText('Light');
-  localStorage.setItem('theme',isDark?'light':'dark');
+  applyTheme(isDark?'light':'dark',true);
+}
+function autoThemeByTime(){
+  const h=new Date().getHours();
+  return h>=7&&h<19?'light':'dark';
+}
+function applyTheme(theme,manual){
+  const t=theme==='light'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',t);
+  const btn=$('theme-btn');
+  if(btn)btn.innerHTML=t==='dark'?'&#9788; '+trText('Light'):'&#9790; '+trText('Dark');
+  localStorage.setItem('theme',t);
+  if(manual)localStorage.setItem('themeMode','manual');
+}
+function refreshAutoTheme(){
+  const mode=localStorage.getItem('themeMode')||'auto';
+  if(mode==='manual')return;
+  applyTheme(autoThemeByTime(),false);
 }
 function i18nSkip(el){
   return !el||['SCRIPT','STYLE','TEXTAREA','INPUT','OPTION'].includes(el.nodeName);
@@ -1940,11 +1941,13 @@ function toggleLanguage(){
   $('theme-btn').innerHTML=t==='dark'?'&#9788; '+trText('Light'):'&#9790; '+trText('Dark');
 }
 (function(){
-  const t=localStorage.getItem('theme')||'dark';
+  const mode=localStorage.getItem('themeMode')||'auto';
+  const t=mode==='manual'?(localStorage.getItem('theme')||autoThemeByTime()):autoThemeByTime();
   document.documentElement.setAttribute('data-theme',t);
   // will be updated after DOM ready
   window.addEventListener('DOMContentLoaded',()=>{
-    $('theme-btn').innerHTML=t==='dark'?'&#9788; '+trText('Light'):'&#9790; '+trText('Dark');
+    applyTheme(t,false);
+    setInterval(refreshAutoTheme,60000);
     updateLanguageButton();
     applyDashboardI18n(document.body);
     setTimeout(()=>{if(!document.body.classList.contains('wifi-max')&&!document.body.classList.contains('wifi-nag'))showOwnerNotice();},1200);
@@ -2738,7 +2741,8 @@ async function poll(){
     }
     const on=!!d.can,armed=!!d.ci,injecting=typeof d.ia==='undefined'?armed:!!d.ia,fpsVal=Number(d.fps||0);
     const hdrDesc=$('hdr-desc');
-    if(hdrDesc)hdrDesc.textContent=on?(trText('CAN running')+' \u2022 '+fpsVal.toFixed(1)+' Hz'):trText('Waiting for CAN frames');
+    const rxTotal=Number(d.rx||0);
+    if(hdrDesc)hdrDesc.textContent=on?(trText('CAN running')+' \u2022 '+fpsVal.toFixed(1)+' Hz \u2022 RX '+rxTotal):trText('Waiting for CAN frames');
     state.hw=d.hw;state.sp=clampProfileForHw(d.hw,d.sp);state.spAuto=typeof d.spAuto==='undefined'?state.spAuto:!!d.spAuto;state.can=armed;
     updateFsdControl(d);
     if(!d.wifiNag){
@@ -2751,13 +2755,13 @@ async function poll(){
     const adEnabled=typeof d.adEnabled==='undefined'?false:!!d.adEnabled;
     updateInjectButtons(armed);
 
-    setText('s-can',on?'Active':'Offline');
+    setText('s-can',on?trText('CAN OK'):trText('CAN waiting'));
     setClass('s-can','stat-val '+(on?'v-ok':'v-err'));
     setText('s-inj',injectionStatusLabel(injecting,armed,d.apGate,d));
     setClass('s-inj','stat-val '+(injecting?'v-ok':(armed&&d.apGate?'v-warn':'v-err')));
     setText('s-AD',apActive?'Active':'Inactive');
     setClass('s-AD','stat-val '+(apActive?'v-ok':'v-dim'));
-    setText('s-fps',fpsVal.toFixed(1)+' Hz');
+    setText('s-fps',on?(fpsVal.toFixed(1)+' Hz / RX '+rxTotal):(fpsVal.toFixed(1)+' Hz / '+trText('No frames')));
     setClass('s-fps','stat-val '+(fpsVal>5?'v-acc':'v-dim'));
     setText('s-rx',d.rx);
     setText('s-tx',d.tx);

@@ -766,6 +766,9 @@ struct NagHandler : public CarManagerBase
 
     void handleMessage(CanFrame &frame, CanDriver &driver) override
     {
+        if (onFrame)
+            onFrame(frame);
+
         if (frame.id != 880 || frame.dlc < 8)
             return;
 
