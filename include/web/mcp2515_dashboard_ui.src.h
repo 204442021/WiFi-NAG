@@ -344,6 +344,19 @@ body.wifi-max .warn-bar,
 body.wifi-max .owner-modal-card{display:none !important}
 body.wifi-max #hw-badge{font-size:0}
 body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
+body.wifi-nag .nag-hide,
+body.wifi-nag #hw3-speed-section,
+body.wifi-nag #legacy-mpp-section,
+body.wifi-nag #hw3-slew-section,
+body.wifi-nag #can-debug-card,
+body.wifi-nag .can-debug-panel,
+body.wifi-nag .owner-modal-card{display:none !important}
+.nag-only{display:none !important}
+body.wifi-nag .nag-only.setting-row{display:flex !important}
+body.wifi-nag #hw-badge{font-size:0}
+body.wifi-nag #hw-badge::after{content:'WIFI-NAG';font-size:11px}
+body.wifi-nag .car-nav-btn.can-only[onclick*="config-hardware-section"],
+body.wifi-nag .car-nav-btn.can-only[onclick*="hw3-speed-section"]{display:none !important}
 </style>
 </head>
 <body>
@@ -357,7 +370,6 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
   <button class="car-nav-btn" onclick="scrollCarSection('wifi-internet-section')">WiFi</button>
   <button class="car-nav-btn" onclick="scrollCarSection('gateway-section')">DNS</button>
   <button class="car-nav-btn" onclick="scrollCarSection('system-card')">System</button>
-  <button class="car-nav-btn can-only" onclick="scrollCarSection('can-debug-card')">CAN</button>
 </nav>
 
 <div class="hdr">
@@ -390,16 +402,16 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
 
 <div class="stat-grid" id="status-panel">
   <div class="stat can-only"><div class="stat-lbl">CAN Bus</div><div class="stat-val" id="s-can">Offline</div></div>
-  <div class="stat can-only"><div class="stat-lbl">FSD Switch</div><div class="stat-val v-dim" id="s-inj">--</div></div>
+  <div class="stat can-only"><div class="stat-lbl" id="s-inj-lbl">CAN TX</div><div class="stat-val v-dim" id="s-inj">--</div></div>
   <div class="stat can-only"><div class="stat-lbl" title="Frames received per second">CAN Frame Rate</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
   <div class="stat can-only"><div class="stat-lbl">RX</div><div class="stat-val v-acc" id="s-rx">0</div></div>
   <div class="stat can-only"><div class="stat-lbl">TX</div><div class="stat-val v-acc" id="s-tx">0</div></div>
   <div class="stat can-only"><div class="stat-lbl">TX Errors</div><div class="stat-val v-dim" id="s-txerr">0</div></div>
-  <div class="stat can-only"><div class="stat-lbl">Follow dist</div><div class="stat-val v-dim" id="s-fd">--</div></div>
-  <div class="stat can-only"><div class="stat-lbl">Profile</div><div class="stat-val v-dim" id="s-prof">--</div></div>
-  <div class="stat can-only"><div class="stat-lbl">Limit Offset</div><div class="stat-val v-dim" id="s-soff">0</div></div>
+  <div class="stat can-only nag-hide"><div class="stat-lbl">Follow dist</div><div class="stat-val v-dim" id="s-fd">--</div></div>
+  <div class="stat can-only nag-hide"><div class="stat-lbl">Profile</div><div class="stat-val v-dim" id="s-prof">--</div></div>
+  <div class="stat can-only nag-hide"><div class="stat-lbl">Limit Offset</div><div class="stat-val v-dim" id="s-soff">0</div></div>
   <div class="stat"><div class="stat-lbl">Uptime</div><div class="stat-val v-dim" id="s-up">0s</div></div>
-  <button class="btn can-only" id="btn-fsd-toggle" onclick="toggleFsdTopButton()">Turn FSD On</button>
+  <button class="btn can-only" id="btn-fsd-toggle" onclick="toggleFsdTopButton()">CAN TX On</button>
   <button class="btn btn-reboot" onclick="reboot()">Reboot</button>
 </div>
 
@@ -464,7 +476,7 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
 
 <div class="card" id="config-card">
   <div class="card-hdr">
-    <div class="card-title">Configuration <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Device settings for hardware mode, WiFi, CAN pins, logging and backup.">i</span></div>
+    <div class="card-title">Configuration <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Device settings for hardware mode, WiFi, CAN pins and logging.">i</span></div>
     <div class="card-meta">Device settings</div>
   </div>
 
@@ -474,12 +486,12 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
       <div class="subsec-meta">Autopilot generation</div>
     </div>
     <div class="subsec-body">
-      <div class="hw-seg" id="hw-seg">
+      <div class="hw-seg nag-hide" id="hw-seg">
         <button class="hw-btn" data-v="0" onclick="setHW(0)">Legacy</button>
         <button class="hw-btn active" data-v="1" onclick="setHW(1)">HW3</button>
         <button class="hw-btn" data-v="2" onclick="setHW(2)">HW4</button>
       </div>
-      <div class="profile-wrap">
+      <div class="profile-wrap nag-hide">
         <div class="profile-label">Profile</div>
         <div class="profile-group" id="sp3-group">
           <div class="hw-seg" id="sp3-seg">
@@ -501,28 +513,34 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
         </div>
         <div class="profile-note" id="profile-note">Available profiles depend on the selected hardware.</div>
       </div>
-      <div class="setting-row">
+      <div class="setting-row" id="can-write-row">
         <div class="setting-info">
-          <div class="setting-name">AP/EAP Auto Restore</div>
-          <div class="setting-desc">Optional 0x293 Autosteer enable restore after AP/EAP ACC drop. Default off.</div>
+          <div class="setting-name">CAN Write</div>
+          <div class="setting-desc">OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes. <span id="nag-echo-meta">echo: --</span></div>
         </div>
-        <label class="tgl"><input type="checkbox" id="ap-restore-tgl" onchange="saveApRestore()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+        <label class="tgl"><input type="checkbox" id="can-write-tgl" onchange="saveCanWrite()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
-      <div class="setting-row" id="nag-killer-row">
+      <div class="setting-row nag-only" id="nag-mode-row">
         <div class="setting-info">
-          <div class="setting-name">Nag Killer</div>
-          <div class="setting-desc">Suppress Autosteer hands-on nag via CAN 880 (0x370) counter+1 echo. Requires CAN/FSD switch ON. <span id="nag-echo-meta">echo: --</span></div>
+          <div class="setting-name">Nag Mode</div>
+          <div class="setting-desc" id="nag-mode-meta">A = fixed +1.80 Nm. A_V2 warms up, then sweeps inside the range.</div>
         </div>
-        <label class="tgl"><input type="checkbox" id="nag-killer-tgl" onchange="saveNagKiller()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+        <div class="hw-seg" style="width:168px;flex:0 0 168px" id="nag-mode-seg">
+          <button class="hw-btn active" data-v="0" onclick="setNagMode(0)">A</button>
+          <button class="hw-btn" data-v="4" onclick="setNagMode(4)">A_V2</button>
+        </div>
       </div>
-      <div class="setting-row">
+      <div class="setting-row nag-only" id="nag-av2-row">
         <div class="setting-info">
-          <div class="setting-name">CAN/WiFi Auto Sleep</div>
-          <div class="setting-desc">After Park + vehicle lock stays stable for 10s, turn off AP/STA WiFi and CAN injection. CAN RX wakes the device.</div>
+          <div class="setting-name">A_V2 Range</div>
+          <div class="setting-desc">Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed. <span id="nag-av2-meta">last: --</span></div>
         </div>
-        <label class="tgl"><input type="checkbox" id="auto-sleep-tgl" onchange="saveAutoSleep()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;width:260px;max-width:100%">
+          <input class="sniff-input" id="nag-av2-min" type="number" min="-1.8" max="1.8" step="0.01" value="-1.80" onchange="saveNagAv2()">
+          <input class="sniff-input" id="nag-av2-max" type="number" min="-1.8" max="1.8" step="0.01" value="1.80" onchange="saveNagAv2()">
+          <button class="sniff-btn" onclick="saveNagAv2()">Save</button>
+        </div>
       </div>
-      <div class="info-box" id="auto-sleep-status">Sleep diag: waiting for status</div>
     </div>
   </div>
 
@@ -835,7 +853,7 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
 
   <div class="subsec can-debug-panel" data-subkey="config-dashboard-log" style="margin-top:14px">
     <div class="subsec-head">
-      <div class="subsec-title">Debug Log <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Shows recent WebUI and firmware log lines. This is debug logging output, not the CAN sniffer.">i</span></div>
+      <div class="subsec-title">Debug Log <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Shows recent WebUI and firmware log lines.">i</span></div>
       <div class="subsec-meta">Recent debug output</div>
     </div>
     <div class="subsec-body">
@@ -850,29 +868,9 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
       <div class="log-box" id="log">Waiting...</div>
     </div>
   </div>
-  <div class="setting-row" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--bd)">
-    <div class="setting-info">
-      <div class="setting-name">Settings Backup <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" data-help-target="backup-info" title="Export or restore saved device settings as JSON.">i</span></div>
-      <div class="setting-desc">Export and import device settings</div>
-    </div>
-    <button class="sniff-btn" onclick="exportSettings()">Download</button>
-    <button class="sniff-btn" onclick="document.getElementById('backup-file').click()">Upload &amp; Restore</button>
-    <input type="file" id="backup-file" accept=".json,application/json" style="display:none" onchange="importSettings(event)">
-    <span style="font-size:11px;color:var(--tx3)" id="backup-status"></span>
-  </div>
-  <div class="setting-row can-debug-panel" style="padding-top:12px;border-top:1px solid var(--bd)">
-    <div class="setting-info">
-      <div class="setting-name">Support <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Collect a support summary and open a GitHub issue with the details prefilled.">i</span></div>
-      <div class="setting-desc">Copy a status summary before opening a GitHub issue</div>
-    </div>
-    <button class="sniff-btn" onclick="openSupport()">Open</button>
-  </div>
-  <div id="backup-info" class="info-box" style="display:none">
-    Exports AP credentials, WiFi Internet, CAN pins, HW3 speed settings and gateway DNS settings as JSON. Useful before a full re-flash or when migrating to another device. <b>Passwords are included in clear text</b> &mdash; keep the file safe.
-  </div>
 </div>
 
-<div class="card can-debug-panel">
+<div class="card">
   <div class="card-hdr">
     <div class="card-title">Firmware Update <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Manual firmware upload only. Select a local .bin and flash it to the device.">i</span></div>
     <div class="card-meta" id="fw-ver">Manual OTA</div>
@@ -896,91 +894,15 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
     </div>
   </div>
 </div>
-<div class="card can-debug-panel">
-  <div class="card-hdr"><div class="card-title">CAN <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Live CAN tools for sniffing, recording, controller status and checking the last injected write.">i</span></div><div class="card-meta">Sniffer, recorder and bus status</div></div>
-
-  <div class="subsec" data-subkey="can-sniffer">
-    <div class="subsec-head">
-      <div class="subsec-title">CAN Sniffer <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Shows the latest 30 CAN frames live. You can filter by ID or name, switch between wire IDs and DBC IDs, and pause the view.">i</span></div>
-      <div class="subsec-meta" id="sniff-count">0 frames</div>
-    </div>
-    <div class="subsec-body">
-      <div class="sniff-ctrl">
-        <input class="sniff-input" id="sniff-filter" placeholder="Filter by ID or name" oninput="renderSniffer()">
-        <button class="sniff-btn" id="sniff-id-btn" onclick="toggleSniffIdMode()">Wire IDs</button>
-        <button class="sniff-btn" id="sniff-pause-btn" onclick="togglePause()">Pause</button>
-      </div>
-      <div class="sniff-box" id="sniffer">
-        <div style="padding:20px;color:var(--tx3);text-align:center;font-size:12px">Waiting for CAN frames</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="subsec" data-subkey="can-recorder">
-    <div class="subsec-head">
-      <div class="subsec-title">CAN Recorder <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Records live CAN traffic up to the frame limit and lets you download it as a CSV file.">i</span></div>
-      <div class="subsec-meta" id="rec-meta">Idle</div>
-    </div>
-    <div class="subsec-body">
-      <div class="rec-bar"><div class="rec-fill" id="rec-fill"></div></div>
-      <div class="rec-info">
-        <span id="rec-count">0 / -- frames</span>
-        <span id="rec-status">Ready</span>
-      </div>
-      <div class="btn-row">
-        <button class="btn" id="rec-btn" onclick="toggleRec()">Start Recording</button>
-        <a class="btn" id="rec-dl" href="/rec_download" download="can_recording.csv" style="display:none;text-align:center;text-decoration:none;padding:10px;border:1px solid var(--bd2);color:var(--tx2)">Download CSV</a>
-      </div>
-    </div>
-  </div>
-
-  <div class="subsec" data-subkey="can-controller">
-    <div class="subsec-head">
-      <div class="subsec-title">CAN Controller <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Shows CAN controller health, error flags and the RX, TX and error counters per mux.">i</span></div>
-      <div class="subsec-meta" style="display:flex;align-items:center;gap:8px">
-        <button onclick="resetStats()" style="font-size:10px;padding:2px 8px;border:1px solid var(--bd2);border-radius:5px;background:transparent;color:var(--tx3);cursor:pointer;font-family:inherit">Reset</button>
-      </div>
-    </div>
-    <div class="subsec-body">
-      <div class="eflg-row" id="eflg-row"><span class="eflg-pill eflg-ok">OK</span></div>
-      <table class="mux-tbl">
-        <tr><th>Mux</th><th>RX</th><th>TX</th><th>Errors</th></tr>
-        <tr><td>0</td><td id="m0rx">0</td><td id="m0tx">0</td><td id="m0err">0</td></tr>
-        <tr><td>1</td><td id="m1rx">0</td><td id="m1tx">0</td><td id="m1err">0</td></tr>
-        <tr><td>2</td><td id="m2rx">0</td><td id="m2tx">0</td><td id="m2err">0</td></tr>
-      </table>
-    </div>
-  </div>
-
-  <div class="subsec" data-subkey="can-last-write-check">
-    <div class="subsec-head">
-      <div class="subsec-title">Last Write Check <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Compares the last injected frame with the latest bus frame that has the same CAN ID and mux. Helpful to spot overwrites, but not proof that a module accepted the change.">i</span></div>
-    </div>
-    <div class="subsec-body">
-      <div class="probe-status v-dim" id="probe-status">No injected frame yet</div>
-      <div class="probe-block">
-        <div class="probe-label">Sent</div>
-        <div class="probe-meta" id="probe-tx-meta">--</div>
-        <div class="probe-hex" id="probe-tx">--</div>
-      </div>
-      <div class="probe-block">
-        <div class="probe-label">Bus</div>
-        <div class="probe-meta" id="probe-rx-meta">--</div>
-        <div class="probe-hex" id="probe-rx">--</div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div class="card" id="can-debug-card">
   <div class="card-hdr">
-    <div class="card-title">CAN Debug <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Enable debug panels: firmware update, debug log and live CAN tools.">i</span></div>
+    <div class="card-title">CAN Debug <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Enable debug panels: firmware update, debug log and CAN pin tools.">i</span></div>
     <div class="card-meta" id="can-debug-meta">Off</div>
   </div>
   <div class="setting-row" style="padding-top:0">
     <div class="setting-info">
       <div class="setting-name">Enable CAN debug tools</div>
-      <div class="setting-desc">Shows firmware update, logs, sniffer and recorder panels</div>
+      <div class="setting-desc">Shows firmware update, debug log and CAN pin tools</div>
     </div>
     <label class="tgl"><input type="checkbox" id="can-debug-tgl" onchange="toggleCanDebug()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
   </div>
@@ -999,7 +921,7 @@ body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
 <span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
 
 Version: 3.0.0-beta.5
-OTA timestamp: 2026-06-17 13:21:13 +08:00</div>
+OTA timestamp: 2026-06-17 19:24:33 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
     </div>
@@ -1021,26 +943,9 @@ OTA timestamp: 2026-06-17 13:21:13 +08:00</div>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
     <div class="modal-title" id="ota-test-title">OTA Test v2</div>
     <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5
-OTA timestamp: 2026-06-17 13:21:13 +08:00</div>
+OTA timestamp: 2026-06-17 19:24:33 +08:00</div>
     <div class="modal-actions">
       <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-backdrop" id="support-modal" onclick="supportBackdrop(event)">
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="support-title" style="width:min(100%,560px)">
-    <div class="modal-title" id="support-title">Support</div>
-    <div class="modal-msg" style="margin-top:10px">
-      <textarea id="support-body" readonly style="width:100%;min-height:260px;resize:vertical;border:1px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--tx);padding:10px;font:inherit;line-height:1.5"></textarea>
-    </div>
-    <div class="modal-actions" style="justify-content:space-between;align-items:center">
-      <span id="support-status" style="font-size:11px;color:var(--tx3)"></span>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="sniff-btn" onclick="copySupport()">Copy</button>
-        <button class="sniff-btn modal-btn-primary" onclick="openSupportIssue()">Open GitHub Issue</button>
-        <button class="sniff-btn" onclick="closeSupport()">Close</button>
-      </div>
     </div>
   </div>
 </div>
@@ -1069,10 +974,10 @@ const I18N_ZH={
 'Offline':'离线','Online':'在线','Active':'运行中','Inactive':'未激活','BLOCKED':'已阻止','Waiting AP':'等待 AP','No frames':'无帧','Sniffer paused':'嗅探暂停',
 'WiFi Hotspot':'WiFi 热点','Change the WiFi hotspot name and password':'修改 WiFi 热点名称和密码','SSID':'SSID','Password':'密码','Hidden':'隐藏','WiFi Internet':'WiFi 互联网','Not configured':'未配置','Save up to 4 networks (e.g. home + phone hotspot).':'最多保存 4 个网络（如家庭 WiFi + 手机热点）。','Add network':'添加网络','WiFi SSID':'WiFi SSID','Scan':'扫描','Save & Connect':'保存并连接','Use static IP':'使用静态 IP',
 'STA-AP Gateway':'STA-AP 网关','Gateway status unavailable':'网关状态不可用','Gateway':'网关','Enable STA-AP NAT routing for hotspot clients when WiFi Internet is connected.':'WiFi 互联网连接后，为热点客户端启用 STA-AP NAT 路由。','Conservative Mode':'保守模式','Aggressive Mode':'激进模式','Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.':'保守模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手。','Aggressive Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant / app vehicle control.':'激进模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手 / 控车。','Custom DNS profile':'自定义 DNS 配置','Blacklist':'黑名单','Whitelist':'白名单','Save DNS':'保存 DNS','Blocked':'阻断记录','DNS Filter List':'DNS 过滤清单','Add to Whitelist':'加入白名单','Blacklisted':'黑名单','Already whitelisted':'已在白名单','Clear':'清空','No blocked domains recorded':'没有阻断记录','Cleared':'已清空','Gateway not available':'网关不可用','domain is blacklisted':'域名在黑名单中，禁止加入白名单','cannot add domain':'无法加入域名',
-'CAN Pins':'CAN 引脚','default':'默认','TX GPIO':'TX GPIO','RX GPIO':'RX GPIO','Reboot required after saving custom pins.':'保存自定义引脚后需要重启。','Dashboard Log':'调试日志','Debug Log':'调试日志','Settings Backup':'设置备份','Export and import device settings':'导出和导入设备设置','Download':'下载','Import':'导入','Support':'支持','Open':'打开',
+'CAN Pins':'CAN 引脚','default':'默认','TX GPIO':'TX GPIO','RX GPIO':'RX GPIO','Reboot required after saving custom pins.':'保存自定义引脚后需要重启。','Dashboard Log':'调试日志','Debug Log':'调试日志','Download':'下载','Import':'导入','Open':'打开',
 'Firmware Update':'固件更新','Beta Channel':'Beta 通道','Include pre-release / beta firmware versions':'包含预发布 / beta 固件版本','Auto-Update on Boot':'启动后自动更新','Check and install updates automatically ~15 s after WiFi connects':'WiFi 连接约 15 秒后自动检查并安装更新','Check for Updates':'检查更新','Manual firmware upload':'手动上传固件','Tap to select firmware .bin':'点击选择固件 .bin','Or drag and drop a file here':'或将文件拖放到这里','Uploading...':'上传中...','Flash Firmware':'刷写固件','Reset OTA Credentials':'重置 OTA 凭据',
   'System Health':'系统状态','System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','CAN Debug':'CAN 调试','CAN调试':'CAN 调试','Enable CAN debug tools':'启用 CAN 调试工具','Shows firmware update, logs, sniffer and recorder panels':'显示固件更新、日志、嗅探器和记录器面板','Chip':'芯片','CPU':'CPU','CPU Load':'CPU 负载','Task Load':'任务负载','task':'任务','core':'核心','cpu%':'CPU%','stack':'栈余量','state':'状态','Task stats unavailable':'任务负载不可用','Core 0':'核心 0','Core 1':'核心 1','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Heap RAM':'堆内存','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','On':'开启','Off':'关闭','off':'关闭','not enabled':'未启用','unavailable':'不可用','offline':'离线','not present':'不存在','STA online':'STA 在线','STA offline':'STA 离线','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','warming up':'采样中',
-'CAN':'CAN','CAN Sniffer':'CAN 嗅探器','Pause':'暂停','Resume':'继续','Wire IDs':'线束 ID','CAN Recorder':'CAN 记录器','Start Recording':'开始记录','Stop Recording':'停止记录','Ready':'就绪','Saved':'已保存','Recording...':'记录中...','CAN Controller':'CAN 控制器','Last Write Check':'最后写入检查','Reset Stats':'重置统计',
+'CAN':'CAN','Pause':'暂停','Resume':'继续','Ready':'就绪','Saved':'已保存','Recording...':'记录中...',
 'Cancel':'取消','Continue':'继续','Confirm':'确认','Copy':'复制','Open GitHub Issue':'打开 GitHub Issue','Close':'关闭','Show':'显示','Hide':'隐藏','Loading...':'加载中...','Saving...':'保存中...','Saved! Reboot to apply.':'已保存！重启后生效。','Saved':'已保存','Error':'错误','Save failed':'保存失败','Connection error':'连接错误','Connection to ':'到 ',
 'Enabled':'已启用','Disabled':'已禁用','on':'开启','waiting':'等待中','blocked':'已阻断','NAT':'NAT','Connected':'已连接','Connecting to ':'正在连接 ','Connect':'连接','Reconnect':'重连','Connect failed':'连接失败','Delete':'删除','Edit':'编辑','No networks saved.':'未保存网络。','firmware default':'固件默认','saved':'已保存'
 };
@@ -1131,6 +1036,15 @@ Object.assign(I18N_ZH,{
 });
 Object.assign(I18N_ZH,{
   // Core terminology refinements (Tesla FSD / CAN context)
+  'CAN Write':'CAN \u5199\u5165',
+  'CAN Write On':'\u5f00\u542f CAN \u5199\u5165',
+  'CAN Write Off':'\u5173\u95ed CAN \u5199\u5165',
+  'Read Only':'\u53ea\u8bfb\u6a21\u5f0f',
+  'READ ONLY':'\u53ea\u8bfb\u6a21\u5f0f',
+  'CAN WRITE ON':'CAN \u5199\u5165\u5f00\u542f',
+  'CAN write is enabled. Nag echo can transmit.':'CAN \u5199\u5165\u5df2\u5f00\u542f\uff0cNag echo \u53ef\u53d1\u9001\u3002',
+  'Read-only mode. CAN frames are monitored but not written.':'\u53ea\u8bfb\u6a21\u5f0f\uff1a\u53ea\u76d1\u542c CAN \u5e27\uff0c\u4e0d\u5199\u5165\u3002',
+  'Read-only when off; Nag 0x370 echo when on':'\u5173\u95ed\u65f6\u53ea\u8bfb\uff1b\u5f00\u542f\u65f6\u5141\u8bb8 Nag 0x370 echo',
   'Stop Injection':'停止 CAN 注入','Resume Injection':'恢复 CAN 注入','Stop Injecting':'停止 CAN 注入',
   'FSD Switch':'FSD 开关','Turn FSD Off':'FSD 关闭','Turn FSD On':'开启 FSD',
   'FSD Master Switch':'FSD 总开关','Enable FSD activation':'启用 FSD 激活',
@@ -1170,6 +1084,7 @@ Object.assign(I18N_ZH,{
   'Download JSON':'下载 JSON','JSON Preview':'JSON 预览','Reset':'重置','Author':'作者',
   // Configuration card
   'Device settings for hardware mode, WiFi, CAN pins, logging and backup.':'设备的硬件模式、WiFi、CAN 引脚、日志与备份设置。',
+  'Device settings for hardware mode, WiFi, CAN pins and logging.':'\u8bbe\u5907\u7684\u786c\u4ef6\u6a21\u5f0f\u3001WiFi\u3001CAN \u5f15\u811a\u4e0e\u65e5\u5fd7\u8bbe\u7f6e\u3002',
   'Select the autopilot hardware generation and matching speed profile set.':'选择 Autopilot 硬件代际和对应的速度配置档。',
   'Autopilot generation':'Autopilot 代际',
   'Available profiles depend on the selected hardware.':'可用配置档取决于所选硬件。',
@@ -1223,6 +1138,9 @@ Object.assign(I18N_ZH,{
   'Recent debug output':'最近调试输出',
   'Shows recent dashboard and firmware log lines. This is the dashboard logging output, not the CAN sniffer.':'显示最近 WebUI 与固件日志；这不是 CAN 嗅探器。',
   'Shows recent WebUI and firmware log lines. This is debug logging output, not the CAN sniffer.':'显示最近 WebUI 与固件日志；这不是 CAN 嗅探器。',
+  'Shows recent WebUI and firmware log lines.':'\u663e\u793a\u6700\u8fd1\u7684 WebUI \u4e0e\u56fa\u4ef6\u65e5\u5fd7\u3002',
+  'Enable debug panels: firmware update, debug log and CAN pin tools.':'\u542f\u7528\u8c03\u8bd5\u9762\u677f\uff1a\u56fa\u4ef6\u66f4\u65b0\u3001\u8c03\u8bd5\u65e5\u5fd7\u548c CAN \u5f15\u811a\u5de5\u5177\u3002',
+  'Shows firmware update, debug log and CAN pin tools':'\u663e\u793a\u56fa\u4ef6\u66f4\u65b0\u3001\u8c03\u8bd5\u65e5\u5fd7\u548c CAN \u5f15\u811a\u5de5\u5177',
   'Turns dashboard log output on or off.':'开启或关闭 WebUI 与固件调试日志输出。',
   'Turns WebUI debug log output on or off.':'开启或关闭 WebUI 与固件调试日志输出。',
   'Dashboard Logging':'调试日志开关',
@@ -1319,7 +1237,7 @@ Object.assign(I18N_ZH,{
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
   'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-06-17 13:21:13 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-06-17 13:21:13 +08:00',
+  'Version: 3.0.0-beta.5\nOTA timestamp: 2026-06-17 19:24:33 +08:00':'\u7248\u672c\uff1a3.0.0-beta.5\nOTA \u65f6\u95f4\uff1a2026-06-17 19:24:33 +08:00',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -1453,6 +1371,9 @@ function gtwAutopilotBadge(v){
   return 'GTW '+gtwAutopilotName(v);
 }
 function injectionStatusLabel(injecting,armed,apGate,d){
+  if(document.body&&document.body.classList.contains('wifi-nag')){
+    return armed?(dashLang==='zh'?'\u5199\u5165\u5f00\u542f':'CAN WRITE ON'):(dashLang==='zh'?'\u53ea\u8bfb\u6a21\u5f0f':'READ ONLY');
+  }
   if(injecting){
     const tag=gtwAutopilotShort(d.gtwap,d.apActive);
     return (dashLang==='zh'?'运行中':'Active')+' '+tag;
@@ -1468,15 +1389,11 @@ function updateGtwBadge(v){
   el.className='gtw-badge '+(known?'known':'');
   el.title=known?trText('GTW_autopilot: '+gtwAutopilotName(v)+' ('+v+')'):trText('GTW_autopilot: not seen yet');
 }
-let state={hw:1,can:true,sp:0,spAuto:true,hw3OffsetSlew:false,hw3SlewRate:25};
-let sniffPaused=false,sniffFrames=[];
-let sniffShowDbcIds=localStorage.getItem('sniffIdMode')==='dbc';
+let state={hw:1,can:true,sp:0,spAuto:true,hw3OffsetSlew:false,hw3SlewRate:25,nagMode:0,nagAv2Min:-1.8,nagAv2Max:1.8};
 let otaFile=null;
 let otaUser=localStorage.getItem('otaU')||'',otaPass=localStorage.getItem('otaP')||'';
 let logSince=0;
 let dashConfirmState=null;
-let supportIssueUrl='https://github.com/ev-open-can-tools/ev-open-can-tools/issues/new?template=issue.yml';
-let supportBodyText='';
 let dashboardPollTimers=[];
 let dashboardPollFailures=0;
 let dashboardStatusOk=false;
@@ -1484,6 +1401,7 @@ let dashboardInitialLoaded=false;
 let dashboardPollStopped=false;
 let systemStatusTimer=null;
 let systemStatusEnabled=false;
+let wifiNagInitialUiApplied=false;
 let taskStatsTimer=null;
 let dashboardStaIp='';
 let canDebugEnabled=localStorage.getItem('canDebug')==='1';
@@ -1544,7 +1462,28 @@ function updateUiModeUi(){
 }
 function applyWifiMaxMode(d){
   const on=!!(d&&d.wifiMax);
+  const nag=!!(d&&d.wifiNag);
   document.body.classList.toggle('wifi-max',on);
+  document.body.classList.toggle('wifi-nag',nag);
+  if(!on&&!nag)return;
+  if(nag){
+    const title=document.querySelector('.hdr-title');if(title)title.textContent='EVtools WIFI-NAG';
+    setText('hw-badge','WIFI-NAG');
+    setText('s-inj-lbl','CAN Write');
+    const hwTitle=document.querySelector('#config-hardware-section .subsec-title');
+    if(hwTitle&&hwTitle.childNodes.length)hwTitle.childNodes[0].nodeValue='CAN Write ';
+    const hwMeta=document.querySelector('#config-hardware-section .subsec-meta');
+    if(hwMeta)hwMeta.textContent='Read-only when off; Nag 0x370 echo when on';
+    if(!wifiNagInitialUiApplied){
+      wifiNagInitialUiApplied=true;
+      stopSystemMonitor();
+      setCollapsedPanel($('system-card'),true,false);
+    }
+    canDebugEnabled=false;
+    localStorage.setItem('canDebug','0');
+    stopCanDebugPolling();
+    setCanDebugUi();
+  }
   if(!on)return;
   if(canDebugEnabled){
     canDebugEnabled=false;
@@ -1661,11 +1600,10 @@ function positionCanDebugPanels(){
   });
 }
 function startCanDebugPolling(){
-  if(document.body&&document.body.classList.contains('wifi-max'))return;
+  if(document.body&&(document.body.classList.contains('wifi-max')||document.body.classList.contains('wifi-nag')))return;
   if(canDebugPollTimers.length||dashboardPollStopped)return;
   canDebugPollTimers.push(setInterval(pollLog,5000));
-  canDebugPollTimers.push(setInterval(pollSniffer,1000));
-  pollLog();pollSniffer();pollRec();if(typeof loadUpdateInfo==='function')loadUpdateInfo();if(typeof peRender==='function')peRender();
+  pollLog();if(!(document.body&&document.body.classList.contains('wifi-nag')))pollRec();if(typeof loadUpdateInfo==='function')loadUpdateInfo();if(typeof peRender==='function')peRender();
 }
 function stopCanDebugPolling(){
   canDebugPollTimers.forEach(clearInterval);
@@ -1678,7 +1616,7 @@ function applyCanDebug(){
   else stopCanDebugPolling();
 }
 function toggleCanDebug(){
-  if(document.body&&document.body.classList.contains('wifi-max'))return;
+  if(document.body&&(document.body.classList.contains('wifi-max')||document.body.classList.contains('wifi-nag')))return;
   canDebugEnabled=!!$('can-debug-tgl').checked;
   localStorage.setItem('canDebug',canDebugEnabled?'1':'0');
   applyCanDebug();
@@ -1778,12 +1716,6 @@ function initSubsectionMinimizers(){
   });
 }
 
-function syncSniffPauseButton(){
-  const b=$('sniff-pause-btn');if(!b)return;
-  b.textContent=sniffPaused?'Resume':'Pause';
-  b.classList.toggle('paused',sniffPaused);
-}
-
 function actionErrorMessage(e,fallback){
   if(!e)return fallback;
   if(e.name==='AbortError'||e.name==='SyntaxError'||e.message==='Failed to fetch'||e.message==='Empty response')return fallback;
@@ -1866,10 +1798,6 @@ function dashConfirmBackdrop(ev){
   if(ev.target===$('confirm-modal'))dashConfirmResolve(false);
 }
 
-function supportBackdrop(ev){
-  if(ev.target===$('support-modal'))closeSupport();
-}
-
 function dashConfirm(message,title,okText,cancelText){
   if(dashConfirmState)dashConfirmResolve(false);
   return new Promise(resolve=>{
@@ -1882,97 +1810,6 @@ function dashConfirm(message,title,okText,cancelText){
     document.body.style.overflow='hidden';
     setTimeout(()=>{$('confirm-ok').focus();},0);
   });
-}
-
-function supportSettingsSummary(){
-  return [
-    'Hardware: '+(HW[state.hw]||'?'),
-    'Speed profile: '+profileDisplayName(state.hw,state.sp,state.spAuto),
-    'CAN status: '+($('s-can')?$('s-can').textContent:'--'),
-    'Injection: '+($('s-inj')?$('s-inj').textContent:'--'),
-    'AD: '+($('s-AD')?$('s-AD').textContent:'--'),
-    'CAN pins: '+($('can-pins-status')?$('can-pins-status').textContent:'--'),
-    'Firmware: '+($('fw-ver')?$('fw-ver').textContent:'--'),
-    'Beta channel: '+($('beta-tgl')&&$('beta-tgl').checked?'enabled':'disabled'),
-    'Auto-update: '+($('auto-upd-tgl')&&$('auto-upd-tgl').checked?'enabled':'disabled'),
-    'HW3 offset slew: '+(state.hw3OffsetSlew?'enabled @ '+(state.hw3SlewRate||25)+'%/s':'disabled'),
-    'Dashboard logging: '+($('tgl-eprn')&&$('tgl-eprn').checked?'enabled':'disabled')
-  ].join('\n');
-}
-
-function buildSupportBody(){
-  const body=[
-    'ev-open-can-tools support report',
-    '',
-    'Device',
-    'Hardware: '+(HW[state.hw]||'?'),
-    'Speed profile: '+profileDisplayName(state.hw,state.sp,state.spAuto),
-    'CAN status: '+($('s-can')?$('s-can').textContent:'--'),
-    'Injection: '+($('s-inj')?$('s-inj').textContent:'--'),
-    'AD: '+($('s-AD')?$('s-AD').textContent:'--'),
-    'CAN pins: '+($('can-pins-status')?$('can-pins-status').textContent:'--'),
-    'Firmware: '+($('fw-ver')?$('fw-ver').textContent:'--'),
-    '',
-    'Settings',
-    'Beta channel: '+($('beta-tgl')&&$('beta-tgl').checked?'enabled':'disabled'),
-    'Auto-update: '+($('auto-upd-tgl')&&$('auto-upd-tgl').checked?'enabled':'disabled'),
-    'HW3 offset slew: '+(state.hw3OffsetSlew?'enabled @ '+(state.hw3SlewRate||25)+'%/s':'disabled'),
-    'Dashboard logging: '+($('tgl-eprn')&&$('tgl-eprn').checked?'enabled':'disabled'),
-    '',
-    'Notes',
-    ''
-  ].join('\n');
-  supportBodyText=body;
-  return body;
-}
-
-function openSupport(){
-  const el=$('support-body');
-  if(el)el.value=buildSupportBody();
-  const st=$('support-status');
-  if(st){st.textContent='Copy this text, then open the GitHub issue form.';st.style.color='var(--tx3)';}
-  $('support-modal').style.display='flex';
-  document.body.style.overflow='hidden';
-  setTimeout(()=>{if(el)el.focus();el&&el.setSelectionRange(0,0);},0);
-}
-
-function closeSupport(){
-  $('support-modal').style.display='none';
-  document.body.style.overflow='';
-}
-
-function copySupportText(text,el){
-  if(el){
-    el.focus();
-    el.select();
-    el.setSelectionRange(0,text.length);
-    if(document.execCommand&&document.execCommand('copy'))return true;
-  }
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(text).catch(()=>{});
-    return true;
-  }
-  return false;
-}
-
-function copySupport(){
-  const el=$('support-body');
-  const text=el?el.value:buildSupportBody();
-  if(copySupportText(text,el)){
-    const st=$('support-status');if(st){st.textContent='Copied to clipboard';st.style.color='var(--ok)';}
-    return true;
-  }
-  const st=$('support-status');if(st){st.textContent='Copy failed';st.style.color='var(--err)';}
-  return false;
-}
-
-function openSupportIssue(){
-  const url='https://github.com/ev-open-can-tools/ev-open-can-tools/issues/new?template=issue.yml';
-  const copied=copySupport();
-  supportIssueUrl=url;
-  window.open(url,'_blank','noopener');
-  const st=$('support-status');if(st&&copied){st.textContent='Copied support details. Paste them into the support question.';st.style.color='var(--ok)';}
-  closeSupport();
 }
 
 document.addEventListener('keydown',e=>{
@@ -2037,7 +1874,7 @@ function toggleLanguage(){
     $('theme-btn').innerHTML=t==='dark'?'&#9788; '+trText('Light'):'&#9790; '+trText('Dark');
     updateLanguageButton();
     applyDashboardI18n(document.body);
-    setTimeout(()=>{if(!document.body.classList.contains('wifi-max'))showOwnerNotice();},1200);
+    setTimeout(()=>{if(!document.body.classList.contains('wifi-max')&&!document.body.classList.contains('wifi-nag'))showOwnerNotice();},1200);
     const obs=new MutationObserver(muts=>{
       if(dashLang!=='zh')return;
       muts.forEach(m=>{
@@ -2106,7 +1943,7 @@ function updSeg(el,v,cls){
   el.querySelectorAll('.'+cls).forEach(b=>b.classList.toggle('active',parseInt(b.dataset.v)===v));
 }
 
-function setHW(v){state.hw=v;state.sp=clampProfileForHw(v,state.sp);updSeg($('hw-seg'),v,'hw-btn');updateHW4(v);updateProfileControls(v,state.sp,state.spAuto);expandActiveHardwareSection(v);updateSniffIdToggle();renderSniffer();pushCfg();}
+function setHW(v){state.hw=v;state.sp=clampProfileForHw(v,state.sp);updSeg($('hw-seg'),v,'hw-btn');updateHW4(v);updateProfileControls(v,state.sp,state.spAuto);expandActiveHardwareSection(v);pushCfg();}
 
 function setProfileAuto(){
   state.spAuto=true;
@@ -2124,7 +1961,8 @@ function setProfile(v){
 function updateInjectButtons(active){
   const btn=$('btn-fsd-toggle');
   if(btn){
-    btn.textContent=trText(active?'Turn FSD Off':'Turn FSD On');
+    const nag=document.body&&document.body.classList.contains('wifi-nag');
+    btn.textContent=trText(nag?(active?'CAN Write Off':'CAN Write On'):(active?'Turn FSD Off':'Turn FSD On'));
     btn.classList.toggle('btn-stop',!!active);
     if(!active){
       btn.style.background='var(--accBg)';
@@ -2238,19 +2076,23 @@ function updateAutoSleepStatus(d){
 
 function updateFsdControl(d){
   const enabled=!!d.ci;
+  const nag=document.body&&document.body.classList.contains('wifi-nag');
   state.can=enabled;
   const tgl=$('fsd-tgl');if(tgl)tgl.checked=enabled;
   const apRestore=$('ap-restore-tgl');if(apRestore&&typeof d.apAutoRestore!=='undefined')apRestore.checked=!!d.apAutoRestore;
-  const nagTgl=$('nag-killer-tgl');if(nagTgl&&typeof d.nagKiller!=='undefined')nagTgl.checked=!!d.nagKiller;
+  const writeTgl=$('can-write-tgl');if(writeTgl)writeTgl.checked=enabled;
   const nagMeta=$('nag-echo-meta');if(nagMeta&&typeof d.nagEcho!=='undefined')nagMeta.textContent='echo: '+d.nagEcho;
+  if(nag)updateNagControl(d);
   const autoSleep=$('auto-sleep-tgl');if(autoSleep&&typeof d.autoSleep!=='undefined')autoSleep.checked=!!d.autoSleep;
-  updateAutoSleepStatus(d);
-  setText('fsd-meta',enabled?'On':'Off');
+  if(!nag)updateAutoSleepStatus(d);
+  setText('fsd-meta',nag?(enabled?'CAN Write':'Read Only'):(enabled?'On':'Off'));
   const st=$('fsd-status');
   if(st){
-    st.textContent=enabled?
-      'Built-in FSD chain is active. Legacy/HW3/HW4 injection is controlled by this switch.':
-      'FSD chain and CAN injection are disabled and stay off after reboot.';
+    st.textContent=nag?
+      (enabled?'CAN write is enabled. Nag echo can transmit.':'Read-only mode. CAN frames are monitored but not written.'):
+      (enabled?
+        'Built-in FSD chain is active. Legacy/HW3/HW4 injection is controlled by this switch.':
+        'FSD chain and CAN injection are disabled and stay off after reboot.');
     st.style.color=enabled?'var(--ok)':'var(--tx3)';
   }
 }
@@ -2263,7 +2105,8 @@ async function saveFsdSwitch(){
     const d=await r.json();
     if(!d.ok)throw new Error();
     state.can=enabled==='1';
-    if(st){st.textContent=state.can?'Built-in FSD chain is active.':'FSD chain and CAN injection are disabled.';st.style.color=state.can?'var(--ok)':'var(--tx3)';}
+    const nag=document.body&&document.body.classList.contains('wifi-nag');
+    if(st){st.textContent=nag?(state.can?'CAN write is enabled. Nag echo can transmit.':'Read-only mode. CAN frames are monitored but not written.'):(state.can?'Built-in FSD chain is active.':'FSD chain and CAN injection are disabled.');st.style.color=state.can?'var(--ok)':'var(--tx3)';}
     poll();
   }catch(e){if(st){st.textContent='Save failed';st.style.color='var(--err)';}}
 }
@@ -2279,18 +2122,66 @@ async function saveApRestore(){
   }
 }
 
-async function saveNagKiller(){
-  const t=$('nag-killer-tgl');
+async function saveCanWrite(){
+  const t=$('can-write-tgl');
   if(!t)return;
   try{
-    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'nagKiller='+(t.checked?'1':'0')});
+    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'can='+(t.checked?'1':'0')});
     if(!r.ok)throw new Error('HTTP '+r.status);
+    state.can=!!t.checked;
+    updateInjectButtons(state.can);
+    poll();
   }catch(e){
-    addLog('Nag killer save failed','le');
+    addLog('CAN write save failed','le');
   }
 }
 
+function updateNagControl(d){
+  const mode=Number(d.nagMode===undefined?state.nagMode:d.nagMode)||0;
+  const min=Number(d.nagAv2MinNm===undefined?state.nagAv2Min:d.nagAv2MinNm);
+  const max=Number(d.nagAv2MaxNm===undefined?state.nagAv2Max:d.nagAv2MaxNm);
+  state.nagMode=mode;state.nagAv2Min=isNaN(min)?-1.8:min;state.nagAv2Max=isNaN(max)?1.8:max;
+  const seg=$('nag-mode-seg');if(seg)updSeg(seg,mode,'hw-btn');
+  const minInp=$('nag-av2-min');if(minInp&&document.activeElement!==minInp)minInp.value=state.nagAv2Min.toFixed(2);
+  const maxInp=$('nag-av2-max');if(maxInp&&document.activeElement!==maxInp)maxInp.value=state.nagAv2Max.toFixed(2);
+  const meta=$('nag-mode-meta');if(meta)meta.textContent=(mode===4?'A_V2: warmup + sweep':'A: fixed +1.80 Nm echo');
+  const av2=$('nag-av2-meta');if(av2){
+    const last=Number(d.nagLastTorqueNm||0);
+    av2.textContent='last: '+last.toFixed(2)+' Nm, skip: '+(d.nagOwnEchoSkip||0);
+  }
+}
+
+async function setNagMode(mode){
+  mode=mode===4?4:0;
+  state.nagMode=mode;
+  const seg=$('nag-mode-seg');if(seg)updSeg(seg,mode,'hw-btn');
+  try{
+    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'nagMode='+mode});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    poll();
+  }catch(e){addLog('Nag mode save failed','le');}
+}
+
+async function saveNagAv2(){
+  const minInp=$('nag-av2-min'),maxInp=$('nag-av2-max');
+  if(!minInp||!maxInp)return;
+  let min=Number(minInp.value),max=Number(maxInp.value);
+  if(isNaN(min))min=-1.8;if(isNaN(max))max=1.8;
+  min=Math.max(-1.8,Math.min(1.8,min));
+  max=Math.max(-1.8,Math.min(1.8,max));
+  if(min>max){const t=min;min=max;max=t;}
+  minInp.value=min.toFixed(2);maxInp.value=max.toFixed(2);
+  try{
+    const body='av2MinNm='+encodeURIComponent(min.toFixed(2))+'&av2MaxNm='+encodeURIComponent(max.toFixed(2));
+    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    state.nagAv2Min=min;state.nagAv2Max=max;
+    poll();
+  }catch(e){addLog('A_V2 range save failed','le');}
+}
+
 async function saveAutoSleep(){
+  if(document.body&&document.body.classList.contains('wifi-nag'))return;
   const t=$('auto-sleep-tgl');
   if(!t)return;
   try{
@@ -2299,24 +2190,6 @@ async function saveAutoSleep(){
   }catch(e){
     addLog('CAN/WiFi auto sleep save failed','le');
   }
-}
-
-function sniffBusPrefix(){return state.hw===0?0x0800:0x1000;}
-function sniffBusLabel(){return state.hw===0?'PARTY':'CH';}
-function sniffWireId(id){return id&0x7FF;}
-function sniffDbcId(id){return sniffWireId(id)|sniffBusPrefix();}
-function sniffDisplayId(id){return sniffShowDbcIds?sniffDbcId(id):sniffWireId(id);}
-function updateSniffIdToggle(){
-  const b=$('sniff-id-btn'),bus=sniffBusLabel();
-  b.textContent=sniffShowDbcIds?('DBC '+bus):'Wire IDs';
-  b.title=sniffShowDbcIds?trText('Showing DBC JSON IDs with '+bus+' prefix'):trText('Showing on-wire 11-bit CAN IDs');
-  $('sniff-filter').placeholder=trText('Filter by wire/DBC ID or name');
-}
-function toggleSniffIdMode(){
-  sniffShowDbcIds=!sniffShowDbcIds;
-  localStorage.setItem('sniffIdMode',sniffShowDbcIds?'dbc':'wire');
-  updateSniffIdToggle();
-  renderSniffer();
 }
 
 async function pushCfg(){
@@ -2455,15 +2328,16 @@ async function pushLogging(){
 
 async function emergencyStop(){
   try{
+    const nag=document.body&&document.body.classList.contains('wifi-nag');
     updateInjectButtons(false);
     state.can=false;
-    setText('s-inj','BLOCKED');
+    setText('s-inj',nag?'READ ONLY':'BLOCKED');
     setClass('s-inj','stat-val v-err');
     await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'can=0'});
   }catch(e){}
   poll();
 }
-async function resumeInj(){try{state.can=true;updateInjectButtons(true);await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'hw='+state.hw+'&sp='+state.sp+'&spa='+(state.spAuto?'1':'0')+'&can=1'});}catch(e){}poll();}
+async function resumeInj(){try{state.can=true;updateInjectButtons(true);const nag=document.body&&document.body.classList.contains('wifi-nag');await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:nag?'can=1':('hw='+state.hw+'&sp='+state.sp+'&spa='+(state.spAuto?'1':'0')+'&can=1')});}catch(e){}poll();}
 async function toggleFsdTopButton(){if(state.can)await emergencyStop();else await resumeInj();}
 async function reboot(){if(!await dashConfirm('Reboot device?','Reboot','Reboot'))return;try{await fetch('/reboot',{method:'POST'});}catch(e){}}
 
@@ -2679,61 +2553,7 @@ function renderWriteProbe(p){
   status.className=cls;
 }
 
-function renderEflg(e){
-  const el=$('eflg-row');
-  if(!e){el.innerHTML='<span class="eflg-pill eflg-ok">OK</span>';return;}
-  let h='';
-  if(e&0x20)h+='<span class="eflg-pill eflg-err">Bus-Off</span>';
-  if(e&0x10)h+='<span class="eflg-pill eflg-warn">TX Passive</span>';
-  if(e&0x08)h+='<span class="eflg-pill eflg-warn">RX Passive</span>';
-  if(e&0x04)h+='<span class="eflg-pill eflg-warn">TX Warn</span>';
-  if(e&0x02)h+='<span class="eflg-pill eflg-warn">RX Warn</span>';
-  if(e&0xC0)h+='<span class="eflg-pill eflg-err">RX Overflow</span>';
-  el.innerHTML=h||'<span class="eflg-pill eflg-ok">OK</span>';
-}
-
-function togglePause(){
-  sniffPaused=!sniffPaused;
-  syncSniffPauseButton();
-  renderSniffer();
-}
-
-function renderSniffer(){
-  updateSniffIdToggle();
-  const filter=$('sniff-filter').value.trim().toLowerCase();
-  const el=$('sniffer');
-  let frames=sniffFrames;
-  if(filter){
-    const fid=parseInt(filter);
-    if(!isNaN(fid))frames=frames.filter(f=>sniffWireId(f.id)===fid||sniffDbcId(f.id)===fid);
-    else frames=frames.filter(f=>f.name&&f.name.toLowerCase().includes(filter));
-  }
-  $('sniff-count').textContent=frames.length+' frames';
-  if(!frames.length){
-    el.innerHTML='<div style="padding:20px;color:var(--tx3);text-align:center;font-size:12px">'+(sniffPaused?'Sniffer paused':'No frames')+'</div>';
-    return;
-  }
-  const ADIds=new Set([1021,1016,921]);
-  el.innerHTML=frames.slice(-30).reverse().map(f=>{
-    const hex=Array.from({length:f.dlc},(_,i)=>toHex(f.data[i],2)).join(' ');
-    const wireId=sniffWireId(f.id),dbcId=sniffDbcId(f.id),displayId=sniffDisplayId(f.id);
-    const altId=sniffShowDbcIds?('Wire 0x'+toHex(wireId,3)):('DBC '+sniffBusLabel()+' 0x'+toHex(dbcId,3));
-    return`<div class="sniff-row${ADIds.has(f.id)?' hi':''}">
-      <span class="s-ts">${(f.ts/1000).toFixed(1)}s</span>
-      <span class="s-id" title="${altId}">0x${toHex(displayId,3)}</span>
-      <div><div class="s-data">${hex}</div>${f.name?`<div class="s-name">${f.name}</div>`:''}</div>
-    </div>`;
-  }).join('');
-}
-
-async function pollSniffer(){
-  return runPoll('frames',async()=>{
-    if(sniffPaused||!dashboardStatusOk)return;
-    try{const d=await fetchPollJson('/frames',2500);sniffFrames=d.frames||[];renderSniffer();}catch(e){}
-  });
-}
-
-// CAN pins + settings backup
+// CAN pins
 async function loadCanPins(){
   try{
     const d=await fetchPollJson('/can_pins',2000);
@@ -2757,36 +2577,6 @@ async function saveCanPins(){
     loadCanPins();
   }catch(e){if(hint){hint.textContent=e.message||'Save failed';hint.style.color='var(--err)';}}
 }
-async function exportSettings(){
-  const st=$('backup-status');
-  if(st){st.textContent='Downloading...';st.style.color='var(--tx3)';}
-  try{
-    const r=await fetch('/settings_export',{cache:'no-store'});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const blob=await r.blob();
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;
-    a.download='evtools-backup.json';
-    document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),2000);
-    if(st){st.textContent='Downloaded';st.style.color='var(--ok)';}
-  }catch(e){if(st){st.textContent='Download failed';st.style.color='var(--err)';}}
-}
-async function importSettings(event){
-  const file=event&&event.target&&event.target.files?event.target.files[0]:null,st=$('backup-status');
-  if(!file)return;
-  if(st){st.textContent='Restoring...';st.style.color='var(--tx3)';}
-  try{
-    const text=await file.text();
-    const r=await fetch('/settings_import',{method:'POST',headers:{'Content-Type':'application/json'},body:text});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok||!d.ok)throw new Error(d.error||'restore failed');
-    if(st){st.textContent='Restored. Reboot required.';st.style.color='var(--ok)';}
-  }catch(e){if(st){st.textContent=e.message||'Restore failed';st.style.color='var(--err)';}}
-  if(event&&event.target)event.target.value='';
-}
-
 // OTA upload
 function fileSelected(file){
   if(!file)return;
@@ -2877,9 +2667,11 @@ async function poll(){
     if(hdrDesc)hdrDesc.textContent=on?(trText('CAN running')+' \u2022 '+fpsVal.toFixed(1)+' Hz'):trText('Waiting for CAN frames');
     state.hw=d.hw;state.sp=clampProfileForHw(d.hw,d.sp);state.spAuto=typeof d.spAuto==='undefined'?state.spAuto:!!d.spAuto;state.can=armed;
     updateFsdControl(d);
-    updateHw3SlewControl(d);
-    updateHw3SpeedControl(d);
-    updateLegacyMppControl(d);
+    if(!d.wifiNag){
+      updateHw3SlewControl(d);
+      updateHw3SpeedControl(d);
+      updateLegacyMppControl(d);
+    }
     setClass('dot','sdot '+(d.txerr>5?'dot-warn':on?'dot-on':'dot-off'));
     const apActive=typeof d.apActive==='undefined'?!!d.AD:!!d.apActive;
     const adEnabled=typeof d.adEnabled==='undefined'?false:!!d.adEnabled;
@@ -2903,13 +2695,15 @@ async function poll(){
     setText('s-up',fmtUp(d.up));
     setText('s-mcp-raw','EFLG: 0x'+toHex(d.eflg,2));
     setFill('fps-fill',Math.min(fpsVal/20*100,100));
-    setText('hw-badge',HW[d.hw]||'?');
-    updateGtwBadge(d.gtwap);
-    try{renderEflg(d.eflg);}catch(e){}
+    if(d.wifiNag)setText('hw-badge','WIFI-NAG');
+    else{
+      setText('hw-badge',HW[d.hw]||'?');
+      updateGtwBadge(d.gtwap);
+    }
     try{renderWriteProbe(d.probe);}catch(e){}
-    if(d.mux){for(let i=0;i<3;i++){setText('m'+i+'rx',d.mux[i].rx);setText('m'+i+'tx',d.mux[i].tx);const e=$('m'+i+'err');if(e){e.textContent=d.mux[i].err;e.style.color=d.mux[i].err>0?'var(--err)':'';}}}
-    updateSniffIdToggle();
-    const hwSeg=$('hw-seg');if(hwSeg)updSeg(hwSeg,d.hw,'hw-btn');updateHW4(d.hw);updateProfileControls(d.hw,state.sp,state.spAuto);
+    if(!d.wifiNag){
+      const hwSeg=$('hw-seg');if(hwSeg)updSeg(hwSeg,d.hw,'hw-btn');updateHW4(d.hw);updateProfileControls(d.hw,state.sp,state.spAuto);
+    }
     const eprn=$('tgl-eprn');if(eprn&&typeof d.eprn!=='undefined')eprn.checked=d.eprn;
     if(!dashboardInitialLoaded){
       dashboardInitialLoaded=true;
@@ -2953,6 +2747,7 @@ async function resetStats(){try{await fetch('/reset_stats',{method:'POST'});}cat
 let recIsActive=false,recInterval=null;
 async function toggleRec(){recIsActive?await stopRec():await startRec();}
 async function startRec(){
+  if(document.body&&document.body.classList.contains('wifi-nag'))return;
   try{
     await fetch('/rec_start',{method:'POST'});
     recIsActive=true;
@@ -2964,6 +2759,7 @@ async function startRec(){
   }catch(e){}
 }
 async function stopRec(){
+  if(document.body&&document.body.classList.contains('wifi-nag'))return;
   clearInterval(recInterval);recIsActive=false;
   try{await fetch('/rec_stop',{method:'POST'});}catch(e){}
   const b=$('rec-btn');
@@ -2971,6 +2767,7 @@ async function stopRec(){
   await pollRec();
 }
 async function pollRec(){
+  if(document.body&&document.body.classList.contains('wifi-nag'))return;
   if(document.hidden)return;
   try{
     const d=await(await fetch('/rec_status')).json();
@@ -3546,9 +3343,9 @@ document.addEventListener('visibilitychange',()=>{
   if(!dashboardVisible())return;
   poll();loadWifiStatus();loadApStatus();loadGatewayStatus();
   if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
-  if(canDebugEnabled){pollLog();pollSniffer();pollRec();}
+  if(canDebugEnabled){pollLog();if(!(document.body&&document.body.classList.contains('wifi-nag')))pollRec();}
 });
-orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();if(isCarUiActive())expandCarEssentials();initSystemMonitor();positionCanDebugPanels();setCanDebugUi();updateHW4(1);updateProfileControls(1,0,true);updateSniffIdToggle();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();poll();
+orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();if(isCarUiActive())expandCarEssentials();initSystemMonitor();positionCanDebugPanels();setCanDebugUi();updateHW4(1);updateProfileControls(1,0,true);loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();poll();
 </script>
 </body>
 </html>

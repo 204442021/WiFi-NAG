@@ -25,7 +25,9 @@
 #endif
 
 #if defined(ESP32_DASHBOARD)
-#if DASH_DEFAULT_HW == 0
+#if defined(PRODUCT_WIFI_NAG)
+using SelectedHandler = NagHandler;
+#elif DASH_DEFAULT_HW == 0
 using SelectedHandler = LegacyHandler;
 #elif DASH_DEFAULT_HW == 2
 using SelectedHandler = HW4Handler;
@@ -249,6 +251,10 @@ static bool appLoop()
         h->frameCount++;
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
         CanFrame original = frame;
+#if defined(PRODUCT_WIFI_NAG)
+        h->handleMessage(frame, *appDriver);
+        dashPostProcessFrame(original, *appDriver);
+#else
         if (dashSleepActive)
         {
             // While sleeping, observe RX only for wake conditions and suppress all CAN writes.
@@ -259,6 +265,7 @@ static bool appLoop()
             h->handleMessage(frame, *appDriver);
             dashPostProcessFrame(original, *appDriver);
         }
+#endif
 #else
         h->handleMessage(frame, *appDriver);
 #endif

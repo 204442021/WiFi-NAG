@@ -778,7 +778,11 @@ static String jsonEscape(const String &s)
 
 static bool dashCheckADEnabled()
 {
+#if defined(PRODUCT_WIFI_NAG)
+    return false;
+#else
     return canActive;
+#endif
 }
 
 static bool dashApInjectionAllowed()
@@ -1256,6 +1260,7 @@ static void dashSleepObserveFrame(const CanFrame &frame)
 }
 
 #if !defined(PRODUCT_WIFI_MAX)
+#if !defined(PRODUCT_WIFI_NAG)
 static void dashTryApAutoRestore(const CanFrame &trigger, CanDriver &driver)
 {
     if (trigger.id != 0x389 || !apAutoRestore)
@@ -1298,6 +1303,7 @@ static void dashTryApAutoRestore(const CanFrame &trigger, CanDriver &driver)
     dashRecordCanFrame(modified, ok ? 'T' : 'E');
     dashLog("[AP] Auto-restore " + String(ok ? "TX OK" : "TX FAIL"));
 }
+#endif
 
 #if defined(NAG_KILLER)
 // Parallel Nag-killer hook. Runs on every received frame regardless of the
@@ -1306,7 +1312,85 @@ static void dashTryApAutoRestore(const CanFrame &trigger, CanDriver &driver)
 // on CAN 880 (0x370) and internally honors nagKillerActive && nagKillerRuntime;
 // here we add the global canActive gate so the WebUI "CAN off" switch (and the
 // default CAN-off boot state) suppresses all Nag echo TX.
+#if !defined(PRODUCT_WIFI_NAG)
 static NagHandler dashNagHandler;
+#endif
+static uint32_t dashNagEchoCount()
+{
+#if defined(PRODUCT_WIFI_NAG)
+    if (dashHandler)
+        return (uint32_t)static_cast<NagHandler *>(dashHandler)->nagEchoCount;
+#else
+    return (uint32_t)dashNagHandler.nagEchoCount;
+#endif
+    return 0;
+}
+
+static NagHandler *dashNagActiveHandler()
+{
+#if defined(PRODUCT_WIFI_NAG)
+    return dashHandler ? static_cast<NagHandler *>(dashHandler) : nullptr;
+#else
+    return &dashNagHandler;
+#endif
+}
+
+static const char *dashNagModeName(uint8_t mode)
+{
+    return mode == NagHandler::MODE_A_V2 ? "A_V2" : "A";
+}
+
+static int16_t dashNagParseNmCenti(const String &value, int16_t fallback)
+{
+    char *end = nullptr;
+    float parsed = strtof(value.c_str(), &end);
+    if (end == value.c_str())
+        return fallback;
+    return NagHandler::nmToCentiNm(parsed);
+}
+
+static String dashNagNmString(int16_t centiNm)
+{
+    return String(NagHandler::centiNmToNm(centiNm), 2);
+}
+
+static bool dashApplyNagConfigArgs();
+
+static String dashNagStatusJson(bool includeOk)
+{
+    NagHandler *nag = dashNagActiveHandler();
+    String j = "{";
+    if (includeOk)
+        j += "\"ok\":true,";
+    if (!nag)
+    {
+        j += "\"available\":false}";
+        return j;
+    }
+    j += "\"available\":true";
+    j += ",\"enabled\":";
+    j += nagKillerEnabled ? "true" : "false";
+    j += ",\"canWrite\":";
+    j += canActive ? "true" : "false";
+    j += ",\"mode\":";
+    j += String((unsigned int)(uint8_t)nag->nagMode);
+    j += ",\"modeName\":\"";
+    j += dashNagModeName((uint8_t)nag->nagMode);
+    j += "\",\"av2MinNm\":";
+    j += dashNagNmString(nag->av2MinCenti());
+    j += ",\"av2MaxNm\":";
+    j += dashNagNmString(nag->av2MaxCenti());
+    j += ",\"lastTorqueNm\":";
+    j += dashNagNmString(nag->lastInjectedCenti());
+    j += ",\"echo\":";
+    j += String(dashNagEchoCount());
+    j += ",\"ownEchoSkip\":";
+    j += String((uint32_t)nag->nagOwnEchoSkipCount);
+    j += "}";
+    return j;
+}
+
+#if !defined(PRODUCT_WIFI_NAG)
 static void dashNagOnFrame(const CanFrame &original, CanDriver &driver)
 {
     if (!canActive)
@@ -1315,16 +1399,19 @@ static void dashNagOnFrame(const CanFrame &original, CanDriver &driver)
     dashNagHandler.handleMessage(frame, driver);
 }
 #endif
+#endif
 
 static void dashPostProcessFrame(const CanFrame &original, CanDriver &driver)
 {
+#if !defined(PRODUCT_WIFI_NAG)
     dashSleepObserveFrame(original);
     if (dashSleepActive)
         return;
-#if defined(NAG_KILLER)
+#endif
+#if defined(NAG_KILLER) && !defined(PRODUCT_WIFI_NAG)
     dashNagOnFrame(original, driver);
 #endif
-#if defined(DASH_FSD_252_COMPAT) && DASH_FSD_252_COMPAT
+#if defined(DASH_FSD_252_COMPAT) && DASH_FSD_252_COMPAT && !defined(PRODUCT_WIFI_NAG)
     dashTryApAutoRestore(original, driver);
 
     if ((hwMode != 0 && hwMode != 1) || !dashInjectionActive())
@@ -1398,12 +1485,31 @@ static void dashApplySpeedProfileState()
 
 static void dashApplyRuntimeState()
 {
+#if defined(PRODUCT_WIFI_NAG)
+    forceActivate = false;
+    forceActivateRuntime = false;
+    dashAutoSleepEnabled = false;
+    dashSleepActive = false;
+    dashSleepCandidateSinceMs = 0;
+    apAutoRestore = false;
+    hw3CustomSpeed = false;
+    hw3HighSpeedEnable = false;
+    hw3OffsetSlew = false;
+    legacyMppOverride = false;
+    legacyMppCustomEnable = false;
+    legacyMppHighSpeedEnable = false;
+#else
     forceActivateRuntime = canActive && forceActivate;
+#endif
     emergencyVehicleDetectionRuntime = false;
     isaSpeedChimeSuppressRuntime = false;
     enhancedAutopilotRuntime = false;
 #if defined(NAG_KILLER)
+#if defined(PRODUCT_WIFI_NAG)
+    nagKillerRuntime = nagKillerEnabled && canActive;
+#else
     nagKillerRuntime = nagKillerEnabled;
+#endif
 #else
     nagKillerRuntime = false;
 #endif
@@ -1432,13 +1538,33 @@ static void dashSavePrefs()
     prefs.putUChar("hw", hwMode);
     prefs.putUChar("hw_def", DASH_DEFAULT_HW);
     prefs.putBool("can", canActive);
+#if defined(PRODUCT_WIFI_NAG)
+    prefs.putBool("force_act", false);
+    prefs.putBool("ap_rst", false);
+#else
     prefs.putBool("force_act", forceActivate);
-    prefs.putBool("ap_gate", apInjectionGate);
     prefs.putBool("ap_rst", apAutoRestore);
+#endif
+    prefs.putBool("ap_gate", apInjectionGate);
 #if defined(NAG_KILLER)
+#if defined(PRODUCT_WIFI_NAG)
+    nagKillerEnabled = true;
+    prefs.putBool("nag_en", true);
+    if (NagHandler *nag = dashNagActiveHandler())
+    {
+        prefs.putUChar("nag_mode", (uint8_t)nag->nagMode);
+        prefs.putString("nag_av2_min", dashNagNmString(nag->av2MinCenti()));
+        prefs.putString("nag_av2_max", dashNagNmString(nag->av2MaxCenti()));
+    }
+#else
     prefs.putBool("nag_en", nagKillerEnabled);
 #endif
+#endif
+#if defined(PRODUCT_WIFI_NAG)
+    prefs.putBool("auto_sleep", false);
+#else
     prefs.putBool("auto_sleep", dashAutoSleepEnabled);
+#endif
     prefs.putBool("sp_auto", dashSpeedProfileAuto);
     prefs.putUChar("sp_sel", dashManualSpeedProfile);
     prefs.putBool("eprn", dashHandler ? (bool)dashHandler->enablePrint : true);
@@ -1478,14 +1604,24 @@ static void dashSavePrefs()
 
 static void dashSetCanActive(bool active, const char *reason = nullptr)
 {
+#if defined(PRODUCT_WIFI_NAG)
+    bool changed = (canActive != active) || forceActivate;
+    canActive = active;
+    forceActivate = false;
+#else
     bool changed = (canActive != active) || (forceActivate != active);
     canActive = active;
     forceActivate = active;
+#endif
     dashApplyRuntimeState();
     dashSavePrefs();
     if (changed)
     {
+#if defined(PRODUCT_WIFI_NAG)
+        String msg = String("[CFG] Nag/CAN TX ") + (active ? "ON" : "OFF");
+#else
         String msg = String("[CFG] FSD master switch ") + (active ? "ON" : "OFF");
+#endif
         if (reason && *reason)
             msg += String(" via ") + reason;
         dashLog(msg);
@@ -1578,7 +1714,9 @@ static void dashLoadPrefs()
 {
     prefs.begin(PREFS_NS, false);
     dashClearLegacyOptionPrefs();
+#if !defined(PRODUCT_WIFI_NAG)
     dashSleepLoadPersistentDiag(prefs);
+#endif
     bool hasStoredHw = prefs.isKey("hw");
     uint8_t storedHw = prefs.getUChar("hw", DASH_DEFAULT_HW);
     uint8_t storedDefaultHw = prefs.getUChar("hw_def", kDashUnsetU8);
@@ -1603,6 +1741,11 @@ static void dashLoadPrefs()
 #if defined(PRODUCT_WIFI_MAX)
     canActive = false;
     forceActivate = false;
+#elif defined(PRODUCT_WIFI_NAG)
+    canActive = prefs.getBool("can", kDashInjectionDefaultEnabled);
+    forceActivate = false;
+    if (prefs.getBool("force_act", false))
+        prefs.putBool("force_act", false);
 #else
     canActive = prefs.getBool("can", kDashInjectionDefaultEnabled);
     forceActivate = canActive;
@@ -1611,11 +1754,38 @@ static void dashLoadPrefs()
 #endif
     // 默认 false：复刻 2.5.2 真车固件行为（apInjectionGate=false 注入无条件放行）。
     apInjectionGate = prefs.getBool("ap_gate", false);
+#if defined(PRODUCT_WIFI_NAG)
+    apAutoRestore = false;
+    if (prefs.getBool("ap_rst", false))
+        prefs.putBool("ap_rst", false);
+#else
     apAutoRestore = prefs.getBool("ap_rst", false);
+#endif
 #if defined(NAG_KILLER)
+#if defined(PRODUCT_WIFI_NAG)
+    nagKillerEnabled = true;
+    if (!prefs.getBool("nag_en", true))
+        prefs.putBool("nag_en", true);
+    if (NagHandler *nag = dashNagActiveHandler())
+    {
+        int16_t minNm = dashNagParseNmCenti(prefs.getString("nag_av2_min", "-1.80"), -180);
+        int16_t maxNm = dashNagParseNmCenti(prefs.getString("nag_av2_max", "1.80"), 180);
+        nag->setAv2RangeCentiNm(minNm, maxNm);
+        nag->setMode(prefs.getUChar("nag_mode", NagHandler::MODE_A));
+    }
+#else
     nagKillerEnabled = prefs.getBool("nag_en", true);
 #endif
+#endif
+#if defined(PRODUCT_WIFI_NAG)
+    dashAutoSleepEnabled = false;
+    dashSleepActive = false;
+    dashSleepCandidateSinceMs = 0;
+    if (prefs.getBool("auto_sleep", false))
+        prefs.putBool("auto_sleep", false);
+#else
     dashAutoSleepEnabled = prefs.getBool("auto_sleep", false);
+#endif
     dashSpeedProfileAuto = prefs.getBool("sp_auto", true);
     dashManualSpeedProfile = dashClampSpeedProfileForHw(hwMode, prefs.getUChar("sp_sel", 1));
     hw3OffsetSlew = prefs.getBool("h3_slw", false);
@@ -1821,6 +1991,16 @@ static void dashApplyFilters()
     if (!dashMcp)
         return;
     dashMcp->setConfigMode();
+#if defined(PRODUCT_WIFI_NAG)
+    dashMcp->setFilterMask(MCP2515::MASK0, false, 0x7FF);
+    dashMcp->setFilter(MCP2515::RXF0, false, 880);
+    dashMcp->setFilter(MCP2515::RXF1, false, 880);
+    dashMcp->setFilterMask(MCP2515::MASK1, false, 0x7FF);
+    dashMcp->setFilter(MCP2515::RXF2, false, 880);
+    dashMcp->setFilter(MCP2515::RXF3, false, 880);
+    dashMcp->setFilter(MCP2515::RXF4, false, 880);
+    dashMcp->setFilter(MCP2515::RXF5, false, 880);
+#else
     if (hwMode == 0)
     {
         dashMcp->setFilterMask(MCP2515::MASK0, false, 0x7FF);
@@ -1854,9 +2034,14 @@ static void dashApplyFilters()
         dashMcp->setFilter(MCP2515::RXF4, false, 1016);
         dashMcp->setFilter(MCP2515::RXF5, false, 1021);
     }
+#endif
     dashMcp->setNormalMode();
+#if defined(PRODUCT_WIFI_NAG)
+    dashLog("[CFG] Filters set for WIFI-NAG 0x370");
+#else
     dashLog("[CFG] Filters set for " + String(hwMode == 0 ? "LEGACY" : hwMode == 1 ? "HW3"
                                                                                    : "HW4"));
+#endif
 #endif
 }
 
@@ -1891,6 +2076,56 @@ static void dashCheckBusHealth()
 static WebServer server(80);
 
 #include "web/dash_gateway.h"
+
+#if defined(NAG_KILLER) && !defined(PRODUCT_WIFI_MAX)
+static bool dashApplyNagConfigArgs()
+{
+    NagHandler *nag = dashNagActiveHandler();
+    if (!nag)
+        return false;
+
+    bool changed = false;
+    if (server.hasArg("nagMode") || server.hasArg("m"))
+    {
+        uint8_t requested = static_cast<uint8_t>((server.hasArg("nagMode") ? server.arg("nagMode") : server.arg("m")).toInt());
+        if (!NagHandler::isSupportedMode(requested))
+            requested = NagHandler::MODE_A;
+        if ((uint8_t)nag->nagMode != requested)
+        {
+            nag->setMode(requested);
+            changed = true;
+        }
+    }
+
+    int16_t minNm = nag->av2MinCenti();
+    int16_t maxNm = nag->av2MaxCenti();
+    bool rangeChanged = false;
+    if (server.hasArg("av2MinNm") || server.hasArg("av2Min"))
+    {
+        minNm = dashNagParseNmCenti(server.hasArg("av2MinNm") ? server.arg("av2MinNm") : server.arg("av2Min"), minNm);
+        rangeChanged = true;
+    }
+    if (server.hasArg("av2MaxNm") || server.hasArg("av2Max"))
+    {
+        maxNm = dashNagParseNmCenti(server.hasArg("av2MaxNm") ? server.arg("av2MaxNm") : server.arg("av2Max"), maxNm);
+        rangeChanged = true;
+    }
+    if (rangeChanged)
+    {
+        int16_t oldMin = nag->av2MinCenti();
+        int16_t oldMax = nag->av2MaxCenti();
+        nag->setAv2RangeCentiNm(minNm, maxNm);
+        changed = changed || oldMin != nag->av2MinCenti() || oldMax != nag->av2MaxCenti();
+    }
+
+    if (changed)
+    {
+        dashLog("[CFG] Nag mode=" + String(dashNagModeName((uint8_t)nag->nagMode)) +
+                " A_V2=" + dashNagNmString(nag->av2MinCenti()) + ".." + dashNagNmString(nag->av2MaxCenti()) + " Nm");
+    }
+    return changed;
+}
+#endif
 
 static void handleRoot()
 {
@@ -1933,6 +2168,8 @@ static void handleStatus()
     String j = "{\"product\":\"";
 #if defined(PRODUCT_WIFI_MAX)
     j += "wifi-max";
+#elif defined(PRODUCT_WIFI_NAG)
+    j += "wifi-nag";
 #else
     j += "can-fsd";
 #endif
@@ -1942,11 +2179,32 @@ static void handleStatus()
 #else
     j += "false";
 #endif
+    j += ",\"wifiNag\":";
+#if defined(PRODUCT_WIFI_NAG)
+    j += "true";
+#else
+    j += "false";
+#endif
 #if defined(NAG_KILLER) && !defined(PRODUCT_WIFI_MAX)
     j += ",\"nagKiller\":";
     j += nagKillerEnabled ? "true" : "false";
     j += ",\"nagEcho\":";
-    j += String((uint32_t)dashNagHandler.nagEchoCount);
+    j += String(dashNagEchoCount());
+    if (NagHandler *nag = dashNagActiveHandler())
+    {
+        j += ",\"nagMode\":";
+        j += String((unsigned int)(uint8_t)nag->nagMode);
+        j += ",\"nagModeName\":\"";
+        j += dashNagModeName((uint8_t)nag->nagMode);
+        j += "\",\"nagAv2MinNm\":";
+        j += dashNagNmString(nag->av2MinCenti());
+        j += ",\"nagAv2MaxNm\":";
+        j += dashNagNmString(nag->av2MaxCenti());
+        j += ",\"nagLastTorqueNm\":";
+        j += dashNagNmString(nag->lastInjectedCenti());
+        j += ",\"nagOwnEchoSkip\":";
+        j += String((uint32_t)nag->nagOwnEchoSkipCount);
+    }
 #endif
     j += ",\"hw\":";
     j += hwMode;
@@ -1976,6 +2234,9 @@ static void handleStatus()
     j += apInjectionGate ? "true" : "false";
     j += ",\"apAutoRestore\":";
     j += apAutoRestore ? "true" : "false";
+#if defined(PRODUCT_WIFI_NAG)
+    j += ",\"autoSleep\":false";
+#else
     j += ",\"autoSleep\":";
     j += dashAutoSleepEnabled ? "true" : "false";
     j += ",\"sleepActive\":";
@@ -2060,6 +2321,7 @@ static void handleStatus()
     j += jsonEscape(dashSleepLastResetReason);
     j += "\",\"sleepLastEndedByReboot\":";
     j += dashSleepLastEndedByReboot ? "true" : "false";
+#endif
     j += ",\"ia\":";
     j += dashInjectionActive() ? "true" : "false";
     j += ",\"lastInjectMs\":";
@@ -2212,6 +2474,37 @@ static void handleConfig()
         dashLog("[CFG] WIFI-MAX ignores CAN/FSD configuration");
     }
     server.send(200, "application/json", "{\"ok\":true,\"canDisabled\":true}");
+    return;
+#else
+#if defined(PRODUCT_WIFI_NAG)
+    if (server.hasArg("can") || server.hasArg("force"))
+    {
+        bool requestedTx = server.hasArg("can") ? (server.arg("can") == "1") : (server.arg("force") == "1");
+        if (requestedTx != canActive || forceActivate)
+        {
+            canActive = requestedTx;
+            forceActivate = false;
+            dashLog("[CFG] Nag/CAN TX " + String(requestedTx ? "ON" : "OFF"));
+        }
+    }
+#if defined(NAG_KILLER)
+    nagKillerEnabled = true;
+    dashApplyNagConfigArgs();
+#endif
+    dashAutoSleepEnabled = false;
+    dashSleepActive = false;
+    dashSleepCandidateSinceMs = 0;
+    forceActivate = false;
+    apAutoRestore = false;
+    hw3OffsetSlew = false;
+    hw3CustomSpeed = false;
+    hw3HighSpeedEnable = false;
+    legacyMppOverride = false;
+    legacyMppCustomEnable = false;
+    legacyMppHighSpeedEnable = false;
+    dashApplyRuntimeState();
+    dashSavePrefs();
+    server.send(200, "application/json", "{\"ok\":true,\"product\":\"wifi-nag\"}");
     return;
 #else
     bool hwChanged = false;
@@ -2419,7 +2712,36 @@ static void handleConfig()
     dashSavePrefs();
     server.send(200, "application/json", "{\"ok\":true}");
 #endif
+#endif
 }
+
+#if defined(NAG_KILLER) && defined(PRODUCT_WIFI_NAG)
+static void handleNagApiConfig()
+{
+    server.send(200, "application/json", dashNagStatusJson(false));
+}
+
+static void handleNagApiStats()
+{
+    server.send(200, "application/json", dashNagStatusJson(false));
+}
+
+static void handleNagApiMode()
+{
+    dashApplyNagConfigArgs();
+    dashApplyRuntimeState();
+    dashSavePrefs();
+    server.send(200, "application/json", dashNagStatusJson(true));
+}
+
+static void handleNagApiUpdate()
+{
+    dashApplyNagConfigArgs();
+    dashApplyRuntimeState();
+    dashSavePrefs();
+    server.send(200, "application/json", dashNagStatusJson(true));
+}
+#endif
 
 static void handleLoggingConfig()
 {
@@ -2504,6 +2826,7 @@ static void handleResetStats()
     server.send(200, "application/json", "{\"ok\":true}");
 }
 
+#if !defined(PRODUCT_WIFI_NAG)
 static void handleRecStart()
 {
     if (!dashEnsureRecBuffer())
@@ -2555,6 +2878,7 @@ static void handleRecDownload()
     server.streamFile(f, "text/csv");
     f.close();
 }
+#endif
 
 static void handleDisable()
 {
@@ -4169,10 +4493,13 @@ static void handleSettingsExport()
     bool wStatic = false, beta = false, autoUpdate = false, apHid = false;
     bool eprn = true;
 #if !defined(PRODUCT_WIFI_MAX)
+    bool storedCan = canActive;
+    int canTx = -1, canRx = -1;
+#endif
+#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
     bool h3Slew = false;
     uint8_t h3SlewRate = kHw3SlewRateDefault;
     uint8_t storedHw = hwMode;
-    bool storedCan = canActive;
     bool spAuto = dashSpeedProfileAuto;
     uint8_t spSel = dashManualSpeedProfile;
     bool h3Custom = hw3CustomSpeed;
@@ -4180,7 +4507,6 @@ static void handleSettingsExport()
     uint8_t h3Enc = hw3WireEncoding;
     uint8_t h3CustomTargets[kHw3CustomTargetCount];
     uint8_t h3HighSpeedTargets[kHw3HighSpeedBucketCount];
-    int canTx = -1, canRx = -1;
 
     for (uint8_t i = 0; i < kHw3CustomTargetCount; i++)
         h3CustomTargets[i] = hw3CustomTarget[i];
@@ -4191,8 +4517,10 @@ static void handleSettingsExport()
     if (p.begin(PREFS_NS, false))
     {
 #if !defined(PRODUCT_WIFI_MAX)
-        storedHw = p.getUChar("hw", hwMode);
         storedCan = p.getBool("can", canActive);
+#endif
+#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
+        storedHw = p.getUChar("hw", hwMode);
         spAuto = p.getBool("sp_auto", dashSpeedProfileAuto);
         spSel = p.getUChar("sp_sel", dashManualSpeedProfile);
 #endif
@@ -4217,7 +4545,7 @@ static void handleSettingsExport()
             wDns = p.getString("wifi_dns", "");
         beta = p.getBool("update_beta", p.getBool("upd_beta", false));
         autoUpdate = p.getBool("auto_upd", false);
-#if !defined(PRODUCT_WIFI_MAX)
+#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
         h3Slew = p.getBool("h3_slw", false);
         h3SlewRate = dashLoadHw3SlewRate(p.getUChar("h3_srt", kHw3SlewRateDefault));
         h3Custom = p.getBool("h3_cust", hw3CustomSpeed);
@@ -4251,6 +4579,17 @@ static void handleSettingsExport()
 #if defined(PRODUCT_WIFI_MAX)
     j += ",\"product\":\"wifi-max\"";
     j += ",\"device\":{\"dashboardLog\":" + String(eprn ? "true" : "false") + "}";
+#elif defined(PRODUCT_WIFI_NAG)
+    j += ",\"product\":\"wifi-nag\"";
+    j += ",\"device\":{\"can\":" + String(storedCan ? "true" : "false");
+    j += ",\"nagKiller\":" + String(nagKillerEnabled ? "true" : "false");
+    if (NagHandler *nag = dashNagActiveHandler())
+    {
+        j += ",\"nagMode\":" + String((unsigned int)(uint8_t)nag->nagMode);
+        j += ",\"av2MinNm\":" + dashNagNmString(nag->av2MinCenti());
+        j += ",\"av2MaxNm\":" + dashNagNmString(nag->av2MaxCenti());
+    }
+    j += ",\"dashboardLog\":" + String(eprn ? "true" : "false") + "}";
 #else
     j += ",\"device\":{\"hw\":" + String(storedHw) + ",\"can\":" + String(storedCan ? "true" : "false");
     j += ",\"speedProfileAuto\":" + String(spAuto ? "true" : "false") + ",\"speedProfile\":" + String(spSel);
@@ -4274,7 +4613,7 @@ static void handleSettingsExport()
     }
     j += "]";
     j += ",\"wifiPreferred\":" + String(wifiActiveSlot >= 0 ? wifiActiveSlot : 0);
-#if !defined(PRODUCT_WIFI_MAX)
+#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
     j += ",\"hw3\":{\"offsetSlew\":" + String(h3Slew ? "true" : "false") + ",\"slewRate\":" + String(h3SlewRate);
     j += ",\"custom\":" + String(h3Custom ? "true" : "false");
     j += ",\"highSpeed\":" + String(h3HighSpeed ? "true" : "false") + ",\"encoding\":" + String(h3Enc);
@@ -4293,6 +4632,8 @@ static void handleSettingsExport()
         j += String(h3HighSpeedTargets[i]);
     }
     j += "]}";
+#endif
+#if !defined(PRODUCT_WIFI_MAX)
     j += ",\"can\":{\"tx\":" + String(canTx) + ",\"rx\":" + String(canRx) + "}";
 #endif
     j += ",\"updates\":{\"beta\":" + String(beta ? "true" : "false") + ",\"auto\":" + String(autoUpdate ? "true" : "false") + "}";
@@ -4334,7 +4675,28 @@ static void handleSettingsImport()
 
     if (doc["device"].is<JsonObject>())
     {
-#if !defined(PRODUCT_WIFI_MAX)
+#if defined(PRODUCT_WIFI_NAG)
+        if (doc["device"]["can"].is<bool>())
+        {
+            p.putBool("can", doc["device"]["can"].as<bool>());
+            p.putBool("force_act", false);
+        }
+#if defined(NAG_KILLER)
+        if (doc["device"]["nagKiller"].is<bool>())
+            p.putBool("nag_en", doc["device"]["nagKiller"].as<bool>());
+        if (doc["device"]["nagMode"].is<int>())
+        {
+            uint8_t mode = static_cast<uint8_t>(doc["device"]["nagMode"].as<int>());
+            if (!NagHandler::isSupportedMode(mode))
+                mode = NagHandler::MODE_A;
+            p.putUChar("nag_mode", mode);
+        }
+        if (doc["device"]["av2MinNm"].is<float>())
+            p.putString("nag_av2_min", String(NagHandler::centiNmToNm(NagHandler::nmToCentiNm(doc["device"]["av2MinNm"].as<float>())), 2));
+        if (doc["device"]["av2MaxNm"].is<float>())
+            p.putString("nag_av2_max", String(NagHandler::centiNmToNm(NagHandler::nmToCentiNm(doc["device"]["av2MaxNm"].as<float>())), 2));
+#endif
+#elif !defined(PRODUCT_WIFI_MAX)
         if (doc["device"]["hw"].is<int>())
         {
             int hw = doc["device"]["hw"].as<int>();
@@ -4432,7 +4794,7 @@ static void handleSettingsImport()
         p.putBool("update_beta", doc["beta"].as<bool>());
         p.putBool("upd_beta", doc["beta"].as<bool>());
     }
-#if !defined(PRODUCT_WIFI_MAX)
+#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
     if (doc["hw3"].is<JsonObject>())
     {
         if (doc["hw3"]["offsetSlew"].is<bool>())
@@ -5034,7 +5396,7 @@ static void webTask(void *)
     }
 }
 
-#if !defined(PRODUCT_WIFI_MAX)
+#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
 static CarManagerBase *handlerPool[3] = {};
 
 static void dashInitHandlers()
@@ -5134,6 +5496,17 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     dashHandler = nullptr;
     appActiveHandler = nullptr;
     dashLog("[BOOT] WIFI-MAX mode: CAN/FSD disabled");
+#elif defined(PRODUCT_WIFI_NAG)
+    forceActivate = false;
+    if (dashHandler)
+    {
+        dashHandler->onFrame = mcpDashOnFrame;
+        appActiveHandler = dashHandler;
+        if (dashDriver)
+            dashDriver->setFilters(dashHandler->filterIds(), dashHandler->filterIdCount());
+    }
+    dashApplyRuntimeState();
+    dashLog("[BOOT] WIFI-NAG mode: Nag killer + WiFi gateway");
 #else
     dashInitHandlers();
     dashSwapHandler(hwMode);
@@ -5154,14 +5527,22 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     server.on("/", HTTP_GET, handleRoot);
     server.on("/status", HTTP_GET, handleStatus);
     server.on("/config", HTTP_POST, handleConfig);
+#if defined(NAG_KILLER) && defined(PRODUCT_WIFI_NAG)
+    server.on("/api/config", HTTP_GET, handleNagApiConfig);
+    server.on("/api/stats", HTTP_GET, handleNagApiStats);
+    server.on("/api/mode", HTTP_POST, handleNagApiMode);
+    server.on("/api/update", HTTP_POST, handleNagApiUpdate);
+#endif
     server.on("/logging", HTTP_POST, handleLoggingConfig);
 #if !defined(PRODUCT_WIFI_MAX)
     server.on("/frames", HTTP_GET, handleFrames);
     server.on("/reset_stats", HTTP_POST, handleResetStats);
+#if !defined(PRODUCT_WIFI_NAG)
     server.on("/rec_start", HTTP_POST, handleRecStart);
     server.on("/rec_stop", HTTP_POST, handleRecStop);
     server.on("/rec_status", HTTP_GET, handleRecStatus);
     server.on("/rec_download", HTTP_GET, handleRecDownload);
+#endif
     server.on("/disable", HTTP_POST, handleDisable);
     server.on("/can_pins", HTTP_GET, handleCanPins);
     server.on("/can_pins", HTTP_POST, handleCanPinsSave);
@@ -5217,15 +5598,17 @@ static void mcpDashboardLoop()
 {
     if (Update.isRunning())
         return;
-#if !defined(PRODUCT_WIFI_MAX)
+#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
     dashSleepPoll();
     if (dashSleepActive)
         return;
 #endif
     dashSerialDiagnosticsPoll();
-#if !defined(PRODUCT_WIFI_MAX)
+#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
     if (recActive && (millis() - recStartMs >= kRecMaxDurationMs))
         dashStopRecordingAndSave("time limit");
+#endif
+#if !defined(PRODUCT_WIFI_MAX)
     dashCheckBusHealth();
 #endif
     if (canOnline && millis() - lastFrameMs > 10000)

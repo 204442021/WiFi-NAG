@@ -23,8 +23,13 @@ struct LogRingBuffer
     {
         uint32_t h = head;
         Entry &e = entries[h % kCapacity];
-        strncpy(e.msg, msg, kMaxMsgLen - 1);
-        e.msg[kMaxMsgLen - 1] = '\0';
+        size_t i = 0;
+        if (msg)
+        {
+            for (; i < kMaxMsgLen - 1 && msg[i] != '\0'; ++i)
+                e.msg[i] = msg[i];
+        }
+        e.msg[i] = '\0';
         e.timestamp_ms = ts;
         head = h + 1;
     }
