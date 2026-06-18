@@ -51,7 +51,7 @@ class SimState:
         self.hw3_offset_last = 0
         self.hw3_slew_count = 0
         self.led_brightness = 120
-        self.enable_print = True
+        self.enable_print = False
         self.ap_ssid = "EV-CAN-WAVESHARE"
         self.ap_hidden = False
         self.ap_clients = 1
@@ -76,13 +76,22 @@ class SimState:
         self.gateway_strict = False
         self.gateway_blacklist = "\n".join(
             [
-                "telemetry.vn.teslamotors.com",
-                "telemetry-prd.vn.cloud.tesla.cn",
-                "owner-api.vn.teslamotors.com",
-                "auth.tesla.cn",
+                "tesla.cn",
+                "tesla.com",
+                "teslamotors.com",
+                "tesla.services",
             ]
         )
-        self.gateway_whitelist = "pool.ntp.org\n*.github.com"
+        self.gateway_whitelist = "\n".join(
+            [
+                "connman.vn.cloud.tesla.cn",
+                "nav-prd-maps.tesla.cn",
+                "maps-cn-prd.go.tesla.services",
+                "signaling.vn.cloud.tesla.cn",
+                "api-prd.vn.cloud.tesla.cn",
+                "media-server-me.tesla.cn",
+            ]
+        )
         self.gateway_blocked = [
             {"domain": "telemetry.vn.teslamotors.com", "count": 8},
             {"domain": "owner-api.vn.teslamotors.com", "count": 2},
@@ -181,6 +190,14 @@ def _domain_in_list(domain, rules):
     return _domain_rule_match_len(domain, rules) > 0
 
 
+def _domain_allowed_for_whitelist(domain, blacklist):
+    domain = (domain or "").strip().lower().removeprefix("*.").rstrip(".")
+    if not domain:
+        return False
+    block_len = _domain_rule_match_len(domain, blacklist)
+    return block_len == 0 or block_len < len(domain)
+
+
 def _domain_rule_match_len(domain, rules):
     domain = (domain or "").strip().lower().removeprefix("*.").rstrip(".")
     best = 0
@@ -202,14 +219,12 @@ def _dns_decision(domain):
         allowed, reason = True, "gateway disabled"
     elif not domain:
         allowed, reason = False, "empty domain"
-    elif allow_len > 0 and allow_len >= block_len:
+    elif allow_len > 0:
         allowed, reason = True, "matched whitelist"
     elif block_len > 0:
         allowed, reason = False, "matched blacklist"
-    elif STATE.gateway_mode == 0:
-        allowed, reason = True, "not in blacklist"
     else:
-        allowed, reason = False, "not in whitelist"
+        allowed, reason = True, "not in blacklist"
     return {
         "domain": domain,
         "enabled": STATE.gateway_enabled,
@@ -562,8 +577,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/gateway_whitelist_add":
             domain = form.get("domain", "").strip().lower()
             blacklist = _dns_rules(STATE.gateway_blacklist)
-            if _domain_rule_match_len(domain, blacklist) > 0:
-                self.send_obj({"ok": False, "error": "domain is blacklisted"}, status=409)
+            if not _domain_allowed_for_whitelist(domain, blacklist):
+                self.send_obj({"ok": False, "error": "domain is blocked root"}, status=409)
                 return
             whitelist = _dns_rules(STATE.gateway_whitelist)
             if _domain_rule_match_len(domain, whitelist) > 0:

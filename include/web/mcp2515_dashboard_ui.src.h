@@ -923,7 +923,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
           <div class="setting-name">Debug logging <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Turns WebUI debug log output on or off.">i</span></div>
           <div class="setting-desc">Toggle WebUI and firmware debug output</div>
         </div>
-        <label class="tgl"><input type="checkbox" id="tgl-eprn" checked onchange="pushLogging()">
+        <label class="tgl"><input type="checkbox" id="tgl-eprn" onchange="pushLogging()">
           <div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
       <div class="log-box" id="log">Waiting...</div>
@@ -1073,7 +1073,7 @@ Object.assign(I18N_ZH,{
   'empty domain':'域名为空',
   'Filtered DNS Entries':'DNS 过滤记录',
   'items':'条',
-  'Only non-blacklist domains can be added to the whitelist.':'只有非黑名单域名可以加入白名单。',
+  'Whitelist allows specific subdomain exceptions; blocked root domains cannot be reopened.':'白名单允许具体子域名例外；不能直接放开黑名单根域名。',
   'Blacklist blocked':'黑名单禁止加入白名单',
   'Not allowed':'不可加入',
   'DNS filter list unavailable':'DNS 过滤记录不可用'
@@ -1294,7 +1294,6 @@ Object.assign(I18N_ZH,{
   'bind wait':'\u7b49\u5f85\u7ed1\u5b9a',
   'fd':'fd',
   'none':'\u65e0',
-  'whitelist override blacklist':'\u767d\u540d\u5355\u8986\u76d6\u9ed1\u540d\u5355',
   'CAN/WiFi Auto Sleep':'CAN/WiFi \u81ea\u52a8\u4f11\u7720',
   'After Park + vehicle lock stays stable for 10s, turn off AP/STA WiFi and CAN injection. CAN RX wakes the device.':'P \u6863 + \u8f66\u8f86\u9501\u5b9a\u72b6\u6001\u7a33\u5b9a 10 \u79d2\u540e\uff0c\u5173\u95ed AP/STA WiFi \u548c CAN \u6ce8\u5165\uff0cCAN RX \u5524\u9192\u8bbe\u5907\u3002',
   'Sleep diag: waiting for status':'\u4f11\u7720\u8bca\u65ad\uff1a\u7b49\u5f85\u72b6\u6001'
@@ -3354,7 +3353,7 @@ async function loadGatewayBlocked(){
   try{
     const r=await fetch('/gateway_blocked');if(!r.ok)throw new Error('HTTP '+r.status);
     const d=await r.json();
-    if(sum)sum.textContent=trText('Only non-blacklist domains can be added to the whitelist.')+' - '+(d.length||0)+' '+trText('items');
+    if(sum)sum.textContent=trText('Whitelist allows specific subdomain exceptions; blocked root domains cannot be reopened.')+' - '+(d.length||0)+' '+trText('items');
     if(!d.length){list.innerHTML='<div style="color:var(--tx3);text-align:center;padding:20px">'+trText('No blocked domains recorded')+'</div>';return;}
     list.innerHTML=d.map(x=>{
       const dom=escapeHtml(x.domain||'');

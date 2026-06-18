@@ -660,7 +660,8 @@ static void dashLog(const String &s)
     logHead = (logHead + 1) % LOG_CAP;
     if (logCount < LOG_CAP)
         logCount++;
-    Serial.println(s);
+    if (dashHandler && (bool)dashHandler->enablePrint)
+        Serial.println(s);
 }
 
 // Pull all new entries from the per-frame handler logRing (in handlers.h)
@@ -1569,7 +1570,7 @@ static void dashSavePrefs()
 #endif
     prefs.putBool("sp_auto", dashSpeedProfileAuto);
     prefs.putUChar("sp_sel", dashManualSpeedProfile);
-    prefs.putBool("eprn", dashHandler ? (bool)dashHandler->enablePrint : true);
+    prefs.putBool("eprn", dashHandler ? (bool)dashHandler->enablePrint : false);
     prefs.putBool("h3_slw", hw3OffsetSlew);
     prefs.putUChar("h3_srt", hw3SlewRate);
     // HW3 custom speed-limit boost
@@ -1834,7 +1835,7 @@ static void dashLoadPrefs()
             legacyMppHighSpeedTarget[i] = dashClampLegacyMppHighSpeedTargetForBucket(i, prefs.getUChar(k, defLgHt[i]));
         }
     }
-    bool ep = prefs.getBool("eprn", true);
+    bool ep = prefs.getBool("eprn", false);
 
     dashApplyRuntimeState();
     if (dashHandler)
@@ -2164,7 +2165,7 @@ static void handleStatus()
     bool spAuto = dashHandler ? (bool)dashHandler->speedProfileAuto : true;
     int soff = dashHandler ? (int)dashHandler->speedOffset : 0;
     int gtwAp = dashHandler ? (int)dashHandler->gatewayAutopilot : -1;
-    bool ep = dashHandler ? (bool)dashHandler->enablePrint : true;
+    bool ep = dashHandler ? (bool)dashHandler->enablePrint : false;
     bool apGateOpen = dashApInjectionAllowed();
 
     String j = "{\"product\":\"";
@@ -4495,7 +4496,7 @@ static void handleSettingsExport()
     String apSsid = "", apPass = "", wSsid = "", wPass = "";
     String wIp = "", wGw = "", wMask = "", wDns = "";
     bool wStatic = false, beta = false, autoUpdate = false, apHid = false;
-    bool eprn = true;
+    bool eprn = false;
 #if !defined(PRODUCT_WIFI_MAX)
     bool storedCan = canActive;
     int canTx = -1, canRx = -1;
@@ -4528,7 +4529,7 @@ static void handleSettingsExport()
         spAuto = p.getBool("sp_auto", dashSpeedProfileAuto);
         spSel = p.getUChar("sp_sel", dashManualSpeedProfile);
 #endif
-        eprn = p.getBool("eprn", true);
+        eprn = p.getBool("eprn", false);
         if (p.isKey("ap_ssid"))
             apSsid = p.getString("ap_ssid", "");
         if (p.isKey("ap_pass"))

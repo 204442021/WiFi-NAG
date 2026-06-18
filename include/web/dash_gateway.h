@@ -30,12 +30,12 @@ static constexpr uint16_t kDashGatewayDnsTypeA = 1;
 static constexpr uint16_t kDashGatewayDnsTypeAAAA = 28;
 static constexpr uint16_t kDashGatewayDnsClassIN = 1;
 static constexpr uint32_t kDashGatewayBlockedTtlSeconds = 60;
-static constexpr size_t kDashGatewayMaxPending = 64;
+static constexpr size_t kDashGatewayMaxPending = 128;
 static constexpr uint8_t kDashGatewayMaxPendingClients = 4;
 static constexpr size_t kDashGatewayMaxWhitelistEntries = 200;
 static constexpr size_t kDashGatewayMaxBlacklistEntries = 100;
 static constexpr size_t kDashGatewayRuleMaxLen = 96;
-static constexpr size_t kDashGatewayDnsCacheEntries = 128;
+static constexpr size_t kDashGatewayDnsCacheEntries = 256;
 static constexpr size_t kDashGatewayDnsCacheRespMax = 512;
 static constexpr uint32_t kDashGatewayDnsCacheTtlSec = 60;
 
@@ -525,28 +525,14 @@ static String dashGatewaySanitizeBlacklist(const String &list)
     return out.substring(0, kDashGatewayListMax);
 }
 
-static bool dashGatewayHardcodedWhitelist(const String &domain)
-{
-    // *.cdnhwcaoc115.cn (Alibaba Cloud CDN)
-    if (dashGatewayDomainMatchesRule(domain, "cdnhwcaoc115.cn"))
-        return true;
-    // sdk.51.la
-    if (domain == "sdk.51.la")
-        return true;
-    return false;
-}
-
 static bool dashGatewayDnsAllowed(const String &domain)
 {
     String d = dashGatewayNormalizeDomain(domain);
     if (d.length() == 0)
         return false;
-    // Hardcoded whitelist always passes
-    if (dashGatewayHardcodedWhitelist(d))
-        return true;
     size_t blockLen = dashGatewayCompiledRuleMatchLen(d, gatewayBlacklistRules, gatewayBlacklistRuleCount);
     size_t allowLen = dashGatewayCompiledRuleMatchLen(d, gatewayWhitelistRules, gatewayWhitelistRuleCount);
-    if (allowLen > 0 && allowLen >= blockLen)
+    if (allowLen > 0)
         return true;
     if (blockLen > 0)
         return false;
@@ -578,10 +564,12 @@ static String dashGatewayDnsDecisionJson(const String &input)
         j += "gateway disabled";
     else if (domain.length() == 0)
         j += "empty domain";
-    else if (whitelisted && blacklisted && allowLen >= blockLen)
-        j += "whitelist override blacklist";
+    else if (whitelisted)
+        j += "matched whitelist";
+    else if (blacklisted)
+        j += "matched blacklist";
     else
-        j += blacklisted ? "matched blacklist" : "not in blacklist";
+        j += "not in blacklist";
     j += "\"}";
     return j;
 }
@@ -1660,9 +1648,9 @@ static void handleGatewayWhitelistAdd()
         return;
     }
     String domain = dashGatewayNormalizeDomain(server.arg("domain"));
-    if (dashGatewayDomainInList(domain, gatewayDnsBlacklist))
+    if (!dashGatewayDomainAllowedForWhitelist(domain))
     {
-        server.send(409, "application/json", "{\"ok\":false,\"error\":\"domain is blacklisted\"}");
+        server.send(409, "application/json", "{\"ok\":false,\"error\":\"domain is blocked root\"}");
         return;
     }
     if (dashGatewayDomainInList(domain, gatewayDnsWhitelist))

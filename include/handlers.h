@@ -52,7 +52,7 @@ struct CarManagerBase
     Shared<bool> Parked{true};
     Shared<bool> Summoning{false};
     Shared<int> gatewayAutopilot{-1};
-    Shared<bool> enablePrint{true};
+    Shared<bool> enablePrint{false};
     Shared<uint32_t> frameCount{0};
     Shared<uint32_t> framesSent{0};
     Shared<int> speedOffset{0};
