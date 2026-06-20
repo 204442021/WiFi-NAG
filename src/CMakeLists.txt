@@ -7,9 +7,7 @@ idf_component_register(
         ".."
     REQUIRES
         app_update
-        esp_http_client
         esp_http_server
-        esp_https_ota
         esp_netif
         esp_wifi
         nvs_flash

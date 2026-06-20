@@ -17,84 +17,8 @@ env:
   PLATFORMIO_VERSION: "6.1.19"
 
 jobs:
-  platformio-build:
+  firmware-build:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - env: feather_rp2040_can
-            profile: --driver DRIVER_MCP2515 --vehicle HW3 --enable
-              EMERGENCY_VEHICLE_DETECTION
-            project_dir: legacy-arduino
-            artifact_name: firmware-rp2040
-            artifact_path: legacy-arduino/.pio/build/feather_rp2040_can/firmware.uf2
-            extra_python_packages: ""
-          - env: feather_m4_can
-            profile: --driver DRIVER_SAME51 --vehicle HW4 --enable
-              EMERGENCY_VEHICLE_DETECTION --enable ENHANCED_AUTOPILOT
-            project_dir: legacy-arduino
-            artifact_name: firmware-m4
-            artifact_path: legacy-arduino/.pio/build/feather_m4_can/firmware.bin
-            extra_python_packages: ""
-          - env: esp32_twai
-            profile: --driver DRIVER_TWAI --vehicle HW4 --enable EMERGENCY_VEHICLE_DETECTION
-              --enable ENHANCED_AUTOPILOT
-            project_dir: .
-            artifact_name: firmware-esp32
-            artifact_path: .pio/build/esp32_twai/firmware.bin
-            extra_python_packages: littlefs-python fatfs-ng pyyaml intelhex
-
-          - env: esp32s2_twai
-            profile: --driver DRIVER_TWAI --vehicle HW4 --enable EMERGENCY_VEHICLE_DETECTION
-              --enable ENHANCED_AUTOPILOT
-            project_dir: .
-            artifact_name: firmware-esp32s2
-            artifact_path: .pio/build/esp32s2_twai/firmware.bin
-            extra_python_packages: littlefs-python fatfs-ng pyyaml intelhex
-            
-          - env: lilygo_tcan485_hw3
-            profile: --driver DRIVER_TWAI --vehicle HW3 --enable EMERGENCY_VEHICLE_DETECTION
-              --enable ENHANCED_AUTOPILOT
-            project_dir: .
-            artifact_name: firmware-lilygo-tcan485-hw3
-            artifact_path: .pio/build/lilygo_tcan485_hw3/firmware.bin
-            extra_python_packages: littlefs-python fatfs-ng pyyaml intelhex
-          - env: m5stack-atomic-can-base
-            profile: --driver DRIVER_TWAI --vehicle HW4 --enable EMERGENCY_VEHICLE_DETECTION
-              --enable ENHANCED_AUTOPILOT
-            project_dir: .
-            artifact_name: firmware-m5stack
-            artifact_path: .pio/build/m5stack-atomic-can-base/firmware.bin
-            extra_python_packages: littlefs-python fatfs-ng pyyaml intelhex
-          - env: esp32_feather_v2_mcp2515
-            profile: --driver DRIVER_ESP32_EXT_MCP2515 --vehicle HW4 --enable
-              EMERGENCY_VEHICLE_DETECTION
-            project_dir: .
-            artifact_name: firmware-esp32-featherwing
-            artifact_path: .pio/build/esp32_feather_v2_mcp2515/firmware.bin
-            extra_python_packages: littlefs-python fatfs-ng pyyaml intelhex
-          - env: esp32_ext_mcp2515
-            profile: --driver DRIVER_ESP32_EXT_MCP2515 --vehicle HW4 --enable
-              EMERGENCY_VEHICLE_DETECTION --enable ENHANCED_AUTOPILOT
-            project_dir: .
-            artifact_name: firmware-esp32-ext-mcp2515
-            artifact_path: .pio/build/esp32_ext_mcp2515/firmware.bin
-            extra_python_packages: littlefs-python fatfs-ng pyyaml intelhex
-          - env: m5stack-atoms3-mini-can-base
-            profile: --driver DRIVER_TWAI --vehicle HW4 --enable EMERGENCY_VEHICLE_DETECTION
-              --enable ENHANCED_AUTOPILOT
-            project_dir: .
-            artifact_name: firmware-m5stack-atoms3-mini
-            artifact_path: .pio/build/m5stack-atoms3-mini-can-base/firmware.bin
-            extra_python_packages: littlefs-python fatfs-ng pyyaml intelhex
-          - env: waveshare_ESP32_S3_RS485_CAN
-            profile: --driver DRIVER_TWAI --vehicle HW4 --enable EMERGENCY_VEHICLE_DETECTION
-              --enable ENHANCED_AUTOPILOT
-            project_dir: .
-            artifact_name: firmware-waveshare-esp32-s3
-            artifact_path: .pio/build/waveshare_ESP32_S3_RS485_CAN/firmware.bin
-            extra_python_packages: littlefs-python fatfs-ng pyyaml intelhex
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -103,23 +27,16 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends
           build-essential git
       - run: pip install "platformio==${PLATFORMIO_VERSION}"
-      - if: matrix.extra_python_packages != ''
-        run: pip install ${{ matrix.extra_python_packages }}
       - run: cp platformio_profile.example.h platformio_profile.h
-      - run: python scripts/platformio_set_profile.py ${{ matrix.profile }}
-      - run: pio run -e ${{ matrix.env }}
-        working-directory: ${{ matrix.project_dir }}
-        env:
-          SKIP_DASH_CREDENTIAL_CHECK: "1"
-      - if: matrix.artifact_path != ''
-        uses: actions/upload-artifact@v7
+      - run: pio run -e wifi_nag_ESP32_S3_CAN
+      - uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_path }}
+          name: firmware-wifi-nag-esp32-s3
+          path: .pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin
 
   release:
     needs:
-      - platformio-build
+      - firmware-build
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -128,15 +45,8 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: release-assets
-      - name: Rename firmware files to unique names
-        run: |
-          for dir in release-assets/firmware-*/; do
-            name=$(basename "$dir")
-            for f in "$dir"*; do
-              ext="${f##*.}"
-              mv "$f" "release-assets/${name}.${ext}"
-            done
-          done
+      - name: Rename firmware file
+        run: mv release-assets/firmware-wifi-nag-esp32-s3/firmware.bin release-assets/firmware-wifi-nag-esp32-s3.bin
       - name: Extract changelog section for this tag
         run: |
           TAG="${GITHUB_REF_NAME}"
@@ -154,17 +64,7 @@ jobs:
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name,
             'alpha') || contains(github.ref_name, 'rc') }}
           draft: true
-          files: |
-            release-assets/firmware-rp2040.uf2
-            release-assets/firmware-m4.bin
-            release-assets/firmware-esp32.bin
-            release-assets/firmware-m5stack.bin
-            release-assets/firmware-esp32-featherwing.bin
-            release-assets/firmware-esp32-ext-mcp2515.bin
-            release-assets/firmware-esp32s2.bin
-            release-assets/firmware-lilygo-tcan485-hw3.bin
-            release-assets/firmware-m5stack-atoms3-mini.bin
-            release-assets/firmware-waveshare-esp32-s3.bin
+          files: release-assets/firmware-wifi-nag-esp32-s3.bin
       - name: Publish draft release
         env:
           GH_TOKEN: ${{ github.token }}

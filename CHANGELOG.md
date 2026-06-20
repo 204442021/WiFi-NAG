@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Pruned the maintained codebase to WIFI-NAG only: ESP32-S3 native TWAI, Nag 0x370, DNS filtering, AP+STA/NAPT, WebUI, and manual local OTA. CI, issue templates, sdkconfig defaults, and agent guidance now target only the WIFI-NAG build and native regression tests.
+
 ## [3.0.0-beta.5] - 2026-05-04
 
 ### Added

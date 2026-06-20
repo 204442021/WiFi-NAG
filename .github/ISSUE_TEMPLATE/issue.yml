@@ -1,13 +1,13 @@
-name: General Issue
-description: Create a new issue
+name: WIFI-NAG Issue
+description: Report a WIFI-NAG bug, feature request, or documentation issue
 body:
   - type: textarea
     id: support_summary
     attributes:
       label: Support Request
-      description: What do you need help with? If you used the dashboard Support button, paste that summary here first.
+      description: What do you need help with? If you copied dashboard logs or status output, paste them here first.
       placeholder: |
-        Describe the problem or paste the copied support block here.
+        Describe the problem, dashboard status, logs, and what you expected to happen.
     validations:
       required: true
 
@@ -25,70 +25,57 @@ body:
       required: true
 
   - type: dropdown
-    id: hw_version
+    id: board
     attributes:
-      label: Vehicle Hardware Version
-      description: Which Tesla hardware generation does your car have? Check the dashboard badge or the vehicle info if you are unsure.
+      label: Board / Hardware
+      description: This repository maintains the WIFI-NAG ESP32-S3 TWAI build.
       options:
-        - Legacy (HW3 retrofit)
-        - HW3
-        - HW4
+        - Waveshare ESP32-S3 RS485/CAN
         - Other / Unknown
     validations:
       required: true
 
   - type: input
-    id: sw_version
+    id: firmware_version
+    attributes:
+      label: Firmware Version
+      description: Version shown in the WebUI or the build you flashed.
+      placeholder: 2.6.0
+    validations:
+      required: false
+
+  - type: input
+    id: vehicle_software
     attributes:
       label: Vehicle Software Version
-      description: Which Tesla software version are you running in your car? Use the version shown by the car.
-      placeholder: v2026.8.3
+      description: Vehicle firmware version, if relevant to the issue.
+      placeholder: 2026.8.3
+    validations:
+      required: false
+
+  - type: dropdown
+    id: can_write
+    attributes:
+      label: CAN Write State
+      description: Was CAN Write enabled when the issue happened?
+      options:
+        - "Off / read-only"
+        - "On"
+        - "Not sure"
     validations:
       required: true
 
-  - type: dropdown
-    id: board
-    attributes:
-      label: Board / Hardware
-      description: Which board are you using? Pick the board or adapter that runs the firmware.
-      options:
-        - Adafruit Feather RP2040 CAN
-        - Adafruit Feather M4 CAN Express
-        - Generic ESP32 dev board
-        - LILYGO TCAN485
-        - M5Stack Atom CAN Base
-        - M5Stack AtomS3 Mini CAN Base
-        - Feather ESP32 V2 + external MCP2515
-        - ESP32-S3 + external MCP2515
-        - Waveshare ESP32-S3 RS485/CAN
-        - Other
-    validations:
-      required: false
-
-  - type: dropdown
-    id: can_termination_resistor
-    attributes:
-      label: 120 ohm CAN termination resistor
-      description: If your board or CAN adapter has an onboard 120 ohm resistor, did you cut or remove it before connecting to the vehicle CAN bus?
-      options:
-        - Not sure
-        - Yes, removed or cut
-        - No, still fitted
-        - Board does not have one
-    validations:
-      required: false
-
   - type: textarea
-    id: profile
+    id: network
     attributes:
-      label: platformio_profile.h
-      description: Paste the contents of your `platformio_profile.h` file. This is the file where the `#define` values for driver, vehicle and options are set. Omit WiFi passwords if you like.
+      label: WiFi / DNS / Gateway Details
+      description: Fill this when the issue involves AP+STA, NAPT, DNS filtering, hotspot clients, or WebUI access.
       placeholder: |
-        #pragma once
-
-        // #define DRIVER_MCP2515
-        // #define HW3
-        // ...
+        STA connected:
+        AP clients:
+        Gateway enabled:
+        DNS mode / blacklist / whitelist:
+        Symptoms:
     validations:
       required: false
 
@@ -96,7 +83,7 @@ body:
     id: summary
     attributes:
       label: Summary
-      description: Short description of the issue. If you copied a support block, add the one-line symptom here too.
+      description: Short description of the issue.
       placeholder: Briefly describe the issue
     validations:
       required: true
@@ -104,15 +91,16 @@ body:
   - type: textarea
     id: steps
     attributes:
-      label: Steps to Reproduce (if applicable)
-      description: How can this be reproduced? Include the exact actions, buttons, or settings that lead to the problem.
+      label: Steps to Reproduce
+      description: How can this be reproduced? Include exact actions, buttons, or settings.
       placeholder: |
-        1. Go to...
-        2. Click on...
-        3. See error...
+        1. Connect to WIFI-NAG AP
+        2. Open WebUI
+        3. Enable...
+        4. See...
 
   - type: textarea
     id: additional
     attributes:
       label: Additional Information
-      description: Logs, screenshots, or anything else
+      description: Logs, screenshots, build output, or anything else

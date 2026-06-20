@@ -11,14 +11,15 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 
 ## Project-Specific Guidelines
 
-- This project runs on ESP32-S3 with CAN, WiFi/AP+STA/NAPT/DNS, WebUI, OTA, and vehicle-facing FSD activation paths. Treat CAN behavior as the highest-risk area.
-- Keep CAN read/write timing, mux handling, checksums, counters, and hardware filter behavior stable unless the task explicitly targets them.
-- Do not mix CAN behavior changes with WebUI, WiFi, DNS, OTA, or documentation cleanup in the same change unless the user asks for a combined feature.
+- This project maintains WIFI-NAG only: Waveshare ESP32-S3 RS485/CAN, native TWAI, Nag 0x370 echo, WiFi AP+STA/NAPT, DNS proxy/filtering, WebUI, and manual local OTA. Treat CAN behavior as the highest-risk area.
+- Keep Nag read/write timing, CAN ID 0x370 handling, torque encoding, checksums, counters, echo-skip behavior, and TWAI filter behavior stable unless the task explicitly targets them.
+- Do not mix CAN/Nag behavior changes with WebUI, WiFi, DNS, NAPT, OTA, or documentation cleanup in the same change unless the user asks for a combined feature.
 - For WebUI edits, update `include/web/mcp2515_dashboard_ui.src.h`, then regenerate `include/web/mcp2515_dashboard_ui.h` with `py -3 scripts/minify_dashboard.py`.
-- For firmware verification, prefer `pio run -e waveshare_ESP32_S3_RS485_CAN`. For Python commands, use `py -3`.
+- For firmware verification, prefer `pio run -e wifi_nag_ESP32_S3_CAN`. For Python commands, use `py -3`.
 - Do not manually edit generated files except as part of the documented generation flow.
 - Before removing code, prove whether it is unused by checking references, tests, build flags, and hardware-mode conditionals.
-- When optimizing, prioritize preserving FSD/CAN stability over WiFi/WebUI convenience.
+- Legacy/HW3/HW4 FSD activation, MCP2515, SAME51, plugins, CAN recorder/sniffer/debug tools, online OTA, settings import/export, and task stats are outside the maintained scope.
+- When optimizing, prioritize preserving Nag/CAN stability over WiFi/WebUI convenience.
 
 ## 1. Think Before Coding
 

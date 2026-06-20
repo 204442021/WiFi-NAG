@@ -7,8 +7,6 @@
 #else
 #include <WiFi.h>
 #include <WiFiUdp.h>
-#include <WiFiClientSecure.h>
-#include <HTTPClient.h>
 #include <WebServer.h>
 #include <ArduinoOTA.h>
 #include <Update.h>
@@ -446,7 +444,7 @@ static bool dashApConfigValid(const char *ssid, const char *pass)
 }
 
 #if defined(ESP_PLATFORM) && defined(DASH_WIFI_PERF_TUNING)
-static void dashApplyWifiMaxRadioTuning()
+static void dashApplyWifiPerfTuning()
 {
     static bool logged = false;
     esp_wifi_set_ps(WIFI_PS_NONE);
@@ -458,11 +456,11 @@ static void dashApplyWifiMaxRadioTuning()
     if (!logged)
     {
         logged = true;
-        dashLog("[WIFI] WIFI-MAX radio tuning: HT20, AP 11g/n, STA 11b/g/n, max TX power");
+        dashLog("[WIFI] WIFI-NAG radio tuning: HT20, AP 11g/n, STA 11b/g/n, max TX power");
     }
 }
 #else
-static void dashApplyWifiMaxRadioTuning() {}
+static void dashApplyWifiPerfTuning() {}
 #endif
 
 static void dashUseDefaultApConfig()
@@ -1005,7 +1003,7 @@ static bool dashStartAccessPoint(bool withSta)
     WiFi.persistent(false);
     WiFi.mode(withSta ? WIFI_AP_STA : WIFI_AP);
     WiFi.setSleep(false);
-    dashApplyWifiMaxRadioTuning();
+    dashApplyWifiPerfTuning();
 
     IPAddress apIp(100, 100, 1, 1);
     IPAddress apMask(255, 255, 255, 0);
@@ -1039,7 +1037,7 @@ static void dashBeginSTA()
     if (WiFi.getMode() != WIFI_AP_STA)
     {
         WiFi.mode(WIFI_AP_STA);
-        dashApplyWifiMaxRadioTuning();
+        dashApplyWifiPerfTuning();
     }
 
     if (staStaticIP && (uint32_t)staIP != 0)
@@ -1140,7 +1138,7 @@ static void dashPrepareWifiScan()
     if (WiFi.getMode() != WIFI_AP_STA)
     {
         WiFi.mode(WIFI_AP_STA);
-        dashApplyWifiMaxRadioTuning();
+        dashApplyWifiPerfTuning();
     }
     WiFi.setSleep(false);
 }

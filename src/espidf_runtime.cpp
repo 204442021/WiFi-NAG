@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <driver/usb_serial_jtag.h>
+#include <lwip/ip4_addr.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -748,72 +749,6 @@ void WiFiClass::scanDelete()
     scanRecords_.clear();
 }
 
-size_t WiFiClient::readBytes(uint8_t *buf, size_t len)
-{
-    size_t available = data_.size() - std::min(offset_, data_.size());
-    size_t count = std::min(len, available);
-    if (count)
-    {
-        std::memcpy(buf, data_.data() + offset_, count);
-        offset_ += count;
-    }
-    return count;
-}
-
-bool HTTPClient::begin(WiFiClientSecure &, const String &url)
-{
-    url_ = url;
-    response_ = "";
-    return true;
-}
-
-int HTTPClient::GET()
-{
-    esp_http_client_config_t cfg = {};
-    cfg.url = url_.c_str();
-    cfg.timeout_ms = timeoutMs_;
-    cfg.skip_cert_common_name_check = true;
-    esp_http_client_handle_t client = esp_http_client_init(&cfg);
-    if (!client)
-        return -1;
-    yield();
-    esp_err_t err = esp_http_client_perform(client);
-    yield();
-    int status = esp_http_client_get_status_code(client);
-    if (err == ESP_OK)
-    {
-        int len = esp_http_client_get_content_length(client);
-        std::string body;
-        char buf[512];
-        int read = 0;
-        while ((read = esp_http_client_read(client, buf, sizeof(buf))) > 0)
-        {
-            body.append(buf, read);
-            yield();
-        }
-        if (body.empty() && len > 0)
-        {
-            body.resize(len);
-            esp_http_client_read_response(client, body.data(), len);
-            yield();
-        }
-        response_ = body;
-        stream_ = WiFiClient(body);
-    }
-    esp_http_client_cleanup(client);
-    return status;
-}
-
-WiFiClient *HTTPClient::getStreamPtr()
-{
-    return &stream_;
-}
-
-void HTTPClient::end()
-{
-    response_ = "";
-}
-
 void UpdateClass::setError(const char *message)
 {
     error_ = true;
@@ -853,21 +788,6 @@ size_t UpdateClass::write(const uint8_t *buf, size_t len)
         return 0;
     }
     return len;
-}
-
-size_t UpdateClass::writeStream(WiFiClient &stream)
-{
-    uint8_t buf[1024];
-    size_t total = 0;
-    size_t n = 0;
-    while ((n = stream.readBytes(buf, sizeof(buf))) > 0)
-    {
-        size_t written = write(buf, n);
-        total += written;
-        if (written != n)
-            break;
-    }
-    return total;
 }
 
 bool UpdateClass::end(bool)

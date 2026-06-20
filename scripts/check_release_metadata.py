@@ -22,8 +22,7 @@ RELEVANT_PREFIXES = (
     "include/",
     "src/",
     "scripts/",
-    "guides/",
-    "docs-site/docs/",
+    "docs/",
 )
 RELEVANT_FILES = {
     "README.md",
