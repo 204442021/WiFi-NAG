@@ -24,27 +24,7 @@
 #define PIN_LED 2
 #endif
 
-#if defined(ESP32_DASHBOARD)
-#if defined(PRODUCT_WIFI_NAG)
 using SelectedHandler = NagHandler;
-#elif DASH_DEFAULT_HW == 0
-using SelectedHandler = LegacyHandler;
-#elif DASH_DEFAULT_HW == 2
-using SelectedHandler = HW4Handler;
-#else
-using SelectedHandler = HW3Handler;
-#endif
-#elif defined(NAG_KILLER)
-using SelectedHandler = NagHandler;
-#elif defined(HW4)
-using SelectedHandler = HW4Handler;
-#elif defined(HW3)
-using SelectedHandler = HW3Handler;
-#elif defined(LEGACY)
-using SelectedHandler = LegacyHandler;
-#else
-#error "Define HW4, HW3, LEGACY, or NAG_KILLER in build_flags"
-#endif
 
 static std::unique_ptr<CanDriver> appDriver;
 static std::unique_ptr<CarManagerBase> appHandler;
@@ -251,21 +231,8 @@ static bool appLoop()
         h->frameCount++;
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
         CanFrame original = frame;
-#if defined(PRODUCT_WIFI_NAG)
         h->handleMessage(frame, *appDriver);
         dashPostProcessFrame(original, *appDriver);
-#else
-        if (dashSleepActive)
-        {
-            // While sleeping, observe RX only for wake conditions and suppress all CAN writes.
-            dashSleepObserveFrame(original);
-        }
-        else
-        {
-            h->handleMessage(frame, *appDriver);
-            dashPostProcessFrame(original, *appDriver);
-        }
-#endif
 #else
         h->handleMessage(frame, *appDriver);
 #endif

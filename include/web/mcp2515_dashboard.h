@@ -40,13 +40,14 @@
 #include "handlers.h"
 #include "can_helpers.h"
 #include <ArduinoJson.h>
-#if defined(DRIVER_ESP32_EXT_MCP2515)
-#include "drivers/esp32_mcp2515_driver.h"
-#endif
 #include "web/mcp2515_dashboard_ui.h"
 
+#if !defined(PRODUCT_WIFI_NAG)
+#error "This firmware is maintained as WIFI-NAG only."
+#endif
+
 #ifndef DASH_SSID
-#error "Define -DDASH_SSID in build_flags (e.g. -DDASH_SSID=\\\"ADUnlock-1234\\\")"
+#error "Define -DDASH_SSID in build_flags (e.g. -DDASH_SSID=\\\"WIFI-NAG-1234\\\")"
 #endif
 #ifndef DASH_PASS
 #error "Define -DDASH_PASS in build_flags (min 8 chars)"
@@ -65,38 +66,6 @@ static_assert(sizeof(DASH_PASS) >= 9 && sizeof(DASH_PASS) <= 65, "DASH_PASS must
 #define DASH_DEFAULT_HW 1
 #endif
 
-#if !defined(DASH_ENABLE_ONLINE_UPDATE)
-#if defined(PRODUCT_WIFI_NAG)
-#define DASH_ENABLE_ONLINE_UPDATE 0
-#else
-#define DASH_ENABLE_ONLINE_UPDATE 1
-#endif
-#endif
-
-#if !defined(DASH_ENABLE_SETTINGS_BACKUP)
-#if defined(PRODUCT_WIFI_NAG)
-#define DASH_ENABLE_SETTINGS_BACKUP 0
-#else
-#define DASH_ENABLE_SETTINGS_BACKUP 1
-#endif
-#endif
-
-#if !defined(DASH_ENABLE_CAN_DEBUG_TOOLS)
-#if defined(PRODUCT_WIFI_NAG)
-#define DASH_ENABLE_CAN_DEBUG_TOOLS 0
-#else
-#define DASH_ENABLE_CAN_DEBUG_TOOLS 1
-#endif
-#endif
-
-#if !defined(DASH_ENABLE_TASK_STATS)
-#if defined(PRODUCT_WIFI_NAG)
-#define DASH_ENABLE_TASK_STATS 0
-#else
-#define DASH_ENABLE_TASK_STATS 1
-#endif
-#endif
-
 #if defined(DASH_INJECTION_ON_BOOT)
 static constexpr bool kDashInjectionDefaultEnabled = true;
 #else
@@ -112,8 +81,8 @@ static constexpr bool kDashInjectionDefaultEnabled = false;
 #endif
 #endif
 
-#if DASH_DEFAULT_HW < 0 || DASH_DEFAULT_HW > 2
-#error "DASH_DEFAULT_HW must be 0 (LEGACY), 1 (HW3), or 2 (HW4)"
+#if DASH_DEFAULT_HW != 1
+#error "DASH_DEFAULT_HW must be 1 for WIFI-NAG"
 #endif
 
 #define PREFS_NS "ADunlock"
@@ -123,9 +92,6 @@ static Preferences prefs;
 
 static CarManagerBase *dashHandler = nullptr;
 static CanDriver *dashDriver = nullptr;
-#if defined(DRIVER_ESP32_EXT_MCP2515)
-static MCP2515 *dashMcp = nullptr;
-#endif
 
 static unsigned long rxCount = 0;
 static unsigned long txCount = 0;
@@ -133,31 +99,13 @@ static unsigned long txErrCount = 0;
 static unsigned long lastFrameMs = 0;
 static unsigned long startMs = 0;
 static bool canOnline = false;
-static uint8_t followDist = 0;
 
 static unsigned long fpsFrames = 0;
 static unsigned long fpsLastMs = 0;
 static float fps = 0.0f;
 
-static unsigned long muxRx[4] = {};
-static unsigned long muxTx[4] = {};
-static unsigned long muxErr[4] = {};
-
-#if defined(DRIVER_ESP32_EXT_MCP2515)
-static uint8_t mcpEflg = 0;
-#else
-static const uint8_t mcpEflg = 0;
-#endif
-
 static uint8_t hwMode = DASH_DEFAULT_HW;
 static bool canActive = kDashInjectionDefaultEnabled;
-static bool forceActivate = false;
-// AP Injection Gate — when false (default), 1021 mux0 bit46 注入与车辆状态解耦，
-// 复刻 2.5.2 真车固件默认行为（kDashApGateDefaultEnabled=false）。
-// 当 true 时回到 3.0 早期行为：必须 Parked||APActive||Summoning 才允许注入。
-static bool apInjectionGate = false;
-static bool apAutoRestore = false;
-static bool dashAutoSleepEnabled = false;
 #if defined(NAG_KILLER)
 // User-facing Nag killer switch (WebUI). Actual CAN echo TX is additionally
 // gated by canActive (the global CAN/injection master switch), so nothing is
@@ -166,68 +114,6 @@ static bool dashAutoSleepEnabled = false;
 #else
 [[maybe_unused]] static bool nagKillerEnabled = false;
 #endif
-static bool dashSleepActive = false;
-static bool dashSleepWakeRequested = false;
-static const char *dashSleepWakeReason = "none";
-#if !defined(PRODUCT_WIFI_MAX)
-static bool dashSleepSavedCanActive = false;
-static bool dashSleepSavedForceActivate = false;
-static unsigned long dashSleepEnteredMs = 0;
-#endif
-static unsigned long dashSleepCandidateSinceMs = 0;
-static uint32_t dashSleepEnterCount = 0;
-static uint32_t dashSleepPersistBootCount = 0;
-static uint32_t dashSleepPersistTotalCount = 0;
-static uint32_t dashSleepPersistCanWakeCount = 0;
-static uint32_t dashSleepPersistRebootWakeCount = 0;
-static uint32_t dashSleepCurrentRxCount = 0;
-static uint32_t dashSleepLastRxCount = 0;
-static uint32_t dashSleepLastEnterUptimeSec = 0;
-static uint32_t dashSleepLastWakeUptimeSec = 0;
-static constexpr uint32_t kDashSleepDurationUnknown = 0xFFFFFFFFUL;
-static uint32_t dashSleepLastDurationSec = kDashSleepDurationUnknown;
-static char dashSleepLastWakeSource[16] = "none";
-static char dashSleepLastWakeReason[24] = "none";
-static char dashSleepLastResetReason[24] = "unknown";
-static bool dashSleepLastEndedByReboot = false;
-static bool dashSleepGearKnown = false;
-static uint8_t dashSleepGear = 7;
-static unsigned long dashSleepGearSeenMs = 0;
-static bool dashSleepLockLatched = false;
-static const char *dashSleepLockSource = "none";
-static unsigned long dashSleepLockLatchedMs = 0;
-static bool dashSleepUiLockKnown = false;
-static uint8_t dashSleepUiLockRequest = 0xFF;
-static unsigned long dashSleepUiLockSeenMs = 0;
-static bool dashSleepVcsecKnown = false;
-static uint8_t dashSleepVcsecVehicleLockStatus = 0xFF;
-static uint8_t dashSleepVcsecSimpleLockStatus = 0xFF;
-static unsigned long dashSleepVcsecSeenMs = 0;
-static bool dashSleepDriverKnown = false;
-static bool dashSleepDriverPresent = false;
-static unsigned long dashSleepDriverSeenMs = 0;
-static bool dashSleepDiPowerKnown = false;
-static uint8_t dashSleepDiPowerState = 0xFF;
-static bool dashSleepEpasKnown = false;
-static uint8_t dashSleepEpasPowerMode = 0xFF;
-static unsigned long dashSleepEpasSeenMs = 0;
-static constexpr unsigned long kDashAutoSleepDelayMs = 10000;
-static constexpr unsigned long kDashSleepLightSliceUs = 500000;
-static constexpr unsigned long kDashSleepLockFallbackMs = 30000;
-static constexpr unsigned long kDashSleepDriveSignalFreshMs = 30000;
-static constexpr unsigned long kDashSleepLatchedLockFreshMs = 60000;
-// 上一次 dashPostProcessFrame 实际发送成功的时间戳，便于 /status 区分"在持续发"与
-// "发了几次就停"，与 framesSent 单调累计计数互补。跨 CAN 任务 / dashboard 任务读写。
-static volatile uint32_t lastInjectMs = 0;
-static bool dashSpeedProfileAuto = true;
-static uint8_t dashManualSpeedProfile = 1;
-
-// HW3 slew limiter constants/state moved to include/dash_hw3_speed.h so
-// HW3Handler can call dashApplyHw3OffsetSlew directly.
-
-// HW3 custom-speed config + helpers live in their own header so handlers.h
-// (parsed before this file) can read fusedSpeedLimitRaw and call the
-// encoders. See include/dash_hw3_speed.h.
 
 #ifdef RGB_BRIGHTNESS
 static constexpr uint8_t kDashLedBrightnessDefault = RGB_BRIGHTNESS;
@@ -273,12 +159,6 @@ static DashWifiNetwork wifiNetworks[kDashMaxWifiNetworks] = {};
 static uint8_t wifiNetworkCount = 0;
 static int8_t wifiActiveSlot = -1;    // slot currently selected for STA attempt
 static int8_t wifiNextRotateSlot = 0; // next slot to try when rotating
-#if DASH_ENABLE_ONLINE_UPDATE
-static bool updateBetaChannel = false;
-static bool autoUpdateEnabled = false;
-static bool autoUpdateDone = false;            // one-shot per boot
-static unsigned long autoUpdateEligibleAt = 0; // millis() at which auto-check may fire
-#endif
 static unsigned long staConnectStartedAt = 0;
 static unsigned long staRetryAt = 0;
 static uint8_t staConsecutiveFailures = 0; // diagnostics only; retry interval is fixed
@@ -311,372 +191,9 @@ static void dashClearWifiNetwork(DashWifiNetwork &n)
     n.dns[0] = 0;
 }
 static void dashRotateAndConnect();
-#if !defined(PRODUCT_WIFI_MAX)
-#if !defined(PRODUCT_WIFI_NAG)
-static void dashSwapHandler(uint8_t mode);
-#endif
-static void dashApplyFilters();
-#endif
 static void dashApplyRuntimeState();
-static void dashClearLegacyOptionPrefs();
+static void dashClearRetiredOptionPrefs();
 static void dashLog(const String &s);
-
-#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
-// CAN recorder
-#ifndef REC_CAP
-#define REC_CAP 8000
-#endif
-static constexpr unsigned long kRecMaxDurationMs = 60000UL;
-struct RecFrame
-{
-    unsigned long ts;
-    char dir;
-    uint32_t id;
-    uint8_t dlc;
-    uint8_t data[8];
-};
-static RecFrame *recBuf = nullptr;
-static bool recBufInPsram = false;
-static volatile bool recActive = false;
-static volatile int recCount = 0;
-static bool recSaved = false;
-[[maybe_unused]] static unsigned long recStartMs = 0;
-#endif
-
-#if !defined(PRODUCT_WIFI_MAX) && DASH_ENABLE_CAN_DEBUG_TOOLS
-// CAN sniffer ring buffer
-#define SNIFFER_CAP 30
-struct SniffFrame
-{
-    unsigned long ts;
-    uint32_t id;
-    uint8_t dlc;
-    uint8_t data[8];
-};
-static SniffFrame sniffBuf[SNIFFER_CAP];
-static int sniffHead = 0;
-static int sniffCount = 0;
-#endif
-
-enum DashWriteProbeState : uint8_t
-{
-    kDashWriteProbeIdle = 0,
-    kDashWriteProbePending = 1,
-    kDashWriteProbeMatch = 2,
-    kDashWriteProbeDifferent = 3,
-    kDashWriteProbeFailed = 4,
-};
-
-struct DashWriteProbe
-{
-    bool active = false;
-    bool hasRx = false;
-    uint8_t state = kDashWriteProbeIdle;
-    uint32_t id = 0;
-    int8_t mux = -1;
-    uint8_t txDlc = 0;
-    uint8_t rxDlc = 0;
-    uint8_t txData[8] = {};
-    uint8_t rxData[8] = {};
-    unsigned long txMs = 0;
-    unsigned long rxMs = 0;
-};
-static DashWriteProbe dashWriteProbe;
-
-#if !defined(PRODUCT_WIFI_MAX)
-struct DashApRestoreState
-{
-    bool gearSeen = false;
-    uint8_t gearRaw = 0xFF;
-    bool brakeSeen = false;
-    uint8_t brakePedalRaw = 0xFF;
-    bool chassisSeen = false;
-    bool brakeTorqueActive = false;
-    uint8_t anyVdcActive = 0xFF;
-    bool tcActive = false;
-    uint8_t vdcControlActive = 0xFF;
-    bool steerSeen = false;
-    uint8_t steerValidity = 0xFF;
-    int16_t steerAngleX10 = 0;
-    int16_t steerSpeedX10 = 0;
-    unsigned long steerMs = 0;
-    bool dasSettingsSeen = false;
-    uint8_t dasSettingsData[8] = {};
-    unsigned long dasSettingsMs = 0;
-    uint8_t dasSettingsCounter = 0xFF;
-    bool dasAccSeen = false;
-    uint8_t dasAccState = 0xFF;
-    unsigned long dasAccDropMs = 0;
-    unsigned long lastDropHandledMs = 0;
-    unsigned long lastTxMs = 0;
-};
-static DashApRestoreState apRestoreState;
-static constexpr unsigned long kDashApRestoreTxCooldownMs = 1000;
-#endif
-
-#if !defined(PRODUCT_WIFI_MAX)
-static int8_t dashFrameMux(const CanFrame &frame)
-{
-    if ((frame.id == 1006 || frame.id == 1021) && frame.dlc > 0)
-        return static_cast<int8_t>(readMuxID(frame));
-    return -1;
-}
-
-static uint32_t dashReadBitsLE(const CanFrame &frame, uint8_t startBit, uint8_t bitCount)
-{
-    uint32_t value = 0;
-    for (uint8_t i = 0; i < bitCount; i++)
-    {
-        uint8_t bit = startBit + i;
-        if (bit >= frame.dlc * 8)
-            break;
-        if (frame.data[bit / 8] & (1U << (bit % 8)))
-            value |= 1UL << i;
-    }
-    return value;
-}
-
-static bool dashReadBit(const CanFrame &frame, uint8_t bit)
-{
-    return dashReadBitsLE(frame, bit, 1) != 0;
-}
-
-[[maybe_unused]] static uint8_t dashCounterChecksumByte(const CanFrame &frame, uint8_t checksumByteIndex = 7)
-{
-    if (checksumByteIndex >= frame.dlc)
-        return 0;
-    uint16_t sum = static_cast<uint16_t>(frame.id & 0xFF) +
-                   static_cast<uint16_t>((frame.id >> 8) & 0xFF);
-    for (uint8_t i = 0; i < frame.dlc; i++)
-    {
-        if (i == checksumByteIndex)
-            sum += frame.data[i] & 0x0F;
-        else
-            sum += frame.data[i];
-    }
-    uint8_t checksum = static_cast<uint8_t>((0x10 - (sum & 0x0F)) & 0x0F);
-    return static_cast<uint8_t>((checksum << 4) | (frame.data[checksumByteIndex] & 0x0F));
-}
-
-static void dashResetWriteProbe()
-{
-    dashWriteProbe = {};
-    dashWriteProbe.mux = -1;
-    dashWriteProbe.state = kDashWriteProbeIdle;
-}
-
-#if !defined(PRODUCT_WIFI_NAG)
-[[maybe_unused]] static bool dashEnsureRecBuffer()
-{
-    if (recBuf)
-        return true;
-#if defined(CONFIG_SPIRAM) && CONFIG_SPIRAM
-    recBuf = static_cast<RecFrame *>(heap_caps_calloc(REC_CAP, sizeof(RecFrame), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    if (recBuf)
-    {
-        recBufInPsram = true;
-        Serial.println("[REC] Buffer allocated in PSRAM");
-        return true;
-    }
-#endif
-    recBuf = static_cast<RecFrame *>(heap_caps_calloc(REC_CAP, sizeof(RecFrame), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-    recBufInPsram = false;
-    if (!recBuf)
-    {
-        Serial.println("[REC] Buffer allocation failed");
-        return false;
-    }
-    Serial.println("[REC] Buffer allocated in internal RAM");
-    return true;
-}
-
-static bool dashSaveRecordingToSpiffs(int n)
-{
-    if (!recBuf)
-    {
-        dashLog("[REC] Save failed: buffer unavailable");
-        return false;
-    }
-    if (n < 0)
-        n = 0;
-    if (n > REC_CAP)
-        n = REC_CAP;
-
-    File f = SPIFFS.open("/rec.csv", "w");
-    if (!f)
-    {
-        dashLog("[REC] SPIFFS write failed");
-        return false;
-    }
-
-    f.println("ts_ms,dir,id,dlc,b0,b1,b2,b3,b4,b5,b6,b7");
-    char line[96];
-    for (int i = 0; i < n; i++)
-    {
-        int len = snprintf(line, sizeof(line),
-                           "%lu,%c,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%u\n",
-                           recBuf[i].ts,
-                           recBuf[i].dir ? recBuf[i].dir : 'R',
-                           static_cast<unsigned long>(recBuf[i].id),
-                           static_cast<unsigned>(recBuf[i].dlc),
-                           static_cast<unsigned>(recBuf[i].data[0]),
-                           static_cast<unsigned>(recBuf[i].data[1]),
-                           static_cast<unsigned>(recBuf[i].data[2]),
-                           static_cast<unsigned>(recBuf[i].data[3]),
-                           static_cast<unsigned>(recBuf[i].data[4]),
-                           static_cast<unsigned>(recBuf[i].data[5]),
-                           static_cast<unsigned>(recBuf[i].data[6]),
-                           static_cast<unsigned>(recBuf[i].data[7]));
-        if (len > 0)
-            f.write(reinterpret_cast<const uint8_t *>(line),
-                    static_cast<size_t>(len < static_cast<int>(sizeof(line)) ? len : sizeof(line) - 1));
-    }
-    f.close();
-    recSaved = true;
-    dashLog("[REC] Saved " + String(n) + " frames to SPIFFS");
-    return true;
-}
-
-static bool dashStopRecordingAndSave(const char *reason = nullptr)
-{
-    if (!recActive && recSaved)
-        return true;
-    recActive = false;
-    int n = recCount;
-    bool ok = dashSaveRecordingToSpiffs(n);
-    if (reason && *reason)
-        dashLog(String("[REC] Stopped: ") + reason);
-    return ok;
-}
-
-static void dashRecordCanFrame(const CanFrame &f, char dir)
-{
-    if (!recActive || !recBuf)
-        return;
-    int idx = recCount;
-    if (idx >= REC_CAP)
-        return;
-    uint8_t dlc = (f.dlc <= 8) ? f.dlc : 8;
-    recBuf[idx].ts = millis();
-    recBuf[idx].dir = dir;
-    recBuf[idx].id = f.id;
-    recBuf[idx].dlc = dlc;
-    memset(recBuf[idx].data, 0, sizeof(recBuf[idx].data));
-    memcpy(recBuf[idx].data, f.data, dlc);
-    recCount = idx + 1;
-    if (recCount >= REC_CAP)
-        dashStopRecordingAndSave("frame limit");
-}
-#endif
-
-static void dashRecordApRestoreFrame(const CanFrame &frame, unsigned long now)
-{
-    if (frame.id == 280 && frame.dlc >= 3)
-    {
-        apRestoreState.gearSeen = true;
-        apRestoreState.gearRaw = readDIGear(frame);
-        apRestoreState.brakeSeen = true;
-        apRestoreState.brakePedalRaw = static_cast<uint8_t>(dashReadBitsLE(frame, 19, 2));
-        return;
-    }
-    if (frame.id == 0x148 && frame.dlc >= 8)
-    {
-        apRestoreState.chassisSeen = true;
-        apRestoreState.brakeTorqueActive = dashReadBit(frame, 15);
-        apRestoreState.anyVdcActive = static_cast<uint8_t>(dashReadBitsLE(frame, 34, 2));
-        apRestoreState.tcActive = dashReadBit(frame, 42);
-        apRestoreState.vdcControlActive = static_cast<uint8_t>(dashReadBitsLE(frame, 60, 3));
-        return;
-    }
-    if (frame.id == 0x129 && frame.dlc >= 6)
-    {
-        uint16_t angleRaw = static_cast<uint16_t>(dashReadBitsLE(frame, 16, 14));
-        uint16_t speedRaw = static_cast<uint16_t>(dashReadBitsLE(frame, 32, 14));
-        apRestoreState.steerSeen = true;
-        apRestoreState.steerValidity = static_cast<uint8_t>(dashReadBitsLE(frame, 30, 2));
-        apRestoreState.steerAngleX10 = angleRaw == 0x3FFF ? 0 : static_cast<int16_t>(angleRaw) - 8192;
-        apRestoreState.steerSpeedX10 = static_cast<int16_t>(static_cast<int32_t>(speedRaw) * 5 - 40960);
-        apRestoreState.steerMs = now;
-        return;
-    }
-    if (frame.id == 0x293 && frame.dlc >= 8)
-    {
-        apRestoreState.dasSettingsSeen = true;
-        apRestoreState.dasSettingsMs = now;
-        memcpy(apRestoreState.dasSettingsData, frame.data, 8);
-        apRestoreState.dasSettingsCounter = frame.data[7] & 0x0F;
-        return;
-    }
-    if (frame.id == 0x389 && frame.dlc >= 4)
-    {
-        uint8_t accState = static_cast<uint8_t>((frame.data[3] >> 2) & 0x1F);
-        if (apRestoreState.dasAccSeen && apRestoreState.dasAccState > 0 && accState == 0)
-            apRestoreState.dasAccDropMs = now;
-        apRestoreState.dasAccSeen = true;
-        apRestoreState.dasAccState = accState;
-    }
-}
-
-static bool dashWriteProbeMatches(const CanFrame &frame)
-{
-    if (!dashWriteProbe.active || dashWriteProbe.id != frame.id)
-        return false;
-
-    int8_t mux = dashFrameMux(frame);
-    if (dashWriteProbe.mux < 0)
-        return mux < 0;
-    return mux == dashWriteProbe.mux;
-}
-
-#if DASH_ENABLE_CAN_DEBUG_TOOLS
-static const char *decodeCanId(uint32_t id)
-{
-    switch (id)
-    {
-    case 0x045:
-        return "STW_ACTN_RQ";
-    case 0x129:
-        return "Steering angle";
-    case 0x175:
-        return "Speed";
-    case 0x186:
-        return "Gear/Drive state";
-    case 0x118:
-        return "DI_systemStatus";
-    case 0x233:
-        return "UI_stalklessControl";
-    case 0x257:
-        return "State of charge";
-    case 0x293:
-        return "DAS control";
-    case 0x321:
-        return "Autopilot state";
-    case 0x329:
-        return "UI_autopilot";
-    case 0x399:
-        return "DAS_status";
-    case 0x3E8:
-        return "UI_driverAssistControl";
-    case 0x3FD:
-        return "UI_autopilotControl";
-    case 0x678:
-        return "GTW_gearControl";
-    default:
-        return "";
-    }
-}
-
-static void sniffPush(const CanFrame &f)
-{
-    uint8_t dlc = (f.dlc <= 8) ? f.dlc : 8;
-    sniffBuf[sniffHead] = {millis(), f.id, dlc, {}};
-    memcpy(sniffBuf[sniffHead].data, f.data, dlc);
-    sniffHead = (sniffHead + 1) % SNIFFER_CAP;
-    if (sniffCount < SNIFFER_CAP)
-        sniffCount++;
-}
-#endif
-#endif
 
 #define LOG_CAP 80
 struct LogEntry
@@ -689,9 +206,7 @@ static int logHead = 0;
 static int logCount = 0;
 static unsigned long logSeq = 0;
 // Cursor tracking how much of logRing we have copied into logBuf so far.
-// logRing is filled by HW3/HW4 handlers when enablePrint is on (per-frame
-// "AD: 1, Profile: 2, Offset: ..." diagnostics). We drain it here on demand
-// so the WebUI /log endpoint surfaces those diagnostics in real time.
+// The Nag handler writes occasional debug diagnostics here when enablePrint is on.
 static uint32_t logRingDrainCursor = 0;
 
 static void dashLog(const String &s)
@@ -729,75 +244,21 @@ static void dashDrainLogRing()
 }
 
 // Public hooks
-#if !defined(PRODUCT_WIFI_MAX)
-static void mcpDashOnFrame(const CanFrame &f)
+static void mcpDashOnFrame(const CanFrame &)
 {
     unsigned long now = millis();
     rxCount++;
     lastFrameMs = now;
     canOnline = true;
     fpsFrames++;
-#if DASH_ENABLE_CAN_DEBUG_TOOLS
-    sniffPush(f);
-#endif
-    if (f.id == 1021 && f.dlc > 0)
-    {
-        uint8_t m = f.data[0] & 0x07;
-        if (m < 4)
-            muxRx[m]++;
-    }
-    if (f.id == 1016 && f.dlc > 5)
-        followDist = (f.data[5] & 0xE0) >> 5;
-    dashRecordApRestoreFrame(f, now);
-#if !defined(PRODUCT_WIFI_NAG)
-    dashRecordCanFrame(f, 'R');
-#endif
-    if (dashWriteProbe.active && dashWriteProbe.state != kDashWriteProbeFailed && dashWriteProbeMatches(f))
-    {
-        dashWriteProbe.hasRx = true;
-        dashWriteProbe.rxMs = now;
-        dashWriteProbe.rxDlc = (f.dlc <= 8) ? f.dlc : 8;
-        memset(dashWriteProbe.rxData, 0, sizeof(dashWriteProbe.rxData));
-        memcpy(dashWriteProbe.rxData, f.data, dashWriteProbe.rxDlc);
-        bool same = dashWriteProbe.txDlc == dashWriteProbe.rxDlc &&
-                    memcmp(dashWriteProbe.txData, dashWriteProbe.rxData, dashWriteProbe.txDlc) == 0;
-        dashWriteProbe.state = same ? kDashWriteProbeMatch : kDashWriteProbeDifferent;
-    }
 }
 
-static void mcpDashOnTxFrame(const CanFrame &frame, bool ok)
+static void mcpDashOnTxFrame(const CanFrame &, bool ok)
 {
     txCount++;
-    int8_t mux = dashFrameMux(frame);
     if (!ok)
-    {
         txErrCount++;
-        if (mux >= 0 && mux < 4)
-            muxErr[mux]++;
-    }
-    else if (mux >= 0 && mux < 4)
-    {
-        muxTx[mux]++;
-    }
-#if !defined(PRODUCT_WIFI_NAG)
-    if (ok)
-        dashRecordCanFrame(frame, 'T');
-#endif
-
-    dashWriteProbe.active = true;
-    dashWriteProbe.hasRx = false;
-    dashWriteProbe.state = ok ? kDashWriteProbePending : kDashWriteProbeFailed;
-    dashWriteProbe.id = frame.id;
-    dashWriteProbe.mux = mux;
-    dashWriteProbe.txMs = millis();
-    dashWriteProbe.rxMs = 0;
-    dashWriteProbe.txDlc = (frame.dlc <= 8) ? frame.dlc : 8;
-    dashWriteProbe.rxDlc = 0;
-    memset(dashWriteProbe.txData, 0, sizeof(dashWriteProbe.txData));
-    memset(dashWriteProbe.rxData, 0, sizeof(dashWriteProbe.rxData));
-    memcpy(dashWriteProbe.txData, frame.data, dashWriteProbe.txDlc);
 }
-#endif
 
 // JSON escape for log strings
 static String jsonEscape(const String &s)
@@ -823,563 +284,22 @@ static String jsonEscape(const String &s)
     return out;
 }
 
-static bool dashCheckADEnabled()
-{
-#if defined(PRODUCT_WIFI_NAG)
-    return false;
-#else
-    return canActive;
-#endif
-}
-
-static bool dashApInjectionAllowed()
-{
-    // 2.5.2 风格：apInjectionGate=false 时短路放行；=true 时回到 3.0 强制门控。
-    return !apInjectionGate || (dashHandler && dashHandler->injectionGateOpen());
-}
-
 static bool dashInjectionActive()
 {
-    return canActive && dashApInjectionAllowed();
+    return canActive;
 }
-
-#if !defined(PRODUCT_WIFI_MAX)
-[[maybe_unused]] static bool dashApRestoreBraking()
-{
-    return (apRestoreState.brakeSeen && apRestoreState.brakePedalRaw == 1) ||
-           (apRestoreState.chassisSeen && apRestoreState.brakeTorqueActive);
-}
-
-[[maybe_unused]] static bool dashApRestoreStabilityBlocked()
-{
-    return apRestoreState.chassisSeen &&
-           (apRestoreState.anyVdcActive == 1 || apRestoreState.vdcControlActive > 0 ||
-            apRestoreState.tcActive);
-}
-#endif
-
-static uint32_t dashReadLeBits(const CanFrame &frame, uint8_t startBit, uint8_t length)
-{
-    uint32_t value = 0;
-    for (uint8_t i = 0; i < length; i++)
-    {
-        uint8_t bit = startBit + i;
-        uint8_t byteIndex = bit / 8;
-        if (byteIndex >= frame.dlc || byteIndex >= 8)
-            break;
-        if (frame.data[byteIndex] & (1U << (bit % 8)))
-            value |= (1UL << i);
-    }
-    return value;
-}
-
-[[maybe_unused]] static const char *dashSleepStateText()
-{
-    if (dashSleepActive)
-        return "sleep";
-    if (!dashAutoSleepEnabled)
-        return "off";
-    if (dashSleepCandidateSinceMs)
-        return "pending";
-    return "awake";
-}
-
-[[maybe_unused]] static long dashSleepSignalAgeSec(unsigned long seenMs)
-{
-    if (!seenMs)
-        return -1;
-    return static_cast<long>((millis() - seenMs) / 1000UL);
-}
-
-static unsigned long dashSleepSignalAgeMs(unsigned long seenMs)
-{
-    if (!seenMs)
-        return 0xFFFFFFFFUL;
-    return millis() - seenMs;
-}
-
-static bool dashSleepSignalFresh(unsigned long seenMs, unsigned long maxAgeMs)
-{
-    return seenMs && dashSleepSignalAgeMs(seenMs) <= maxAgeMs;
-}
-
-static void dashSleepClearLockState(const char *source)
-{
-    dashSleepLockLatched = false;
-    dashSleepLockSource = source ? source : "none";
-    dashSleepLockLatchedMs = 0;
-    dashSleepCandidateSinceMs = 0;
-}
-
-static void dashSleepLatchLock(const char *source)
-{
-    dashSleepLockLatched = true;
-    dashSleepLockSource = source ? source : "lock";
-    dashSleepLockLatchedMs = millis();
-}
-
-#ifdef ESP_PLATFORM
-static const char *dashResetReasonName(esp_reset_reason_t reason);
-#endif
-
-static const char *dashSleepCurrentResetReason()
-{
-#ifdef ESP_PLATFORM
-    return dashResetReasonName(esp_reset_reason());
-#else
-    return "unknown";
-#endif
-}
-
-static void dashSleepSetText(char *dst, size_t dstLen, const char *src)
-{
-    if (!dst || dstLen == 0)
-        return;
-    strlcpy(dst, src ? src : "none", dstLen);
-}
-
-static void dashSleepLoadText(Preferences &p, const char *key, char *dst, size_t dstLen, const char *fallback)
-{
-    String v = p.getString(key, fallback ? fallback : "");
-    dashSleepSetText(dst, dstLen, v.c_str());
-}
-
-static uint32_t dashSleepGetU32(Preferences &p, const char *key, uint32_t fallback)
-{
-    String v = p.getString(key, "");
-    if (v.length() == 0)
-        return fallback;
-    return static_cast<uint32_t>(strtoul(v.c_str(), nullptr, 10));
-}
-
-static void dashSleepPutU32(Preferences &p, const char *key, uint32_t value)
-{
-    p.putString(key, String(value));
-}
-
-static void dashSleepPersistDiag(Preferences &p)
-{
-    dashSleepPutU32(p, "slp_boots", dashSleepPersistBootCount);
-    dashSleepPutU32(p, "slp_total", dashSleepPersistTotalCount);
-    dashSleepPutU32(p, "slp_wcan", dashSleepPersistCanWakeCount);
-    dashSleepPutU32(p, "slp_wreboot", dashSleepPersistRebootWakeCount);
-    dashSleepPutU32(p, "slp_lent", dashSleepLastEnterUptimeSec);
-    dashSleepPutU32(p, "slp_lwake", dashSleepLastWakeUptimeSec);
-    dashSleepPutU32(p, "slp_ldur", dashSleepLastDurationSec);
-    dashSleepPutU32(p, "slp_lrx", dashSleepLastRxCount);
-    p.putString("slp_lsrc", dashSleepLastWakeSource);
-    p.putString("slp_lwhy", dashSleepLastWakeReason);
-    p.putString("slp_rst", dashSleepLastResetReason);
-}
-
-[[maybe_unused]] static void dashSleepLoadPersistentDiag(Preferences &p)
-{
-    dashSleepPersistBootCount = dashSleepGetU32(p, "slp_boots", 0) + 1;
-    dashSleepPersistTotalCount = dashSleepGetU32(p, "slp_total", 0);
-    dashSleepPersistCanWakeCount = dashSleepGetU32(p, "slp_wcan", 0);
-    dashSleepPersistRebootWakeCount = dashSleepGetU32(p, "slp_wreboot", 0);
-    dashSleepLastEnterUptimeSec = dashSleepGetU32(p, "slp_lent", 0);
-    dashSleepLastWakeUptimeSec = dashSleepGetU32(p, "slp_lwake", 0);
-    dashSleepLastDurationSec = dashSleepGetU32(p, "slp_ldur", kDashSleepDurationUnknown);
-    dashSleepLastRxCount = dashSleepGetU32(p, "slp_lrx", 0);
-    dashSleepLoadText(p, "slp_lsrc", dashSleepLastWakeSource, sizeof(dashSleepLastWakeSource), "none");
-    dashSleepLoadText(p, "slp_lwhy", dashSleepLastWakeReason, sizeof(dashSleepLastWakeReason), "none");
-    dashSleepSetText(dashSleepLastResetReason, sizeof(dashSleepLastResetReason), dashSleepCurrentResetReason());
-
-    dashSleepLastEndedByReboot = p.getBool("slp_active", false);
-    if (dashSleepLastEndedByReboot)
-    {
-        dashSleepPersistRebootWakeCount++;
-        dashSleepSetText(dashSleepLastWakeSource, sizeof(dashSleepLastWakeSource), "reboot");
-        dashSleepSetText(dashSleepLastWakeReason, sizeof(dashSleepLastWakeReason), dashSleepLastResetReason);
-        dashSleepLastWakeUptimeSec = 0;
-        dashSleepLastDurationSec = kDashSleepDurationUnknown;
-        p.putBool("slp_active", false);
-    }
-
-    dashSleepPersistDiag(p);
-}
-
-#if !defined(PRODUCT_WIFI_MAX)
-static void dashSleepPersistEnterDiag()
-{
-    dashSleepPersistTotalCount++;
-    dashSleepCurrentRxCount = 0;
-    dashSleepLastRxCount = 0;
-    dashSleepLastEnterUptimeSec = (millis() - startMs) / 1000UL;
-    dashSleepLastWakeUptimeSec = 0;
-    dashSleepLastDurationSec = kDashSleepDurationUnknown;
-    dashSleepSetText(dashSleepLastWakeSource, sizeof(dashSleepLastWakeSource), "sleeping");
-    dashSleepSetText(dashSleepLastWakeReason, sizeof(dashSleepLastWakeReason), "active");
-
-    Preferences p;
-    if (!p.begin(PREFS_NS, false))
-        return;
-    p.putBool("slp_active", true);
-    dashSleepPersistDiag(p);
-    p.end();
-}
-#endif
-
-#if !defined(PRODUCT_WIFI_MAX)
-static void dashSleepPersistWakeDiag(const char *reason)
-{
-    dashSleepPersistCanWakeCount++;
-    dashSleepLastRxCount = dashSleepCurrentRxCount;
-    dashSleepLastWakeUptimeSec = (millis() - startMs) / 1000UL;
-    dashSleepLastDurationSec = dashSleepEnteredMs ? ((millis() - dashSleepEnteredMs) / 1000UL) : kDashSleepDurationUnknown;
-    dashSleepSetText(dashSleepLastWakeSource, sizeof(dashSleepLastWakeSource), "CAN");
-    dashSleepSetText(dashSleepLastWakeReason, sizeof(dashSleepLastWakeReason), reason ? reason : "unknown");
-    dashSleepLastEndedByReboot = false;
-
-    Preferences p;
-    if (!p.begin(PREFS_NS, false))
-        return;
-    p.putBool("slp_active", false);
-    dashSleepPersistDiag(p);
-    p.end();
-}
-#endif
-
-static bool dashSleepVcsecStatusLocked(uint8_t status);
-static bool dashSleepVcsecStatusUnlocked(uint8_t status);
-
-static bool dashSleepRecentDriveEvidence()
-{
-    if (dashSleepGearKnown &&
-        dashSleepSignalFresh(dashSleepGearSeenMs, kDashSleepDriveSignalFreshMs) &&
-        (dashSleepGear == 2 || dashSleepGear == 3 || dashSleepGear == 4))
-        return true;
-    if (dashSleepDriverKnown &&
-        dashSleepSignalFresh(dashSleepDriverSeenMs, kDashSleepDriveSignalFreshMs) &&
-        dashSleepDriverPresent)
-        return true;
-    if (dashSleepDiPowerKnown &&
-        dashSleepSignalFresh(dashSleepDriverSeenMs, kDashSleepDriveSignalFreshMs) &&
-        dashSleepDiPowerState == 3)
-        return true;
-    if (dashSleepEpasKnown &&
-        dashSleepSignalFresh(dashSleepEpasSeenMs, kDashSleepDriveSignalFreshMs) &&
-        (dashSleepEpasPowerMode == 1 || dashSleepEpasPowerMode == 2))
-        return true;
-    return false;
-}
-
-static bool dashSleepRecentUnlockEvidence()
-{
-    if (dashSleepUiLockKnown &&
-        dashSleepSignalFresh(dashSleepUiLockSeenMs, kDashSleepDriveSignalFreshMs) &&
-        (dashSleepUiLockRequest == 2 || dashSleepUiLockRequest == 3))
-        return true;
-    if (dashSleepVcsecKnown &&
-        dashSleepSignalFresh(dashSleepVcsecSeenMs, kDashSleepDriveSignalFreshMs) &&
-        (dashSleepVcsecSimpleLockStatus == 1 ||
-         dashSleepVcsecStatusUnlocked(dashSleepVcsecVehicleLockStatus)))
-        return true;
-    return false;
-}
-
-static bool dashSleepParkStateFallbackReady()
-{
-    if (millis() < kDashSleepLockFallbackMs)
-        return false;
-    if (dashSleepRecentDriveEvidence())
-        return false;
-
-    // Park fallback: some harnesses stop publishing a clean P value after the
-    // car is locked/asleep and only leave SNA/invalid plus low-power hints.
-    bool gearLowPower = dashSleepGearKnown &&
-                        (dashSleepGear == 0 || dashSleepGear == 7 ||
-                         !dashSleepSignalFresh(dashSleepGearSeenMs, kDashSleepDriveSignalFreshMs));
-    bool epasLowPower = dashSleepEpasKnown &&
-                        dashSleepSignalFresh(dashSleepEpasSeenMs, kDashSleepLockFallbackMs * 2) &&
-                        (dashSleepEpasPowerMode == 0 || dashSleepEpasPowerMode == 6);
-    bool diLowPower = dashSleepDiPowerKnown &&
-                      dashSleepSignalFresh(dashSleepDriverSeenMs, kDashSleepLockFallbackMs * 2) &&
-                      (dashSleepDiPowerState == 0 || dashSleepDiPowerState == 4);
-
-    return gearLowPower && (epasLowPower || diLowPower);
-}
-
-static bool dashSleepVehicleEmptyReady()
-{
-    if (dashSleepDriverKnown && dashSleepDriverPresent &&
-        dashSleepSignalFresh(dashSleepDriverSeenMs, kDashSleepDriveSignalFreshMs))
-        return false;
-    if (dashSleepDriverKnown && !dashSleepDriverPresent)
-        return true;
-    if (dashSleepLockLatched &&
-        dashSleepSignalFresh(dashSleepLockLatchedMs, kDashSleepLatchedLockFreshMs) &&
-        !dashSleepRecentDriveEvidence())
-        return true;
-
-    // If driver-present is not visible on this harness, a quiet low-power
-    // parked state is the practical empty-cabin fallback.
-    return dashSleepParkStateFallbackReady() && !dashSleepRecentUnlockEvidence();
-}
-
-static bool dashSleepLowPowerLockFallbackReady()
-{
-    if (dashSleepRecentUnlockEvidence())
-        return false;
-
-    // Some harnesses never expose 0x273/0x339 after lock. Treat the car as
-    // locked only when drive evidence is gone and low-power parked-state
-    // hints remain. This is intentionally independent from cabin inference to
-    // avoid deadlock when 0x3A1 driver-present is not visible on the harness.
-    return dashSleepParkStateFallbackReady();
-}
-
-static bool dashSleepEffectiveLocked()
-{
-    return (dashSleepLockLatched &&
-            dashSleepSignalFresh(dashSleepLockLatchedMs, kDashSleepLatchedLockFreshMs)) ||
-           dashSleepLowPowerLockFallbackReady();
-}
-
-[[maybe_unused]] static const char *dashSleepEffectiveLockSource()
-{
-    if (dashSleepLockLatched &&
-        dashSleepSignalFresh(dashSleepLockLatchedMs, kDashSleepLatchedLockFreshMs))
-        return dashSleepLockSource;
-    if (dashSleepLowPowerLockFallbackReady())
-        return "fallback";
-    return "none";
-}
-
-static bool dashSleepParkStateReady()
-{
-    if (dashSleepGearKnown)
-    {
-        if (dashSleepGear == 1)
-            return true;
-        // R/N/D are definitive awake/drive states. INVALID/SNA may be emitted
-        // while modules are powering down, so allow the lock-state fallback.
-        if ((dashSleepGear == 2 || dashSleepGear == 3 || dashSleepGear == 4) &&
-            dashSleepSignalFresh(dashSleepGearSeenMs, kDashSleepDriveSignalFreshMs))
-            return false;
-    }
-
-    return dashSleepParkStateFallbackReady();
-}
-
-static bool dashSleepDriverClearReady()
-{
-    return dashSleepVehicleEmptyReady();
-}
-
-[[maybe_unused]] static const char *dashSleepBlockReason()
-{
-    if (!dashAutoSleepEnabled)
-        return "off";
-    if (dashSleepActive)
-        return "sleeping";
-    if (Update.isRunning())
-        return "ota running";
-    if (!dashSleepParkStateReady())
-    {
-        if (!dashSleepGearKnown)
-            return "waiting P or park state";
-        if (dashSleepGear == 0 || dashSleepGear == 7)
-            return "waiting park fallback";
-        return "gear not P";
-    }
-    if (!dashSleepDriverClearReady())
-        return dashSleepDriverKnown ? "driver present" : "waiting driver empty";
-    if (!dashSleepEffectiveLocked())
-        return "waiting lock 0x273/0x339";
-    if (dashSleepCandidateSinceMs)
-        return "pending 10s";
-    return "ready";
-}
-
-static bool dashSleepParkLockReady()
-{
-    if (!dashAutoSleepEnabled || dashSleepActive || Update.isRunning())
-        return false;
-    if (!dashSleepParkStateReady())
-        return false;
-    if (!dashSleepDriverClearReady())
-        return false;
-    if (!dashSleepEffectiveLocked())
-        return false;
-    return true;
-}
-
-static bool dashSleepVcsecStatusLocked(uint8_t status)
-{
-    return status == 2 || status == 5 || status == 8 ||
-           status == 10 || status == 12 || status == 15;
-}
-
-static bool dashSleepVcsecStatusUnlocked(uint8_t status)
-{
-    return status == 1 || status == 3 || status == 4 ||
-           status == 6 || status == 7 || status == 9 ||
-           status == 11 || status == 13 || status == 14;
-}
-
-static void dashSleepRequestWake(const char *reason)
-{
-    if (!dashSleepActive)
-        return;
-    dashSleepWakeReason = reason;
-    dashSleepWakeRequested = true;
-}
-
-[[maybe_unused]] static void dashSleepObserveFrame(const CanFrame &frame)
-{
-    if (dashSleepActive)
-        dashSleepCurrentRxCount++;
-    if (frame.dlc < 3)
-        return;
-
-    if (frame.id == 280)
-    {
-        uint8_t gear = readDIGear(frame);
-        dashSleepGearKnown = true;
-        dashSleepGear = gear;
-        dashSleepGearSeenMs = millis();
-        if (gear == 2 || gear == 3 || gear == 4)
-        {
-            dashSleepClearLockState("drive");
-            dashSleepRequestWake("gear");
-        }
-    }
-    else if (frame.id == 627)
-    {
-        uint8_t lockRequest = static_cast<uint8_t>(dashReadLeBits(frame, 17, 3));
-        dashSleepUiLockKnown = true;
-        dashSleepUiLockRequest = lockRequest;
-        dashSleepUiLockSeenMs = millis();
-        if (lockRequest == 1 || lockRequest == 4)
-        {
-            dashSleepLatchLock("0x273");
-        }
-        else if (lockRequest == 2 || lockRequest == 3)
-        {
-            dashSleepClearLockState("0x273");
-            dashSleepRequestWake("unlock");
-        }
-    }
-    else if (frame.id == 825)
-    {
-        uint8_t vehicleLockStatus = static_cast<uint8_t>(dashReadLeBits(frame, 12, 4));
-        uint8_t simpleLockStatus = static_cast<uint8_t>(dashReadLeBits(frame, 54, 2));
-        dashSleepVcsecKnown = true;
-        dashSleepVcsecVehicleLockStatus = vehicleLockStatus;
-        dashSleepVcsecSimpleLockStatus = simpleLockStatus;
-        dashSleepVcsecSeenMs = millis();
-        if (simpleLockStatus == 2 || dashSleepVcsecStatusLocked(vehicleLockStatus))
-        {
-            dashSleepLatchLock("0x339");
-        }
-        else if (simpleLockStatus == 1 || dashSleepVcsecStatusUnlocked(vehicleLockStatus))
-        {
-            dashSleepClearLockState("0x339");
-            dashSleepRequestWake("unlock");
-        }
-    }
-    else if (frame.id == 929 && frame.dlc >= 2)
-    {
-        dashSleepDriverKnown = true;
-        dashSleepDriverPresent = dashReadLeBits(frame, 7, 1) != 0;
-        dashSleepDriverSeenMs = millis();
-        dashSleepDiPowerKnown = true;
-        dashSleepDiPowerState = static_cast<uint8_t>(dashReadLeBits(frame, 10, 3));
-        if (dashSleepDriverPresent || dashSleepDiPowerState == 3)
-        {
-            dashSleepClearLockState("driver");
-            dashSleepRequestWake("driver");
-        }
-    }
-    else if (frame.id == 49)
-    {
-        dashSleepEpasKnown = true;
-        dashSleepEpasPowerMode = static_cast<uint8_t>(dashReadLeBits(frame, 16, 3));
-        dashSleepEpasSeenMs = millis();
-        if (dashSleepEpasPowerMode == 1 || dashSleepEpasPowerMode == 2)
-        {
-            dashSleepClearLockState("epas");
-            dashSleepRequestWake("epas");
-        }
-    }
-}
-
-#if !defined(PRODUCT_WIFI_MAX)
-#if !defined(PRODUCT_WIFI_NAG)
-static void dashTryApAutoRestore(const CanFrame &trigger, CanDriver &driver)
-{
-    if (trigger.id != 0x389 || !apAutoRestore)
-        return;
-
-    unsigned long now = millis();
-    if (!apRestoreState.dasAccDropMs ||
-        apRestoreState.lastDropHandledMs == apRestoreState.dasAccDropMs ||
-        now - apRestoreState.dasAccDropMs > 250)
-        return;
-
-    apRestoreState.lastDropHandledMs = apRestoreState.dasAccDropMs;
-    if (!apRestoreState.dasSettingsSeen || now - apRestoreState.dasSettingsMs > 5000)
-        return;
-    if (!apRestoreState.gearSeen || apRestoreState.gearRaw != 4)
-        return;
-    if (dashApRestoreBraking() || dashApRestoreStabilityBlocked())
-        return;
-    if (apRestoreState.lastTxMs && now - apRestoreState.lastTxMs < kDashApRestoreTxCooldownMs)
-        return;
-
-    CanFrame modified{};
-    modified.id = 0x293;
-    modified.bus = CAN_BUS_DEFAULT;
-    modified.dlc = 8;
-    memcpy(modified.data, apRestoreState.dasSettingsData, 8);
-    CanFrame original = modified;
-    setBit(modified, 38, true);
-    setBit(modified, 24, true);
-    uint8_t counter = static_cast<uint8_t>(((apRestoreState.dasSettingsCounter == 0xFF ? 0 : apRestoreState.dasSettingsCounter) + 1) & 0x0F);
-    modified.data[7] = static_cast<uint8_t>((modified.data[7] & 0xF0) | counter);
-    modified.data[7] = dashCounterChecksumByte(modified);
-    if (!framePayloadChanged(original, modified))
-        return;
-
-    bool ok = driver.send(modified);
-    apRestoreState.lastTxMs = now;
-    if (ok)
-        lastInjectMs = now;
-    dashRecordCanFrame(modified, ok ? 'T' : 'E');
-    dashLog("[AP] Auto-restore " + String(ok ? "TX OK" : "TX FAIL"));
-}
-#endif
 
 #if defined(NAG_KILLER)
-// Parallel Nag-killer hook. Runs on every received frame regardless of the
-// selected vehicle handler (Legacy/HW3/HW4), so Autosteer nag suppression
-// coexists with normal CAN/diagnostic behavior. The reused NagHandler only acts
-// on CAN 880 (0x370) and internally honors nagKillerActive && nagKillerRuntime;
-// here we add the global canActive gate so the WebUI "CAN off" switch (and the
-// default CAN-off boot state) suppresses all Nag echo TX.
-#if !defined(PRODUCT_WIFI_NAG)
-static NagHandler dashNagHandler;
-#endif
 static uint32_t dashNagEchoCount()
 {
-#if defined(PRODUCT_WIFI_NAG)
     if (dashHandler)
         return (uint32_t)static_cast<NagHandler *>(dashHandler)->nagEchoCount;
-#else
-    return (uint32_t)dashNagHandler.nagEchoCount;
-#endif
     return 0;
 }
 
 static NagHandler *dashNagActiveHandler()
 {
-#if defined(PRODUCT_WIFI_NAG)
     return dashHandler ? static_cast<NagHandler *>(dashHandler) : nullptr;
-#else
-    return &dashNagHandler;
-#endif
 }
 
 static const char *dashNagModeName(uint8_t mode)
@@ -1439,66 +359,12 @@ static String dashNagStatusJson(bool includeOk)
     return j;
 }
 
-#if !defined(PRODUCT_WIFI_NAG)
-static void dashNagOnFrame(const CanFrame &original, CanDriver &driver)
-{
-    if (!canActive)
-        return;
-    CanFrame frame = original;
-    dashNagHandler.handleMessage(frame, driver);
-}
-#endif
 #endif
 
 static void dashPostProcessFrame(const CanFrame &original, CanDriver &driver)
 {
-#if !defined(PRODUCT_WIFI_NAG)
-    dashSleepObserveFrame(original);
-    if (dashSleepActive)
-        return;
-#endif
-#if defined(NAG_KILLER) && !defined(PRODUCT_WIFI_NAG)
-    dashNagOnFrame(original, driver);
-#endif
-#if defined(DASH_FSD_252_COMPAT) && DASH_FSD_252_COMPAT && !defined(PRODUCT_WIFI_NAG)
-    dashTryApAutoRestore(original, driver);
-
-    if ((hwMode != 0 && hwMode != 1) || !dashInjectionActive())
-        return;
-    const uint32_t activationId = hwMode == 0 ? 1006 : 1021;
-    if (original.id != activationId || original.dlc < 8 || readMuxID(original) != 0)
-        return;
-
-    CanFrame modified = original;
-    if (dashHandler && !(bool)dashHandler->speedProfileAuto)
-        setSpeedProfileV12V13(modified, (int)dashHandler->speedProfile);
-    setBit(modified, 46, true);
-    if (!framePayloadChanged(original, modified))
-        return;
-
-    if (dashHandler)
-        dashHandler->framesSent++;
-    bool ok = driver.send(modified);
-    if (ok)
-        lastInjectMs = millis();
-    if (dashHandler && dashHandler->onSend)
-        dashHandler->onSend(0, ok);
-#else
     (void)original;
     (void)driver;
-#endif
-}
-#else
-static void dashPostProcessFrame(const CanFrame &original, CanDriver &driver)
-{
-    (void)original;
-    (void)driver;
-}
-#endif
-
-static bool dashCheckNagDisabled()
-{
-    return false;
 }
 
 static bool dashStaSsidLooksCorrupt(const String &ssid)
@@ -1507,73 +373,13 @@ static bool dashStaSsidLooksCorrupt(const String &ssid)
            ssid.indexOf("\",\"") >= 0;
 }
 
-// dashClampHw3SlewRate / dashLoadHw3SlewRate now in dash_hw3_speed.h.
-
-static uint8_t dashClampSpeedProfileForHw(uint8_t hw, int profile)
-{
-    int maxProfile = hw == 2 ? 4 : 2;
-    if (profile < 0)
-        return 0;
-    if (profile > maxProfile)
-        return static_cast<uint8_t>(maxProfile);
-    return static_cast<uint8_t>(profile);
-}
-
-static void dashApplySpeedProfileState()
-{
-    if (!dashHandler)
-        return;
-    dashHandler->speedProfileAuto = dashSpeedProfileAuto;
-    if (!dashSpeedProfileAuto)
-        dashHandler->speedProfile = dashClampSpeedProfileForHw(hwMode, dashManualSpeedProfile);
-}
-
-// HW3 mux-2 codec + slew limiter live in include/dash_hw3_speed.h so they
-// can be shared between HW3Handler (in handlers.h, parsed first) and the
-// dashboard HW3 send path below.
-
 static void dashApplyRuntimeState()
 {
-#if defined(PRODUCT_WIFI_NAG)
-    forceActivate = false;
-    forceActivateRuntime = false;
-    dashAutoSleepEnabled = false;
-    dashSleepActive = false;
-    dashSleepCandidateSinceMs = 0;
-    apAutoRestore = false;
-    hw3CustomSpeed = false;
-    hw3HighSpeedEnable = false;
-    hw3OffsetSlew = false;
-    legacyMppOverride = false;
-    legacyMppCustomEnable = false;
-    legacyMppHighSpeedEnable = false;
-#else
-    forceActivateRuntime = canActive && forceActivate;
-#endif
-    emergencyVehicleDetectionRuntime = false;
-    isaSpeedChimeSuppressRuntime = false;
-    enhancedAutopilotRuntime = false;
 #if defined(NAG_KILLER)
-#if defined(PRODUCT_WIFI_NAG)
     nagKillerRuntime = nagKillerEnabled && canActive;
-#else
-    nagKillerRuntime = nagKillerEnabled;
-#endif
 #else
     nagKillerRuntime = false;
 #endif
-
-    if (dashHandler)
-    {
-        dashHandler->checkAD = dashCheckADEnabled;
-        dashHandler->checkNag = dashCheckNagDisabled;
-        dashApplySpeedProfileState();
-        if (!canActive)
-        {
-            dashHandler->ADEnabled = false;
-            dashHandler->APActive = false;
-        }
-    }
 
 #if defined(DASH_RGB_STATUS_LED)
     appRefreshStatusLed();
@@ -1587,16 +393,10 @@ static void dashSavePrefs()
     prefs.putUChar("hw", hwMode);
     prefs.putUChar("hw_def", DASH_DEFAULT_HW);
     prefs.putBool("can", canActive);
-#if defined(PRODUCT_WIFI_NAG)
     prefs.putBool("force_act", false);
     prefs.putBool("ap_rst", false);
-#else
-    prefs.putBool("force_act", forceActivate);
-    prefs.putBool("ap_rst", apAutoRestore);
-#endif
-    prefs.putBool("ap_gate", apInjectionGate);
+    prefs.putBool("ap_gate", false);
 #if defined(NAG_KILLER)
-#if defined(PRODUCT_WIFI_NAG)
     nagKillerEnabled = true;
     prefs.putBool("nag_en", true);
     if (NagHandler *nag = dashNagActiveHandler())
@@ -1605,72 +405,23 @@ static void dashSavePrefs()
         prefs.putString("nag_av2_min", dashNagNmString(nag->av2MinCenti()));
         prefs.putString("nag_av2_max", dashNagNmString(nag->av2MaxCenti()));
     }
-#else
-    prefs.putBool("nag_en", nagKillerEnabled);
 #endif
-#endif
-#if defined(PRODUCT_WIFI_NAG)
     prefs.putBool("auto_sleep", false);
-#else
-    prefs.putBool("auto_sleep", dashAutoSleepEnabled);
-#endif
-    prefs.putBool("sp_auto", dashSpeedProfileAuto);
-    prefs.putUChar("sp_sel", dashManualSpeedProfile);
+    prefs.putBool("sp_auto", true);
+    prefs.putUChar("sp_sel", 1);
     prefs.putBool("eprn", dashHandler ? (bool)dashHandler->enablePrint : false);
-    prefs.putBool("h3_slw", hw3OffsetSlew);
-    prefs.putUChar("h3_srt", hw3SlewRate);
-    // HW3 custom speed-limit boost
-    prefs.putBool("h3_cust", hw3CustomSpeed);
-    prefs.putBool("h3_hse", hw3HighSpeedEnable);
-    prefs.putUChar("h3_enc", hw3WireEncoding);
-    char k[8];
-    for (uint8_t i = 0; i < kHw3CustomTargetCount; i++)
-    {
-        snprintf(k, sizeof(k), "h3_ct%u", (unsigned)i);
-        prefs.putUChar(k, hw3CustomTarget[i]);
-    }
-    for (uint8_t i = 0; i < kHw3HighSpeedBucketCount; i++)
-    {
-        snprintf(k, sizeof(k), "h3_ht%u", (unsigned)i);
-        prefs.putUChar(k, hw3HighSpeedTarget[i]);
-    }
-    // Legacy MPP custom speed-limit override
-    prefs.putBool("lg_mpp_en", legacyMppOverride);
-    prefs.putBool("lg_mppc_en", legacyMppCustomEnable);
-    prefs.putBool("lg_mpph_en", legacyMppHighSpeedEnable);
-    for (uint8_t i = 0; i < kLegacyMppCustomTargetCount; i++)
-    {
-        snprintf(k, sizeof(k), "lg_ct%u", (unsigned)i);
-        prefs.putUChar(k, legacyMppCustomTarget[i]);
-    }
-    for (uint8_t i = 0; i < kLegacyMppHighSpeedBucketCount; i++)
-    {
-        snprintf(k, sizeof(k), "lg_ht%u", (unsigned)i);
-        prefs.putUChar(k, legacyMppHighSpeedTarget[i]);
-    }
     prefs.end();
 }
 
 static void dashSetCanActive(bool active, const char *reason = nullptr)
 {
-#if defined(PRODUCT_WIFI_NAG)
-    bool changed = (canActive != active) || forceActivate;
+    bool changed = canActive != active;
     canActive = active;
-    forceActivate = false;
-#else
-    bool changed = (canActive != active) || (forceActivate != active);
-    canActive = active;
-    forceActivate = active;
-#endif
     dashApplyRuntimeState();
     dashSavePrefs();
     if (changed)
     {
-#if defined(PRODUCT_WIFI_NAG)
         String msg = String("[CFG] Nag/CAN TX ") + (active ? "ON" : "OFF");
-#else
-        String msg = String("[CFG] FSD master switch ") + (active ? "ON" : "OFF");
-#endif
         if (reason && *reason)
             msg += String(" via ") + reason;
         dashLog(msg);
@@ -1732,7 +483,7 @@ static bool dashStaConfigLengthValid(const String &ssid, const String &pass)
     return ssid.length() <= kDashMaxSsidLen && pass.length() <= kDashMaxPassLen;
 }
 
-static void dashClearLegacyOptionPrefs()
+static void dashClearRetiredOptionPrefs()
 {
     static const char *const keys[] = {
         "fAD",
@@ -1756,62 +507,30 @@ static void dashClearLegacyOptionPrefs()
     }
 
     if (removed)
-        dashLog("[BOOT] Cleared legacy dashboard prefs from NVS");
+        dashLog("[BOOT] Cleared retired dashboard prefs from NVS");
 }
 
 static void dashLoadPrefs()
 {
     prefs.begin(PREFS_NS, false);
-    dashClearLegacyOptionPrefs();
-#if !defined(PRODUCT_WIFI_NAG)
-    dashSleepLoadPersistentDiag(prefs);
-#endif
-    bool hasStoredHw = prefs.isKey("hw");
     uint8_t storedHw = prefs.getUChar("hw", DASH_DEFAULT_HW);
     uint8_t storedDefaultHw = prefs.getUChar("hw_def", kDashUnsetU8);
-    bool migratedHw = false;
+    bool migratedHw = storedHw != DASH_DEFAULT_HW || storedDefaultHw != DASH_DEFAULT_HW;
+    dashClearRetiredOptionPrefs();
 
-    hwMode = storedHw <= 2 ? storedHw : DASH_DEFAULT_HW;
-    if (!hasStoredHw || storedHw > 2)
-        migratedHw = true;
-
-    // If the stored selection only mirrors the old firmware default, follow the
-    // new build default after reflashing instead of staying pinned to stale NVS.
-    if (storedDefaultHw <= 2 && storedDefaultHw != DASH_DEFAULT_HW && hwMode == storedDefaultHw)
-    {
-        hwMode = DASH_DEFAULT_HW;
-        migratedHw = true;
-    }
-
-    if (migratedHw)
+    hwMode = DASH_DEFAULT_HW;
+    if (storedHw != DASH_DEFAULT_HW)
         prefs.putUChar("hw", hwMode);
     if (storedDefaultHw != DASH_DEFAULT_HW)
         prefs.putUChar("hw_def", DASH_DEFAULT_HW);
-#if defined(PRODUCT_WIFI_MAX)
-    canActive = false;
-    forceActivate = false;
-#elif defined(PRODUCT_WIFI_NAG)
     canActive = prefs.getBool("can", kDashInjectionDefaultEnabled);
-    forceActivate = false;
     if (prefs.getBool("force_act", false))
         prefs.putBool("force_act", false);
-#else
-    canActive = prefs.getBool("can", kDashInjectionDefaultEnabled);
-    forceActivate = canActive;
-    if (prefs.getBool("force_act", canActive) != forceActivate)
-        prefs.putBool("force_act", forceActivate);
-#endif
-    // 默认 false：复刻 2.5.2 真车固件行为（apInjectionGate=false 注入无条件放行）。
-    apInjectionGate = prefs.getBool("ap_gate", false);
-#if defined(PRODUCT_WIFI_NAG)
-    apAutoRestore = false;
     if (prefs.getBool("ap_rst", false))
         prefs.putBool("ap_rst", false);
-#else
-    apAutoRestore = prefs.getBool("ap_rst", false);
-#endif
+    if (prefs.getBool("ap_gate", false))
+        prefs.putBool("ap_gate", false);
 #if defined(NAG_KILLER)
-#if defined(PRODUCT_WIFI_NAG)
     nagKillerEnabled = true;
     if (!prefs.getBool("nag_en", true))
         prefs.putBool("nag_en", true);
@@ -1822,65 +541,13 @@ static void dashLoadPrefs()
         nag->setAv2RangeCentiNm(minNm, maxNm);
         nag->setMode(prefs.getUChar("nag_mode", NagHandler::MODE_A));
     }
-#else
-    nagKillerEnabled = prefs.getBool("nag_en", true);
 #endif
-#endif
-#if defined(PRODUCT_WIFI_NAG)
-    dashAutoSleepEnabled = false;
-    dashSleepActive = false;
-    dashSleepCandidateSinceMs = 0;
     if (prefs.getBool("auto_sleep", false))
         prefs.putBool("auto_sleep", false);
-#else
-    dashAutoSleepEnabled = prefs.getBool("auto_sleep", false);
-#endif
-    dashSpeedProfileAuto = prefs.getBool("sp_auto", true);
-    dashManualSpeedProfile = dashClampSpeedProfileForHw(hwMode, prefs.getUChar("sp_sel", 1));
-    hw3OffsetSlew = prefs.getBool("h3_slw", false);
-    hw3SlewRate = dashLoadHw3SlewRate(prefs.getUChar("h3_srt", kHw3SlewRateDefault));
-    // HW3 custom speed-limit boost
-    hw3CustomSpeed = prefs.getBool("h3_cust", false);
-    hw3HighSpeedEnable = prefs.getBool("h3_hse", false);
-    {
-        uint8_t enc = prefs.getUChar("h3_enc", kHw3WireEncDefault);
-        hw3WireEncoding = (enc == kHw3WireEncKph5) ? kHw3WireEncKph5 : kHw3WireEncPct4;
-    }
-    {
-        char k[8];
-        static const uint8_t defCt[kHw3CustomTargetCount] = {45, 60, 75, 90, 105};
-        static const uint8_t defHs[kHw3HighSpeedBucketCount] = {90, 110, 130};
-        for (uint8_t i = 0; i < kHw3CustomTargetCount; i++)
-        {
-            snprintf(k, sizeof(k), "h3_ct%u", (unsigned)i);
-            hw3CustomTarget[i] = dashClampHw3CustomTargetForBucket(i, prefs.getUChar(k, defCt[i]));
-        }
-        for (uint8_t i = 0; i < kHw3HighSpeedBucketCount; i++)
-        {
-            snprintf(k, sizeof(k), "h3_ht%u", (unsigned)i);
-            hw3HighSpeedTarget[i] = dashClampHw3HighSpeedTargetForBucket(i,
-                prefs.getUChar(k, defHs[i]));
-        }
-    }
-    // Legacy MPP custom speed-limit override
-    legacyMppOverride = prefs.getBool("lg_mpp_en", false);
-    legacyMppCustomEnable = prefs.getBool("lg_mppc_en", false);
-    legacyMppHighSpeedEnable = prefs.getBool("lg_mpph_en", false);
-    {
-        char k[8];
-        static const uint8_t defLgCt[kLegacyMppCustomTargetCount] = {45, 60, 75, 90, 105};
-        static const uint8_t defLgHt[kLegacyMppHighSpeedBucketCount] = {90, 110, 130};
-        for (uint8_t i = 0; i < kLegacyMppCustomTargetCount; i++)
-        {
-            snprintf(k, sizeof(k), "lg_ct%u", (unsigned)i);
-            legacyMppCustomTarget[i] = dashClampLegacyMppCustomTargetForBucket(i, prefs.getUChar(k, defLgCt[i]));
-        }
-        for (uint8_t i = 0; i < kLegacyMppHighSpeedBucketCount; i++)
-        {
-            snprintf(k, sizeof(k), "lg_ht%u", (unsigned)i);
-            legacyMppHighSpeedTarget[i] = dashClampLegacyMppHighSpeedTargetForBucket(i, prefs.getUChar(k, defLgHt[i]));
-        }
-    }
+    if (!prefs.getBool("sp_auto", true))
+        prefs.putBool("sp_auto", true);
+    if (prefs.getUChar("sp_sel", 1) != 1)
+        prefs.putUChar("sp_sel", 1);
     bool ep = prefs.getBool("eprn", false);
 
     dashApplyRuntimeState();
@@ -2020,115 +687,19 @@ static void dashLoadPrefs()
         wifiNextRotateSlot = 0;
     }
 
-#if DASH_ENABLE_ONLINE_UPDATE
-    updateBetaChannel = prefs.getBool("update_beta", false);
-    autoUpdateEnabled = prefs.getBool("auto_upd", false);
-#endif
     prefs.end();
 
     if (migratedHw)
-        dashLog("[BOOT] HW default synced to " + String(hwMode == 0 ? "LEGACY" : hwMode == 1 ? "HW3"
-                                                                                             : "HW4"));
-    dashLog("[BOOT] Prefs loaded HW=" + String(hwMode));
+        dashLog("[BOOT] HW locked to WIFI-NAG ESP32-S3 TWAI");
+    dashLog("[BOOT] Prefs loaded product=WIFI-NAG hw=" + String(hwMode));
     dashLog("[BOOT] canActive=" + String(canActive ? "YES" : "NO"));
 }
 
-// MCP2515-only: fine-grained filter register reload on HW mode switch.
-// Other builds use dashDriver->setFilters() in dashSwapHandler instead.
-#if !defined(PRODUCT_WIFI_MAX)
-[[maybe_unused]] static void dashApplyFilters()
-{
-#if defined(DRIVER_ESP32_EXT_MCP2515)
-    if (!dashMcp)
-        return;
-    dashMcp->setConfigMode();
-#if defined(PRODUCT_WIFI_NAG)
-    dashMcp->setFilterMask(MCP2515::MASK0, false, 0x7FF);
-    dashMcp->setFilter(MCP2515::RXF0, false, 880);
-    dashMcp->setFilter(MCP2515::RXF1, false, 880);
-    dashMcp->setFilterMask(MCP2515::MASK1, false, 0x7FF);
-    dashMcp->setFilter(MCP2515::RXF2, false, 880);
-    dashMcp->setFilter(MCP2515::RXF3, false, 880);
-    dashMcp->setFilter(MCP2515::RXF4, false, 880);
-    dashMcp->setFilter(MCP2515::RXF5, false, 880);
-#else
-    if (hwMode == 0)
-    {
-        dashMcp->setFilterMask(MCP2515::MASK0, false, 0x7FF);
-        dashMcp->setFilter(MCP2515::RXF0, false, 69);
-        dashMcp->setFilter(MCP2515::RXF1, false, 280);
-        dashMcp->setFilterMask(MCP2515::MASK1, false, 0x7FF);
-        dashMcp->setFilter(MCP2515::RXF2, false, 390);
-        dashMcp->setFilter(MCP2515::RXF3, false, 760);
-        dashMcp->setFilter(MCP2515::RXF4, false, 921);
-        dashMcp->setFilter(MCP2515::RXF5, false, 1006);
-    }
-    else if (hwMode == 2)
-    {
-        dashMcp->setFilterMask(MCP2515::MASK0, false, 0x7FF);
-        dashMcp->setFilter(MCP2515::RXF0, false, 921);
-        dashMcp->setFilter(MCP2515::RXF1, false, 1021);
-        dashMcp->setFilterMask(MCP2515::MASK1, false, 0x7FF);
-        dashMcp->setFilter(MCP2515::RXF2, false, 1016);
-        dashMcp->setFilter(MCP2515::RXF3, false, 280);
-        dashMcp->setFilter(MCP2515::RXF4, false, 1016);
-        dashMcp->setFilter(MCP2515::RXF5, false, 921);
-    }
-    else
-    {
-        dashMcp->setFilterMask(MCP2515::MASK0, false, 0x7FF);
-        dashMcp->setFilter(MCP2515::RXF0, false, 1016);
-        dashMcp->setFilter(MCP2515::RXF1, false, 1021);
-        dashMcp->setFilterMask(MCP2515::MASK1, false, 0x7FF);
-        dashMcp->setFilter(MCP2515::RXF2, false, 1016);
-        dashMcp->setFilter(MCP2515::RXF3, false, 280);
-        dashMcp->setFilter(MCP2515::RXF4, false, 1016);
-        dashMcp->setFilter(MCP2515::RXF5, false, 1021);
-    }
-#endif
-    dashMcp->setNormalMode();
-#if defined(PRODUCT_WIFI_NAG)
-    dashLog("[CFG] Filters set for WIFI-NAG 0x370");
-#else
-    dashLog("[CFG] Filters set for " + String(hwMode == 0 ? "LEGACY" : hwMode == 1 ? "HW3"
-                                                                                   : "HW4"));
-#endif
-#endif
-}
-
-// Bus-off recovery (MCP2515 only — TWAI driver handles its own bus-off internally)
-#if defined(DRIVER_ESP32_EXT_MCP2515)
-static unsigned long lastEflgCheckMs = 0;
-static void dashCheckBusHealth()
-{
-    if (!dashMcp)
-        return;
-    if (millis() - lastEflgCheckMs < 5000)
-        return;
-    lastEflgCheckMs = millis();
-    uint8_t eflg = dashMcp->getErrorFlags();
-    mcpEflg = eflg;
-    if (eflg & 0x20)
-    {
-        dashLog("[ERR] MCP2515 BUS-OFF -- recovering");
-        dashMcp->reset();
-        delay(10);
-        dashMcp->setBitrate(CAN_500KBPS, MCP_CRYSTAL_FREQ);
-        dashApplyFilters();
-        dashLog("[OK] MCP2515 recovered");
-    }
-}
-#else
-static void dashCheckBusHealth()
-{
-}
-#endif
-#endif
 static WebServer server(80);
 
 #include "web/dash_gateway.h"
 
-#if defined(NAG_KILLER) && !defined(PRODUCT_WIFI_MAX)
+#if defined(NAG_KILLER)
 static bool dashApplyNagConfigArgs()
 {
     NagHandler *nag = dashNagActiveHandler();
@@ -2207,41 +778,12 @@ static void handleStatus()
         fpsLastMs = now;
     }
 
-    bool APActive = dashHandler ? (bool)dashHandler->APActive : false;
-    bool ADEnabled = dashHandler ? (bool)dashHandler->ADEnabled : false;
-    int sp = dashHandler ? (int)dashHandler->speedProfile : 0;
-    bool spAuto = dashHandler ? (bool)dashHandler->speedProfileAuto : true;
-    int soff = dashHandler ? (int)dashHandler->speedOffset : 0;
-    int gtwAp = dashHandler ? (int)dashHandler->gatewayAutopilot : -1;
     bool ep = dashHandler ? (bool)dashHandler->enablePrint : false;
-    bool apGateOpen = dashApInjectionAllowed();
 
-    String j = "{\"product\":\"";
-#if defined(PRODUCT_WIFI_NAG)
-    j.reserve(1800);
-#else
-    j.reserve(4200);
-#endif
-#if defined(PRODUCT_WIFI_MAX)
-    j += "wifi-max";
-#elif defined(PRODUCT_WIFI_NAG)
-    j += "wifi-nag";
-#else
-    j += "can-fsd";
-#endif
-    j += "\",\"wifiMax\":";
-#if defined(PRODUCT_WIFI_MAX)
-    j += "true";
-#else
-    j += "false";
-#endif
-    j += ",\"wifiNag\":";
-#if defined(PRODUCT_WIFI_NAG)
-    j += "true";
-#else
-    j += "false";
-#endif
-#if defined(NAG_KILLER) && !defined(PRODUCT_WIFI_MAX)
+    String j = "{\"product\":\"wifi-nag\"";
+    j.reserve(900);
+    j += ",\"wifiNag\":true";
+#if defined(NAG_KILLER)
     j += ",\"nagKiller\":";
     j += nagKillerEnabled ? "true" : "false";
     j += ",\"nagEcho\":";
@@ -2266,184 +808,10 @@ static void handleStatus()
 #endif
     j += ",\"hw\":";
     j += hwMode;
-    j += ",\"sp\":";
-    j += sp;
-    j += ",\"spAuto\":";
-    j += spAuto ? "true" : "false";
-    j += ",\"soff\":";
-    j += soff;
-    j += ",\"gtwap\":";
-    j += gtwAp;
-    j += ",\"AD\":";
-    j += APActive ? "true" : "false";
-    j += ",\"apActive\":";
-    j += APActive ? "true" : "false";
-    j += ",\"adEnabled\":";
-    j += ADEnabled ? "true" : "false";
     j += ",\"eprn\":";
     j += ep ? "true" : "false";
-    j += ",\"force\":";
-    j += forceActivate ? "true" : "false";
-    j += ",\"apGate\":";
-    j += (canActive && !apGateOpen) ? "true" : "false";
-    j += ",\"apGateOpen\":";
-    j += apGateOpen ? "true" : "false";
-    j += ",\"apGateEnabled\":";
-    j += apInjectionGate ? "true" : "false";
-    j += ",\"apAutoRestore\":";
-    j += apAutoRestore ? "true" : "false";
-#if defined(PRODUCT_WIFI_NAG)
-    j += ",\"autoSleep\":false";
-#else
-    j += ",\"autoSleep\":";
-    j += dashAutoSleepEnabled ? "true" : "false";
-    j += ",\"sleepActive\":";
-    j += dashSleepActive ? "true" : "false";
-    j += ",\"sleepState\":\"";
-    j += dashSleepStateText();
-    j += "\",\"sleepReason\":\"";
-    j += jsonEscape(dashSleepBlockReason());
-    j += "\",\"sleepReady\":";
-    j += dashSleepParkLockReady() ? "true" : "false";
-    j += ",\"sleepGear\":";
-    j += dashSleepGearKnown ? String(dashSleepGear) : String(-1);
-    j += ",\"sleepGearAge\":";
-    j += dashSleepSignalAgeSec(dashSleepGearSeenMs);
-    j += ",\"sleepParkState\":";
-    j += dashSleepParkStateReady() ? "true" : "false";
-    j += ",\"sleepVehicleEmpty\":";
-    j += dashSleepVehicleEmptyReady() ? "true" : "false";
-    j += ",\"sleepLocked\":";
-    j += dashSleepEffectiveLocked() ? "true" : "false";
-    j += ",\"sleepLockFallback\":";
-    j += dashSleepLowPowerLockFallbackReady() ? "true" : "false";
-    j += ",\"sleepLockSource\":\"";
-    j += dashSleepEffectiveLockSource();
-    j += "\",\"sleepLockAge\":";
-    j += dashSleepSignalAgeSec(dashSleepLockLatchedMs);
-    j += ",\"sleepUiLockReq\":";
-    j += dashSleepUiLockKnown ? String(dashSleepUiLockRequest) : String(-1);
-    j += ",\"sleepUiLockAge\":";
-    j += dashSleepSignalAgeSec(dashSleepUiLockSeenMs);
-    j += ",\"sleepVcsecLock\":";
-    j += dashSleepVcsecKnown ? String(dashSleepVcsecVehicleLockStatus) : String(-1);
-    j += ",\"sleepVcsecSimple\":";
-    j += dashSleepVcsecKnown ? String(dashSleepVcsecSimpleLockStatus) : String(-1);
-    j += ",\"sleepVcsecAge\":";
-    j += dashSleepSignalAgeSec(dashSleepVcsecSeenMs);
-    j += ",\"sleepDriverPresent\":";
-    j += dashSleepDriverKnown ? (dashSleepDriverPresent ? "true" : "false") : "null";
-    j += ",\"sleepDriverAge\":";
-    j += dashSleepSignalAgeSec(dashSleepDriverSeenMs);
-    j += ",\"sleepDiPower\":";
-    j += dashSleepDiPowerKnown ? String(dashSleepDiPowerState) : String(-1);
-    j += ",\"sleepEpasPower\":";
-    j += dashSleepEpasKnown ? String(dashSleepEpasPowerMode) : String(-1);
-    j += ",\"sleepEpasAge\":";
-    j += dashSleepSignalAgeSec(dashSleepEpasSeenMs);
-    j += ",\"sleepCountdownMs\":";
-    if (dashSleepCandidateSinceMs)
-    {
-        unsigned long elapsed = millis() - dashSleepCandidateSinceMs;
-        j += elapsed >= kDashAutoSleepDelayMs ? 0 : (kDashAutoSleepDelayMs - elapsed);
-    }
-    else
-    {
-        j += -1;
-    }
-    j += ",\"sleepCount\":";
-    j += dashSleepEnterCount;
-    j += ",\"sleepBootCount\":";
-    j += dashSleepPersistBootCount;
-    j += ",\"sleepTotalCount\":";
-    j += dashSleepPersistTotalCount;
-    j += ",\"sleepCanWakeCount\":";
-    j += dashSleepPersistCanWakeCount;
-    j += ",\"sleepRebootWakeCount\":";
-    j += dashSleepPersistRebootWakeCount;
-    j += ",\"sleepCurrentRxCount\":";
-    j += dashSleepCurrentRxCount;
-    j += ",\"sleepLastRxCount\":";
-    j += dashSleepLastRxCount;
-    j += ",\"sleepLastEnterUptime\":";
-    j += dashSleepLastEnterUptimeSec;
-    j += ",\"sleepLastWakeUptime\":";
-    j += dashSleepLastWakeUptimeSec;
-    j += ",\"sleepLastDurationSec\":";
-    j += dashSleepLastDurationSec == kDashSleepDurationUnknown ? String(-1) : String(dashSleepLastDurationSec);
-    j += ",\"sleepLastWakeSource\":\"";
-    j += jsonEscape(dashSleepLastWakeSource);
-    j += "\",\"sleepLastWakeReason\":\"";
-    j += jsonEscape(dashSleepLastWakeReason);
-    j += "\",\"sleepLastReset\":\"";
-    j += jsonEscape(dashSleepLastResetReason);
-    j += "\",\"sleepLastEndedByReboot\":";
-    j += dashSleepLastEndedByReboot ? "true" : "false";
-#endif
     j += ",\"ia\":";
     j += dashInjectionActive() ? "true" : "false";
-    j += ",\"lastInjectMs\":";
-    j += (uint32_t)lastInjectMs;
-    j += ",\"hw3OffsetSlew\":";
-    j += hw3OffsetSlew ? "true" : "false";
-    j += ",\"hw3SlewRate\":";
-    j += hw3SlewRate;
-    j += ",\"hw3OffsetTarget\":";
-    j += hw3OffsetTargetRaw;
-    j += ",\"hw3OffsetLast\":";
-    j += hw3OffsetLastRaw;
-    j += ",\"hw3SlewCount\":";
-    j += hw3OffsetSlewCount;
-    // HW3 custom speed-limit boost
-    j += ",\"hw3CustomSpeed\":";
-    j += hw3CustomSpeed ? "true" : "false";
-    j += ",\"hw3CustomTarget\":[";
-    for (uint8_t i = 0; i < kHw3CustomTargetCount; i++)
-    {
-        if (i) j += ",";
-        j += hw3CustomTarget[i];
-    }
-    j += "],\"hw3HighSpeedEnable\":";
-    j += hw3HighSpeedEnable ? "true" : "false";
-    j += ",\"hw3HighSpeedTarget\":[";
-    for (uint8_t i = 0; i < kHw3HighSpeedBucketCount; i++)
-    {
-        if (i) j += ",";
-        j += hw3HighSpeedTarget[i];
-    }
-    j += "],\"hw3WireEncoding\":";
-    j += hw3WireEncoding;
-    j += ",\"fusedSpeedLimitRaw\":";
-    j += fusedSpeedLimitRaw;
-    j += ",\"fusedSpeedLimitKph\":";
-    j += (fusedSpeedLimitRaw == 0 || fusedSpeedLimitRaw == 31)
-             ? 0
-             : (uint16_t)fusedSpeedLimitRaw * 5;
-    j += ",\"hw3StockOffset\":";
-    j += hw3StockOffsetKph;
-    // Legacy MPP custom speed-limit override
-    j += ",\"legacyMppOverride\":";
-    j += legacyMppOverride ? "true" : "false";
-    j += ",\"legacyMppCustomEnable\":";
-    j += legacyMppCustomEnable ? "true" : "false";
-    j += ",\"legacyMppCustomTarget\":[";
-    for (uint8_t i = 0; i < kLegacyMppCustomTargetCount; i++)
-    {
-        if (i) j += ",";
-        j += legacyMppCustomTarget[i];
-    }
-    j += "],\"legacyMppHighSpeedEnable\":";
-    j += legacyMppHighSpeedEnable ? "true" : "false";
-    j += ",\"legacyMppHighSpeedTarget\":[";
-    for (uint8_t i = 0; i < kLegacyMppHighSpeedBucketCount; i++)
-    {
-        if (i) j += ",";
-        j += legacyMppHighSpeedTarget[i];
-    }
-    j += "],\"legacyMppLastRaw\":";
-    j += legacyMppLastRaw;
-    j += ",\"legacyMppLastSentRaw\":";
-    j += legacyMppLastSentRaw;
     j += ",\"can\":";
     j += canOnline ? "true" : "false";
     j += ",\"ci\":";
@@ -2454,8 +822,6 @@ static void handleStatus()
     j += txCount;
     j += ",\"txerr\":";
     j += txErrCount;
-    j += ",\"fd\":";
-    j += followDist;
     j += ",\"fps\":";
     {
         unsigned long fpsX10 = static_cast<unsigned long>(fps * 10.0f + 0.5f);
@@ -2463,85 +829,20 @@ static void handleStatus()
         j += ".";
         j += String(fpsX10 % 10);
     }
-    j += ",\"eflg\":";
-    j += mcpEflg;
     j += ",\"up\":";
     j += (millis() - startMs) / 1000;
-    j += ",\"probe\":{\"active\":";
-    j += dashWriteProbe.active ? "true" : "false";
-    j += ",\"state\":";
-    j += dashWriteProbe.state;
-    j += ",\"id\":";
-    j += dashWriteProbe.id;
-    j += ",\"mux\":";
-    j += dashWriteProbe.mux;
-    j += ",\"txa\":";
-    j += dashWriteProbe.active ? String(now - dashWriteProbe.txMs) : String(0);
-    j += ",\"rxa\":";
-    j += dashWriteProbe.hasRx ? String(now - dashWriteProbe.rxMs) : String(0);
-    j += ",\"txdlc\":";
-    j += dashWriteProbe.txDlc;
-    j += ",\"rxdlc\":";
-    j += dashWriteProbe.rxDlc;
-    j += ",\"hasrx\":";
-    j += dashWriteProbe.hasRx ? "true" : "false";
-    j += ",\"tx\":[";
-    for (uint8_t i = 0; i < dashWriteProbe.txDlc; i++)
-    {
-        if (i)
-            j += ",";
-        j += String(dashWriteProbe.txData[i]);
-    }
-    j += "],\"rx\":[";
-    for (uint8_t i = 0; i < dashWriteProbe.rxDlc; i++)
-    {
-        if (i)
-            j += ",";
-        j += String(dashWriteProbe.rxData[i]);
-    }
-    j += "]},\"mux\":[";
-    for (int i = 0; i < 3; i++)
-    {
-        if (i)
-            j += ",";
-        j += "{\"rx\":" + String(muxRx[i]) +
-             ",\"tx\":" + String(muxTx[i]) +
-             ",\"err\":" + String(muxErr[i]) + "}";
-    }
-    j += "]}";
+    j += "}";
     server.send(200, "application/json", j);
 }
 
 static void handleConfig()
 {
-#if defined(PRODUCT_WIFI_MAX)
-    bool changed = false;
-    if (canActive || forceActivate || hwMode != 1 || apAutoRestore || dashAutoSleepEnabled)
-    {
-        canActive = false;
-        forceActivate = false;
-        hwMode = 1;
-        apAutoRestore = false;
-        dashAutoSleepEnabled = false;
-        changed = true;
-    }
-    if (changed)
-    {
-        dashApplyRuntimeState();
-        dashSavePrefs();
-        dashLog("[CFG] WIFI-MAX ignores CAN/FSD configuration");
-    }
-    server.send(200, "application/json", "{\"ok\":true,\"canDisabled\":true}");
-    return;
-#else
-#if defined(PRODUCT_WIFI_NAG)
     if (server.hasArg("can") || server.hasArg("force"))
     {
         bool requestedTx = server.hasArg("can") ? (server.arg("can") == "1") : (server.arg("force") == "1");
-        if (requestedTx != canActive || forceActivate)
+        if (requestedTx != canActive)
         {
             canActive = requestedTx;
-            forceActivate = false;
             dashLog("[CFG] Nag/CAN TX " + String(requestedTx ? "ON" : "OFF"));
         }
     }
@@ -2549,230 +850,10 @@ static void handleConfig()
     nagKillerEnabled = true;
     dashApplyNagConfigArgs();
 #endif
-    dashAutoSleepEnabled = false;
-    dashSleepActive = false;
-    dashSleepCandidateSinceMs = 0;
-    forceActivate = false;
-    apAutoRestore = false;
-    hw3OffsetSlew = false;
-    hw3CustomSpeed = false;
-    hw3HighSpeedEnable = false;
-    legacyMppOverride = false;
-    legacyMppCustomEnable = false;
-    legacyMppHighSpeedEnable = false;
     dashApplyRuntimeState();
     dashSavePrefs();
     server.send(200, "application/json", "{\"ok\":true,\"product\":\"wifi-nag\"}");
-    return;
-#else
-    bool hwChanged = false;
-    if (server.hasArg("hw"))
-    {
-        uint8_t v = server.arg("hw").toInt();
-        if (v <= 2 && v != hwMode)
-        {
-            hwMode = v;
-            hwChanged = true;
-            dashLog("[CFG] HW=" + String(v == 0 ? "LEGACY" : v == 1 ? "HW3"
-                                                                    : "HW4"));
-        }
-    }
-    bool requestedFsdSwitch = canActive;
-    bool hasFsdSwitchArg = false;
-    if (server.hasArg("can"))
-    {
-        requestedFsdSwitch = server.arg("can") == "1";
-        hasFsdSwitchArg = true;
-    }
-    if (server.hasArg("force"))
-    {
-        requestedFsdSwitch = server.arg("force") == "1";
-        hasFsdSwitchArg = true;
-    }
-#if defined(PRODUCT_WIFI_MAX)
-    if (hasFsdSwitchArg && (canActive || forceActivate || requestedFsdSwitch))
-    {
-        canActive = false;
-        forceActivate = false;
-        dashLog("[CFG] WIFI-MAX ignores CAN/FSD switch");
-    }
-#else
-    if (hasFsdSwitchArg && ((requestedFsdSwitch != canActive) || (requestedFsdSwitch != forceActivate)))
-    {
-        canActive = requestedFsdSwitch;
-        forceActivate = requestedFsdSwitch;
-        dashLog("[CFG] FSD master switch " + String(requestedFsdSwitch ? "ON" : "OFF"));
-    }
-#endif
-    bool profileAutoRequested = server.hasArg("spa") && server.arg("spa") == "1";
-    if (server.hasArg("sp"))
-    {
-        uint8_t v = dashClampSpeedProfileForHw(hwMode, server.arg("sp").toInt());
-        if (!profileAutoRequested && (v != dashManualSpeedProfile || dashSpeedProfileAuto))
-            dashLog("[CFG] Speed profile manual " + String(v));
-        dashManualSpeedProfile = v;
-        if (!profileAutoRequested)
-            dashSpeedProfileAuto = false;
-    }
-    if (server.hasArg("spa"))
-    {
-        bool v = server.arg("spa") == "1";
-        if (v != dashSpeedProfileAuto)
-            dashLog("[CFG] Speed profile " + String(v ? "AUTO" : "MANUAL"));
-        dashSpeedProfileAuto = v;
-    }
-    if (server.hasArg("apRestore"))
-    {
-        bool v = server.arg("apRestore") == "1";
-        if (v != apAutoRestore)
-        {
-            apAutoRestore = v;
-            dashLog("[CFG] AP/EAP auto-restore " + String(v ? "ON" : "OFF"));
-        }
-    }
-#if defined(NAG_KILLER)
-    if (server.hasArg("nagKiller"))
-    {
-        bool v = server.arg("nagKiller") == "1";
-        if (v != nagKillerEnabled)
-        {
-            nagKillerEnabled = v;
-            dashLog("[CFG] Nag killer " + String(v ? "ON" : "OFF"));
-        }
-    }
-#endif
-    if (server.hasArg("autoSleep"))
-    {
-        bool v = server.arg("autoSleep") == "1";
-        if (v != dashAutoSleepEnabled)
-        {
-            dashAutoSleepEnabled = v;
-            dashSleepCandidateSinceMs = 0;
-            dashLog("[CFG] Auto sleep after Park+Lock " + String(v ? "ON" : "OFF"));
-        }
-    }
-    if (server.hasArg("hw3OffsetSlew"))
-    {
-        bool v = server.arg("hw3OffsetSlew") == "1";
-        if (v != hw3OffsetSlew)
-        {
-            hw3OffsetSlew = v;
-            dashLog("[CFG] HW3 offset slew " + String(v ? "ON" : "OFF"));
-        }
-    }
-    if (server.hasArg("hw3SlewRate"))
-    {
-        uint8_t v = dashClampHw3SlewRate(server.arg("hw3SlewRate").toInt());
-        if (v != hw3SlewRate)
-        {
-            hw3SlewRate = v;
-            dashLog("[CFG] HW3 slew rate " + String(hw3SlewRate) + "%/s");
-        }
-    }
-    // ─── HW3 custom speed-limit boost ────────────────────────────────────────
-    if (server.hasArg("hw3CustomSpeed"))
-    {
-        bool v = server.arg("hw3CustomSpeed") == "1";
-        if (v != hw3CustomSpeed)
-        {
-            hw3CustomSpeed = v;
-            dashLog("[CFG] HW3 custom speed " + String(v ? "ON" : "OFF"));
-        }
-    }
-    if (server.hasArg("hw3HighSpeedEnable"))
-    {
-        bool v = server.arg("hw3HighSpeedEnable") == "1";
-        if (v != hw3HighSpeedEnable)
-        {
-            hw3HighSpeedEnable = v;
-            dashLog("[CFG] HW3 high-speed " + String(v ? "ON" : "OFF"));
-        }
-    }
-    if (server.hasArg("hw3WireEncoding"))
-    {
-        int v = server.arg("hw3WireEncoding").toInt();
-        uint8_t enc = (v == kHw3WireEncKph5) ? kHw3WireEncKph5 : kHw3WireEncPct4;
-        if (enc != hw3WireEncoding)
-        {
-            hw3WireEncoding = enc;
-            dashLog(String("[CFG] HW3 wire enc ") +
-                    (enc == kHw3WireEncPct4 ? "PCT4" : "KPH5"));
-        }
-    }
-    {
-        char arg[16];
-        for (uint8_t i = 0; i < kHw3CustomTargetCount; i++)
-        {
-            snprintf(arg, sizeof(arg), "hw3CustomT%u", (unsigned)i);
-            if (server.hasArg(arg))
-                hw3CustomTarget[i] = dashClampHw3CustomTargetForBucket(i,
-                    server.arg(arg).toInt());
-        }
-        for (uint8_t i = 0; i < kHw3HighSpeedBucketCount; i++)
-        {
-            snprintf(arg, sizeof(arg), "hw3HighTarget%u", (unsigned)i);
-            if (server.hasArg(arg))
-                hw3HighSpeedTarget[i] = dashClampHw3HighSpeedTargetForBucket(i,
-                    server.arg(arg).toInt());
-        }
-    }
-    // ─── Legacy MPP custom speed-limit override ──────────────────────────────
-    if (server.hasArg("legacyMppOverride"))
-    {
-        bool v = server.arg("legacyMppOverride") == "1";
-        if (v != legacyMppOverride)
-        {
-            legacyMppOverride = v;
-            dashLog("[CFG] Legacy MPP override " + String(v ? "ON" : "OFF"));
-        }
-    }
-    if (server.hasArg("legacyMppCustomEnable"))
-    {
-        bool v = server.arg("legacyMppCustomEnable") == "1";
-        if (v != legacyMppCustomEnable)
-        {
-            legacyMppCustomEnable = v;
-            dashLog("[CFG] Legacy MPP custom " + String(v ? "ON" : "OFF"));
-        }
-    }
-    if (server.hasArg("legacyMppHighSpeedEnable"))
-    {
-        bool v = server.arg("legacyMppHighSpeedEnable") == "1";
-        if (v != legacyMppHighSpeedEnable)
-        {
-            legacyMppHighSpeedEnable = v;
-            dashLog("[CFG] Legacy MPP high-speed " + String(v ? "ON" : "OFF"));
-        }
-    }
-    {
-        char arg[28];
-        for (uint8_t i = 0; i < kLegacyMppCustomTargetCount; i++)
-        {
-            snprintf(arg, sizeof(arg), "legacyMppCustomT%u", (unsigned)i);
-            if (server.hasArg(arg))
-                legacyMppCustomTarget[i] = dashClampLegacyMppCustomTargetForBucket(i,
-                    server.arg(arg).toInt());
-        }
-        for (uint8_t i = 0; i < kLegacyMppHighSpeedBucketCount; i++)
-        {
-            snprintf(arg, sizeof(arg), "legacyMppHighTarget%u", (unsigned)i);
-            if (server.hasArg(arg))
-                legacyMppHighSpeedTarget[i] = dashClampLegacyMppHighSpeedTargetForBucket(i,
-                    server.arg(arg).toInt());
-        }
-    }
-    if (hwChanged)
-    {
-        dashSwapHandler(hwMode);
-        dashApplyFilters();
-    }
-    dashApplyRuntimeState();
-    dashSavePrefs();
-    server.send(200, "application/json", "{\"ok\":true}");
-#endif
-#endif
 }
-
 #if defined(NAG_KILLER) && defined(PRODUCT_WIFI_NAG)
 static void handleNagApiConfig()
 {
@@ -2814,36 +895,6 @@ static void handleLoggingConfig()
     server.send(200, "application/json", "{\"ok\":true}");
 }
 
-#if !defined(PRODUCT_WIFI_MAX) && DASH_ENABLE_CAN_DEBUG_TOOLS
-static void handleFrames()
-{
-    String j = "{\"frames\":[";
-    j.reserve(32 + static_cast<size_t>(min(sniffCount, SNIFFER_CAP)) * 96);
-    int start = (sniffCount < SNIFFER_CAP) ? 0 : sniffHead;
-    int count = min(sniffCount, SNIFFER_CAP);
-    for (int i = 0; i < count; i++)
-    {
-        int idx = (start + i) % SNIFFER_CAP;
-        SniffFrame &f = sniffBuf[idx];
-        if (i)
-            j += ",";
-        j += "{\"ts\":" + String(f.ts) +
-             ",\"id\":" + String(f.id) +
-             ",\"dlc\":" + String(f.dlc) +
-             ",\"data\":[";
-        for (int b = 0; b < f.dlc; b++)
-        {
-            if (b)
-                j += ",";
-            j += String(f.data[b]);
-        }
-        j += "],\"name\":\"" + jsonEscape(decodeCanId(f.id)) + "\"}";
-    }
-    j += "]}";
-    server.send(200, "application/json", j);
-}
-#endif
-
 static void handleLog()
 {
     // Pick up any new per-frame handler diagnostics first.
@@ -2872,82 +923,11 @@ static void handleLog()
     server.send(200, "application/json", j);
 }
 
-#if !defined(PRODUCT_WIFI_MAX) && DASH_ENABLE_CAN_DEBUG_TOOLS
-static void handleResetStats()
-{
-    rxCount = 0;
-    txCount = 0;
-    txErrCount = 0;
-    memset(muxRx, 0, sizeof(muxRx));
-    memset(muxTx, 0, sizeof(muxTx));
-    memset(muxErr, 0, sizeof(muxErr));
-    dashResetWriteProbe();
-    dashLog("[CFG] Stats reset");
-    server.send(200, "application/json", "{\"ok\":true}");
-}
-#endif
-
-#if !defined(PRODUCT_WIFI_MAX)
-#if !defined(PRODUCT_WIFI_NAG)
-static void handleRecStart()
-{
-    if (!dashEnsureRecBuffer())
-    {
-        server.send(500, "application/json", "{\"ok\":false,\"error\":\"recorder buffer allocation failed\"}");
-        return;
-    }
-    recCount = 0;
-    recSaved = false;
-    recStartMs = millis();
-    recActive = true;
-    dashLog("[REC] Recording started");
-    server.send(200, "application/json", "{\"ok\":true}");
-}
-
-static void handleRecStop()
-{
-    bool ok = dashStopRecordingAndSave("manual");
-    server.send(ok ? 200 : 500, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
-}
-
-static void handleRecStatus()
-{
-    if (recActive && (millis() - recStartMs >= kRecMaxDurationMs))
-        dashStopRecordingAndSave("time limit");
-    String j = "{\"active\":";
-    j += recActive ? "true" : "false";
-    j += ",\"count\":";
-    j += recCount;
-    j += ",\"cap\":";
-    j += REC_CAP;
-    j += ",\"saved\":";
-    j += recSaved ? "true" : "false";
-    j += ",\"psram\":";
-    j += recBufInPsram ? "true" : "false";
-    j += "}";
-    server.send(200, "application/json", j);
-}
-
-static void handleRecDownload()
-{
-    if (!SPIFFS.exists("/rec.csv"))
-    {
-        server.send(404, "text/plain", "No recording saved yet");
-        return;
-    }
-    File f = SPIFFS.open("/rec.csv", "r");
-    server.sendHeader("Content-Disposition", "attachment; filename=\"can_recording.csv\"");
-    server.streamFile(f, "text/csv");
-    f.close();
-}
-#endif
-
 static void handleDisable()
 {
     dashSetCanActive(false, "dashboard");
     server.send(200, "text/plain", "Injection stopped.");
 }
-#endif
 
 static void handleReboot()
 {
@@ -3094,9 +1074,6 @@ static void dashPrepareStaReconnect()
     staConnectAttemptActive = false;
     staRetryAt = 0;
     staConsecutiveFailures = 0; // user-initiated reconnect resets diagnostics
-#if DASH_ENABLE_ONLINE_UPDATE
-    autoUpdateEligibleAt = 0;
-#endif
 }
 
 static void dashApplyWifiSlot(uint8_t slot)
@@ -3245,10 +1222,6 @@ static const char *dashWifiStatusName(int status)
     }
 }
 
-#if DASH_ENABLE_ONLINE_UPDATE
-static void performAutoUpdate(); // forward decl, defined below
-#endif
-
 static void dashCheckWifi()
 {
     static unsigned long lastCheck = 0;
@@ -3308,11 +1281,6 @@ static void dashCheckWifi()
                     prefs.putUChar("wn_pref", static_cast<uint8_t>(wifiActiveSlot));
                 prefs.end();
             }
-#if DASH_ENABLE_ONLINE_UPDATE
-            // Schedule auto-update check 15 s after STA comes up (grace period for other boot work)
-            if (autoUpdateEnabled && !autoUpdateDone)
-                autoUpdateEligibleAt = millis() + 15000;
-#endif
         }
         else
         {
@@ -3327,115 +1295,12 @@ static void dashCheckWifi()
         }
     }
 
-#if DASH_ENABLE_ONLINE_UPDATE
-    // Fire one-shot auto-update check once eligible
-    if (autoUpdateEnabled && !autoUpdateDone && staConnected && autoUpdateEligibleAt > 0 && millis() >= autoUpdateEligibleAt)
-    {
-        autoUpdateDone = true;
-        performAutoUpdate();
-    }
-#endif
-
 }
 
 // Cached scan results — a full-channel scan in APSTA mode briefly drops the
 // AP beacon, so we do NOT scan more often than kDashScanMinIntervalMs even if
 // the WebUI keeps polling. Cached JSON is returned for repeat calls inside the
 // window, and a 429 with retry-after is returned if the cache is empty.
-#if !defined(PRODUCT_WIFI_MAX)
-static void dashEnterLowPowerSleep()
-{
-    if (dashSleepActive)
-        return;
-    dashSleepSavedCanActive = canActive;
-    dashSleepSavedForceActivate = forceActivate;
-    canActive = false;
-    forceActivate = false;
-    dashApplyRuntimeState();
-
-    staConnected = false;
-    staConnectAttemptActive = false;
-    staRetryAt = 0;
-    dashGatewayOnStaDisconnected(WiFi.apNetif());
-    WiFi.disconnect(true, false);
-#ifdef ESP_PLATFORM
-    esp_wifi_stop();
-#endif
-    dashSleepActive = true;
-    dashSleepWakeRequested = false;
-    dashSleepWakeReason = "none";
-    dashSleepEnteredMs = millis();
-    dashSleepEnterCount++;
-    dashSleepPersistEnterDiag();
-    dashLog("[SLEEP] Enter Park+Lock low-power sleep; WiFi/AP/STA off, CAN injection off");
-}
-
-static void dashExitLowPowerSleep(const char *reason)
-{
-    if (!dashSleepActive)
-        return;
-    dashSleepPersistWakeDiag(reason);
-    dashSleepActive = false;
-    dashSleepCandidateSinceMs = 0;
-    canActive = dashSleepSavedCanActive;
-    forceActivate = dashSleepSavedForceActivate;
-    dashApplyRuntimeState();
-
-    dashStartAccessPoint(true);
-    if (strlen(staSSID) > 0)
-        dashScheduleSTAConnect(kDashStaBootDelayMs);
-    dashLog("[SLEEP] Wake from low-power sleep: " + String(reason ? reason : "unknown"));
-}
-
-[[maybe_unused]] static void dashSleepPoll()
-{
-    if (!dashAutoSleepEnabled)
-    {
-        dashSleepCandidateSinceMs = 0;
-        return;
-    }
-
-    if (dashSleepActive)
-    {
-        if (dashSleepWakeRequested)
-        {
-            const char *reason = dashSleepWakeReason;
-            dashSleepWakeRequested = false;
-            dashExitLowPowerSleep(reason);
-            return;
-        }
-#ifdef ESP_PLATFORM
-        esp_sleep_enable_timer_wakeup(kDashSleepLightSliceUs);
-#if defined(DRIVER_TWAI) && defined(TWAI_RX_PIN)
-        gpio_wakeup_enable(TWAI_RX_PIN, GPIO_INTR_LOW_LEVEL);
-        esp_sleep_enable_gpio_wakeup();
-#endif
-        esp_light_sleep_start();
-#if defined(DRIVER_TWAI) && defined(TWAI_RX_PIN)
-        gpio_wakeup_disable(TWAI_RX_PIN);
-#endif
-#endif
-        return;
-    }
-
-    if (!dashSleepParkLockReady())
-    {
-        dashSleepCandidateSinceMs = 0;
-        return;
-    }
-
-    unsigned long now = millis();
-    if (!dashSleepCandidateSinceMs)
-    {
-        dashSleepCandidateSinceMs = now;
-        dashLog("[SLEEP] Park+Lock detected; sleep in 10s if unchanged");
-        return;
-    }
-    if (now - dashSleepCandidateSinceMs >= kDashAutoSleepDelayMs)
-        dashEnterLowPowerSleep();
-}
-#endif
-
 static String dashCachedScanJson;
 static unsigned long dashLastScanAt = 0;
 static constexpr unsigned long kDashScanMinIntervalMs = 30000;
@@ -4067,187 +1932,6 @@ static void handleSystemStatus()
 #endif
 }
 
-#if DASH_ENABLE_TASK_STATS
-#ifdef ESP_PLATFORM
-static const char *dashTaskStateName(eTaskState state)
-{
-    switch (state)
-    {
-    case eRunning:
-        return "RUN";
-    case eReady:
-        return "READY";
-    case eBlocked:
-        return "BLOCK";
-    case eSuspended:
-        return "SUSP";
-    case eDeleted:
-        return "DEL";
-    default:
-        return "UNK";
-    }
-}
-
-static String dashTaskCoreName(BaseType_t core)
-{
-    if (core == tskNO_AFFINITY)
-        return "any";
-    return String((int)core);
-}
-
-static BaseType_t dashTaskCore(TaskHandle_t handle)
-{
-    if (!handle)
-        return tskNO_AFFINITY;
-    return xTaskGetCoreID(handle);
-}
-
-#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
-static constexpr UBaseType_t kMaxTasksForStats = 64;
-
-struct DashTaskSample
-{
-    const TaskStatus_t *task;
-    uint32_t delta;
-};
-
-static String dashBuildTaskStatsText(const TaskStatus_t *before,
-                                     UBaseType_t beforeCount,
-                                     const TaskStatus_t *after,
-                                     UBaseType_t afterCount,
-                                     uint32_t elapsedMs)
-{
-    DashTaskSample samples[kMaxTasksForStats];
-    UBaseType_t sampleCount = 0;
-    uint64_t totalDelta = 0;
-    uint32_t idleDelta[2] = {0, 0};
-
-    for (UBaseType_t i = 0; i < afterCount && i < kMaxTasksForStats; i++)
-    {
-        uint32_t prevCounter = static_cast<uint32_t>(after[i].ulRunTimeCounter);
-        bool found = false;
-        for (UBaseType_t j = 0; j < beforeCount && j < kMaxTasksForStats; j++)
-        {
-            if (before[j].xHandle == after[i].xHandle)
-            {
-                prevCounter = static_cast<uint32_t>(before[j].ulRunTimeCounter);
-                found = true;
-                break;
-            }
-        }
-        uint32_t nowCounter = static_cast<uint32_t>(after[i].ulRunTimeCounter);
-        uint32_t delta = found ? (nowCounter - prevCounter) : 0;
-        samples[sampleCount++] = {&after[i], delta};
-        totalDelta += delta;
-
-        const char *name = after[i].pcTaskName ? after[i].pcTaskName : "";
-        BaseType_t core = dashTaskCore(after[i].xHandle);
-        if (strncmp(name, "IDLE", 4) == 0 && core >= 0 && core <= 1)
-            idleDelta[core] = delta;
-    }
-
-    for (UBaseType_t i = 0; i < sampleCount; i++)
-    {
-        for (UBaseType_t j = i + 1; j < sampleCount; j++)
-        {
-            if (samples[j].delta > samples[i].delta)
-            {
-                DashTaskSample tmp = samples[i];
-                samples[i] = samples[j];
-                samples[j] = tmp;
-            }
-        }
-    }
-
-    auto pct = [totalDelta](uint32_t delta) -> String {
-        if (totalDelta == 0)
-            return "0.0";
-        uint32_t tenths = static_cast<uint32_t>((static_cast<uint64_t>(delta) * 1000ULL + totalDelta / 2) / totalDelta);
-        return String(tenths / 10) + "." + String(tenths % 10);
-    };
-    auto loadFromIdle = [totalDelta](uint32_t idle) -> String {
-        if (totalDelta == 0)
-            return "n/a";
-        uint32_t perCoreTotal = static_cast<uint32_t>(totalDelta / 2);
-        if (perCoreTotal == 0)
-            return "n/a";
-        uint32_t idlePct = static_cast<uint32_t>((static_cast<uint64_t>(idle) * 100ULL + perCoreTotal / 2) / perCoreTotal);
-        if (idlePct > 100)
-            idlePct = 100;
-        return String(100 - idlePct);
-    };
-
-    String out;
-    out.reserve(4096);
-    out += "ev-open-can-tools task stats\n";
-    out += "sample_ms: " + String(elapsedMs) + "\n";
-    out += "tasks: " + String(afterCount) + "\n";
-    out += "cpu0_load_from_idle: " + loadFromIdle(idleDelta[0]) + "%\n";
-    out += "cpu1_load_from_idle: " + loadFromIdle(idleDelta[1]) + "%\n";
-    out += "heap_free: " + String(heap_caps_get_free_size(MALLOC_CAP_8BIT)) + " bytes\n";
-    out += "heap_largest: " + String(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)) + " bytes\n\n";
-    out += "CPU%   core prio stack state  task\n";
-    out += "-----  ---- ---- ----- ------ ----------------\n";
-
-    for (UBaseType_t i = 0; i < sampleCount; i++)
-    {
-        const TaskStatus_t &t = *samples[i].task;
-        String p = pct(samples[i].delta);
-        while (p.length() < 5)
-            p = " " + p;
-        String core = dashTaskCoreName(dashTaskCore(t.xHandle));
-        while (core.length() < 4)
-            core = " " + core;
-        String prio = String((unsigned)t.uxCurrentPriority);
-        while (prio.length() < 4)
-            prio = " " + prio;
-        String stack = String((unsigned)t.usStackHighWaterMark);
-        while (stack.length() < 5)
-            stack = " " + stack;
-
-        out += p + "  " + core + " " + prio + " " + stack + " ";
-        out += dashTaskStateName(t.eCurrentState);
-        out += "  ";
-        out += t.pcTaskName ? t.pcTaskName : "?";
-        out += "\n";
-    }
-
-    return out;
-}
-
-static String dashBuildTaskStatsTextBlocking()
-{
-    TaskStatus_t before[kMaxTasksForStats];
-    TaskStatus_t after[kMaxTasksForStats];
-    configRUN_TIME_COUNTER_TYPE totalBefore = 0;
-    configRUN_TIME_COUNTER_TYPE totalAfter = 0;
-
-    UBaseType_t beforeCount = uxTaskGetSystemState(before, kMaxTasksForStats, &totalBefore);
-    int64_t startUs = esp_timer_get_time();
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    int64_t endUs = esp_timer_get_time();
-    UBaseType_t afterCount = uxTaskGetSystemState(after, kMaxTasksForStats, &totalAfter);
-    return dashBuildTaskStatsText(before, beforeCount, after, afterCount,
-                                  static_cast<uint32_t>((endUs - startUs) / 1000));
-}
-#endif
-
-static void handleTaskStats()
-{
-#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
-    server.send(200, "text/plain; charset=utf-8", dashBuildTaskStatsTextBlocking());
-#else
-    server.send(200, "text/plain; charset=utf-8", "FreeRTOS runtime stats are not enabled.\n");
-#endif
-}
-#else
-static void handleTaskStats()
-{
-    server.send(200, "text/plain; charset=utf-8", "Task stats are only available on ESP-IDF builds.\n");
-}
-#endif
-#endif
-
 #ifdef ESP_PLATFORM
 static void dashSerialPrintHelp()
 {
@@ -4256,12 +1940,7 @@ static void dashSerialPrintHelp()
     Serial.println("Commands:");
     Serial.println("  help           show this help");
     Serial.println("  system_status  print CPU/heap/WiFi summary");
-#if !defined(PRODUCT_WIFI_MAX)
-    Serial.println("  can_status     print CAN/injection summary");
-#endif
-#if DASH_ENABLE_TASK_STATS
-    Serial.println("  task_stats     sample FreeRTOS tasks for 1s asynchronously");
-#endif
+    Serial.println("  can_status     print CAN/Nag summary");
     Serial.println();
 }
 
@@ -4321,71 +2000,20 @@ static void dashSerialPrintSystemStatus()
     Serial.println();
 }
 
-#if !defined(PRODUCT_WIFI_MAX)
 static void dashSerialPrintCanStatus()
 {
     unsigned long fpsX10 = static_cast<unsigned long>(fps * 10.0f + 0.5f);
-    bool apActive = dashHandler ? (bool)dashHandler->APActive : false;
-    bool adEnabled = dashHandler ? (bool)dashHandler->ADEnabled : false;
-    int sp = dashHandler ? (int)dashHandler->speedProfile : 0;
-    bool spAuto = dashHandler ? (bool)dashHandler->speedProfileAuto : true;
-    int gtwAp = dashHandler ? (int)dashHandler->gatewayAutopilot : -1;
     Serial.println();
     Serial.println("[can_status]");
-    Serial.printf("can=%s fsd_switch=%s injection_active=%s hw=%u profile=%s/%d\n",
+    Serial.printf("can=%s can_write=%s nag_tx_active=%s hw=%u\n",
                   canOnline ? "online" : "offline",
                   canActive ? "ON" : "OFF",
                   dashInjectionActive() ? "ON" : "OFF",
-                  (unsigned)hwMode,
-                  spAuto ? "auto" : "manual",
-                  sp);
-    Serial.printf("rx=%lu tx=%lu txerr=%lu fps=%lu.%lu follow_dist=%u eflg=0x%02X\n",
-                  rxCount, txCount, txErrCount, fpsX10 / 10, fpsX10 % 10,
-                  (unsigned)followDist, (unsigned)mcpEflg);
-    Serial.printf("APActive=%s ADEnabled=%s GTW_autopilot=%d\n",
-                  apActive ? "yes" : "no",
-                  adEnabled ? "yes" : "no",
-                  gtwAp);    Serial.println();
+                  (unsigned)hwMode);
+    Serial.printf("rx=%lu tx=%lu txerr=%lu fps=%lu.%lu\n",
+                  rxCount, txCount, txErrCount, fpsX10 / 10, fpsX10 % 10);
+    Serial.println();
 }
-#endif
-
-#if DASH_ENABLE_TASK_STATS
-#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
-static TaskStatus_t dashSerialTaskBefore[kMaxTasksForStats];
-static UBaseType_t dashSerialTaskBeforeCount = 0;
-static uint32_t dashSerialTaskStartMs = 0;
-static bool dashSerialTaskSampling = false;
-
-static void dashSerialStartTaskStats()
-{
-    configRUN_TIME_COUNTER_TYPE totalBefore = 0;
-    dashSerialTaskBeforeCount = uxTaskGetSystemState(dashSerialTaskBefore, kMaxTasksForStats, &totalBefore);
-    dashSerialTaskStartMs = millis();
-    dashSerialTaskSampling = true;
-    Serial.println("[task_stats] sampling 1000 ms...");
-}
-
-static void dashSerialTaskStatsTick()
-{
-    if (!dashSerialTaskSampling || millis() - dashSerialTaskStartMs < 1000)
-        return;
-
-    TaskStatus_t after[kMaxTasksForStats];
-    configRUN_TIME_COUNTER_TYPE totalAfter = 0;
-    UBaseType_t afterCount = uxTaskGetSystemState(after, kMaxTasksForStats, &totalAfter);
-    uint32_t elapsedMs = millis() - dashSerialTaskStartMs;
-    dashSerialTaskSampling = false;
-    Serial.print(dashBuildTaskStatsText(dashSerialTaskBefore, dashSerialTaskBeforeCount, after, afterCount, elapsedMs));
-}
-#else
-static void dashSerialStartTaskStats()
-{
-    Serial.println("FreeRTOS runtime stats are not enabled.");
-}
-
-static void dashSerialTaskStatsTick() {}
-#endif
-#endif
 
 static void dashSerialRunCommand(char *cmd)
 {
@@ -4405,14 +2033,8 @@ static void dashSerialRunCommand(char *cmd)
         dashSerialPrintHelp();
     else if (strcmp(start, "system_status") == 0 || strcmp(start, "sys") == 0)
         dashSerialPrintSystemStatus();
-#if !defined(PRODUCT_WIFI_MAX)
     else if (strcmp(start, "can_status") == 0 || strcmp(start, "can") == 0)
         dashSerialPrintCanStatus();
-#endif
-#if DASH_ENABLE_TASK_STATS
-    else if (strcmp(start, "task_stats") == 0 || strcmp(start, "tasks") == 0)
-        dashSerialStartTaskStats();
-#endif
     else if (*start)
         Serial.println("Unknown command. Type help.");
 }
@@ -4428,10 +2050,6 @@ static void dashSerialDiagnosticsPoll()
         announced = true;
         Serial.println("[DIAG] Serial commands ready. Type help.");
     }
-
-#if DASH_ENABLE_TASK_STATS
-    dashSerialTaskStatsTick();
-#endif
 
     int budget = 24;
     while (budget-- > 0 && Serial.available() > 0)
@@ -4463,495 +2081,6 @@ static void dashSerialDiagnosticsPoll()
 }
 #else
 static void dashSerialDiagnosticsPoll() {}
-#endif
-
-#if !defined(PRODUCT_WIFI_MAX) && DASH_ENABLE_CAN_DEBUG_TOOLS
-static bool dashCanGpioReserved(int pin)
-{
-#if defined(CONFIG_IDF_TARGET_ESP32S3)
-    if (pin >= 26 && pin <= 32)
-        return true; // embedded flash/PSRAM bus on ESP32-S3 modules
-    if (pin == 45 || pin == 46)
-        return true; // strapping/input-only pins
-#elif defined(CONFIG_IDF_TARGET_ESP32)
-#ifndef DASH_ALLOW_CAN_GPIO_6_11
-#define DASH_ALLOW_CAN_GPIO_6_11 0
-#endif
-#if !DASH_ALLOW_CAN_GPIO_6_11
-    if (pin >= 6 && pin <= 11)
-        return true; // SPI flash pins on common ESP32 modules
-#endif
-#endif
-    return false;
-}
-
-static bool dashCanGpioValid(int pin, bool tx)
-{
-#if defined(CONFIG_IDF_TARGET_ESP32S3)
-    constexpr int kMaxGpio = 48;
-#else
-    constexpr int kMaxGpio = 39;
-#endif
-    if (pin < 0 || pin > kMaxGpio || dashCanGpioReserved(pin))
-        return false;
-#if defined(CONFIG_IDF_TARGET_ESP32)
-    if (tx && pin >= 34 && pin <= 39)
-        return false; // input-only pins cannot drive TWAI TX
-#else
-    (void)tx;
-#endif
-    return true;
-}
-
-static void handleCanPins()
-{
-    Preferences canPrefs;
-    bool customized = false;
-    int tx = -1, rx = -1;
-#if defined(DRIVER_TWAI)
-    tx = (int)TWAI_TX_PIN;
-    rx = (int)TWAI_RX_PIN;
-#endif
-    if (canPrefs.begin("can", false))
-    {
-        int storedTx = canPrefs.getChar("tx", -1);
-        int storedRx = canPrefs.getChar("rx", -1);
-        canPrefs.end();
-        if (dashCanGpioValid(storedTx, true) && dashCanGpioValid(storedRx, false) && storedTx != storedRx)
-        {
-            tx = storedTx;
-            rx = storedRx;
-            customized = true;
-        }
-    }
-    String j = "{\"tx\":" + String(tx);
-    j += ",\"rx\":" + String(rx);
-    j += ",\"customized\":" + String(customized ? "true" : "false");
-    j += "}";
-    server.send(200, "application/json", j);
-}
-
-static void handleCanPinsSave()
-{
-    int tx = server.arg("tx").toInt();
-    int rx = server.arg("rx").toInt();
-
-    if (!dashCanGpioValid(tx, true) || !dashCanGpioValid(rx, false))
-    {
-        server.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid or reserved GPIO for CAN\"}");
-        return;
-    }
-    if (tx == rx)
-    {
-        server.send(400, "application/json", "{\"ok\":false,\"error\":\"TX and RX must differ\"}");
-        return;
-    }
-
-    Preferences canPrefs;
-    if (!canPrefs.begin("can", false))
-    {
-        server.send(500, "application/json", "{\"ok\":false,\"error\":\"NVS open failed\"}");
-        return;
-    }
-    canPrefs.putChar("tx", (int8_t)tx);
-    canPrefs.putChar("rx", (int8_t)rx);
-    canPrefs.end();
-
-    dashLog("[CAN] Pins saved: TX=" + String(tx) + " RX=" + String(rx) + " (reboot required)");
-    server.send(200, "application/json", "{\"ok\":true,\"reboot\":true}");
-}
-
-// ── Settings Backup / Restore ───────────────────────────────────
-
-#endif
-
-#if DASH_ENABLE_SETTINGS_BACKUP
-static void handleSettingsExport()
-{
-    Preferences p;
-    String apSsid = "", apPass = "", wSsid = "", wPass = "";
-    String wIp = "", wGw = "", wMask = "", wDns = "";
-    bool wStatic = false, beta = false, autoUpdate = false, apHid = false;
-    bool eprn = false;
-#if !defined(PRODUCT_WIFI_MAX)
-    bool storedCan = canActive;
-    int canTx = -1, canRx = -1;
-#endif
-#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
-    bool h3Slew = false;
-    uint8_t h3SlewRate = kHw3SlewRateDefault;
-    uint8_t storedHw = hwMode;
-    bool spAuto = dashSpeedProfileAuto;
-    uint8_t spSel = dashManualSpeedProfile;
-    bool h3Custom = hw3CustomSpeed;
-    bool h3HighSpeed = hw3HighSpeedEnable;
-    uint8_t h3Enc = hw3WireEncoding;
-    uint8_t h3CustomTargets[kHw3CustomTargetCount];
-    uint8_t h3HighSpeedTargets[kHw3HighSpeedBucketCount];
-
-    for (uint8_t i = 0; i < kHw3CustomTargetCount; i++)
-        h3CustomTargets[i] = hw3CustomTarget[i];
-    for (uint8_t i = 0; i < kHw3HighSpeedBucketCount; i++)
-        h3HighSpeedTargets[i] = hw3HighSpeedTarget[i];
-#endif
-
-    if (p.begin(PREFS_NS, false))
-    {
-#if !defined(PRODUCT_WIFI_MAX)
-        storedCan = p.getBool("can", canActive);
-#endif
-#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
-        storedHw = p.getUChar("hw", hwMode);
-        spAuto = p.getBool("sp_auto", dashSpeedProfileAuto);
-        spSel = p.getUChar("sp_sel", dashManualSpeedProfile);
-#endif
-        eprn = p.getBool("eprn", false);
-        if (p.isKey("ap_ssid"))
-            apSsid = p.getString("ap_ssid", "");
-        if (p.isKey("ap_pass"))
-            apPass = p.getString("ap_pass", "");
-        apHid = p.getBool("ap_hidden", false);
-        if (p.isKey("wifi_ssid"))
-            wSsid = p.getString("wifi_ssid", "");
-        if (p.isKey("wifi_pass"))
-            wPass = p.getString("wifi_pass", "");
-        wStatic = p.getBool("wifi_static", false);
-        if (p.isKey("wifi_ip"))
-            wIp = p.getString("wifi_ip", "");
-        if (p.isKey("wifi_gw"))
-            wGw = p.getString("wifi_gw", "");
-        if (p.isKey("wifi_mask"))
-            wMask = p.getString("wifi_mask", "");
-        if (p.isKey("wifi_dns"))
-            wDns = p.getString("wifi_dns", "");
-        beta = p.getBool("update_beta", p.getBool("upd_beta", false));
-        autoUpdate = p.getBool("auto_upd", false);
-#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
-        h3Slew = p.getBool("h3_slw", false);
-        h3SlewRate = dashLoadHw3SlewRate(p.getUChar("h3_srt", kHw3SlewRateDefault));
-        h3Custom = p.getBool("h3_cust", hw3CustomSpeed);
-        h3HighSpeed = p.getBool("h3_hse", hw3HighSpeedEnable);
-        h3Enc = p.getUChar("h3_enc", hw3WireEncoding);
-        char k[8];
-        for (uint8_t i = 0; i < kHw3CustomTargetCount; i++)
-        {
-            snprintf(k, sizeof(k), "h3_ct%u", (unsigned)i);
-            h3CustomTargets[i] = p.getUChar(k, h3CustomTargets[i]);
-        }
-        for (uint8_t i = 0; i < kHw3HighSpeedBucketCount; i++)
-        {
-            snprintf(k, sizeof(k), "h3_ht%u", (unsigned)i);
-            h3HighSpeedTargets[i] = p.getUChar(k, h3HighSpeedTargets[i]);
-        }
-#endif
-        p.end();
-    }
-#if !defined(PRODUCT_WIFI_MAX)
-    Preferences cp;
-    if (cp.begin("can", true))
-    {
-        canTx = cp.getChar("tx", -1);
-        canRx = cp.getChar("rx", -1);
-        cp.end();
-    }
-#endif
-
-    String j = "{\"version\":\"" FIRMWARE_VERSION "\"";
-#if defined(PRODUCT_WIFI_MAX)
-    j += ",\"product\":\"wifi-max\"";
-    j += ",\"device\":{\"dashboardLog\":" + String(eprn ? "true" : "false") + "}";
-#elif defined(PRODUCT_WIFI_NAG)
-    j += ",\"product\":\"wifi-nag\"";
-    j += ",\"device\":{\"can\":" + String(storedCan ? "true" : "false");
-    j += ",\"nagKiller\":" + String(nagKillerEnabled ? "true" : "false");
-    if (NagHandler *nag = dashNagActiveHandler())
-    {
-        j += ",\"nagMode\":" + String((unsigned int)(uint8_t)nag->nagMode);
-        j += ",\"av2MinNm\":" + dashNagNmString(nag->av2MinCenti());
-        j += ",\"av2MaxNm\":" + dashNagNmString(nag->av2MaxCenti());
-    }
-    j += ",\"dashboardLog\":" + String(eprn ? "true" : "false") + "}";
-#else
-    j += ",\"device\":{\"hw\":" + String(storedHw) + ",\"can\":" + String(storedCan ? "true" : "false");
-    j += ",\"speedProfileAuto\":" + String(spAuto ? "true" : "false") + ",\"speedProfile\":" + String(spSel);
-    j += ",\"dashboardLog\":" + String(eprn ? "true" : "false") + "}";
-#endif
-    j += ",\"ap\":{\"ssid\":\"" + jsonEscape(apSsid) + "\",\"pass\":\"" + jsonEscape(apPass) + "\",\"hidden\":" + String(apHid ? "true" : "false") + "}";
-    j += ",\"wifi\":{\"ssid\":\"" + jsonEscape(wSsid) + "\",\"pass\":\"" + jsonEscape(wPass) + "\"";
-    j += ",\"static\":" + String(wStatic ? "true" : "false");
-    j += ",\"ip\":\"" + jsonEscape(wIp) + "\",\"gw\":\"" + jsonEscape(wGw) + "\"";
-    j += ",\"mask\":\"" + jsonEscape(wMask) + "\",\"dns\":\"" + jsonEscape(wDns) + "\"}";
-    j += ",\"wifiNetworks\":[";
-    for (uint8_t i = 0; i < wifiNetworkCount; i++)
-    {
-        if (i)
-            j += ",";
-        const DashWifiNetwork &n = wifiNetworks[i];
-        j += "{\"ssid\":\"" + jsonEscape(n.ssid) + "\",\"pass\":\"" + jsonEscape(n.pass) + "\"";
-        j += ",\"static\":" + String(n.useStatic ? "true" : "false");
-        j += ",\"ip\":\"" + jsonEscape(n.ip) + "\",\"gw\":\"" + jsonEscape(n.gw) + "\"";
-        j += ",\"mask\":\"" + jsonEscape(n.mask) + "\",\"dns\":\"" + jsonEscape(n.dns) + "\"}";
-    }
-    j += "]";
-    j += ",\"wifiPreferred\":" + String(wifiActiveSlot >= 0 ? wifiActiveSlot : 0);
-#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
-    j += ",\"hw3\":{\"offsetSlew\":" + String(h3Slew ? "true" : "false") + ",\"slewRate\":" + String(h3SlewRate);
-    j += ",\"custom\":" + String(h3Custom ? "true" : "false");
-    j += ",\"highSpeed\":" + String(h3HighSpeed ? "true" : "false") + ",\"encoding\":" + String(h3Enc);
-    j += ",\"customTargets\":[";
-    for (uint8_t i = 0; i < kHw3CustomTargetCount; i++)
-    {
-        if (i)
-            j += ",";
-        j += String(h3CustomTargets[i]);
-    }
-    j += "],\"highSpeedTargets\":[";
-    for (uint8_t i = 0; i < kHw3HighSpeedBucketCount; i++)
-    {
-        if (i)
-            j += ",";
-        j += String(h3HighSpeedTargets[i]);
-    }
-    j += "]}";
-#endif
-#if !defined(PRODUCT_WIFI_MAX)
-    j += ",\"can\":{\"tx\":" + String(canTx) + ",\"rx\":" + String(canRx) + "}";
-#endif
-    j += ",\"updates\":{\"beta\":" + String(beta ? "true" : "false") + ",\"auto\":" + String(autoUpdate ? "true" : "false") + "}";
-    j += ",\"beta\":" + String(beta ? "true" : "false");
-#if defined(ESP_PLATFORM) && defined(DASH_STA_AP_GATEWAY)
-    j += ",\"gateway\":{\"enabled\":" + String(gatewayEnabled ? "true" : "false");
-    j += ",\"blacklist\":\"" + jsonEscape(gatewayDnsBlacklist.c_str()) + "\"";
-    j += ",\"whitelist\":\"" + jsonEscape(gatewayDnsWhitelist.c_str()) + "\"}";
-#endif
-    j += "}";
-
-    server.sendHeader("Content-Disposition", "attachment; filename=\"evtools-backup.json\"");
-    server.send(200, "application/json", j);
-}
-
-static void handleSettingsImport()
-{
-    String body = server.arg("plain");
-    if (body.length() == 0)
-    {
-        server.send(400, "application/json", "{\"ok\":false,\"error\":\"Empty body\"}");
-        return;
-    }
-
-    JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, body);
-    if (err)
-    {
-        server.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid JSON\"}");
-        return;
-    }
-
-    Preferences p;
-    if (!p.begin(PREFS_NS, false))
-    {
-        server.send(500, "application/json", "{\"ok\":false,\"error\":\"NVS open failed\"}");
-        return;
-    }
-
-    if (doc["device"].is<JsonObject>())
-    {
-#if defined(PRODUCT_WIFI_NAG)
-        if (doc["device"]["can"].is<bool>())
-        {
-            p.putBool("can", doc["device"]["can"].as<bool>());
-            p.putBool("force_act", false);
-        }
-#if defined(NAG_KILLER)
-        if (doc["device"]["nagKiller"].is<bool>())
-            p.putBool("nag_en", doc["device"]["nagKiller"].as<bool>());
-        if (doc["device"]["nagMode"].is<int>())
-        {
-            uint8_t mode = static_cast<uint8_t>(doc["device"]["nagMode"].as<int>());
-            if (!NagHandler::isSupportedMode(mode))
-                mode = NagHandler::MODE_A;
-            p.putUChar("nag_mode", mode);
-        }
-        if (doc["device"]["av2MinNm"].is<float>())
-            p.putString("nag_av2_min", String(NagHandler::centiNmToNm(NagHandler::nmToCentiNm(doc["device"]["av2MinNm"].as<float>())), 2));
-        if (doc["device"]["av2MaxNm"].is<float>())
-            p.putString("nag_av2_max", String(NagHandler::centiNmToNm(NagHandler::nmToCentiNm(doc["device"]["av2MaxNm"].as<float>())), 2));
-#endif
-#elif !defined(PRODUCT_WIFI_MAX)
-        if (doc["device"]["hw"].is<int>())
-        {
-            int hw = doc["device"]["hw"].as<int>();
-            if (hw >= 0 && hw <= 2)
-                p.putUChar("hw", static_cast<uint8_t>(hw));
-        }
-        if (doc["device"]["can"].is<bool>())
-        {
-            bool fsdSwitch = doc["device"]["can"].as<bool>();
-            p.putBool("can", fsdSwitch);
-            p.putBool("force_act", fsdSwitch);
-        }
-        if (doc["device"]["speedProfileAuto"].is<bool>())
-            p.putBool("sp_auto", doc["device"]["speedProfileAuto"].as<bool>());
-        if (doc["device"]["speedProfile"].is<int>())
-        {
-            uint8_t targetHw = p.getUChar("hw", hwMode);
-            p.putUChar("sp_sel", dashClampSpeedProfileForHw(targetHw, doc["device"]["speedProfile"].as<int>()));
-        }
-#endif
-        if (doc["device"]["dashboardLog"].is<bool>())
-            p.putBool("eprn", doc["device"]["dashboardLog"].as<bool>());
-    }
-    if (doc["ap"].is<JsonObject>())
-    {
-        const char *s = doc["ap"]["ssid"] | "";
-        const char *pw = doc["ap"]["pass"] | "";
-        size_t ssidLen = strlen(s);
-        size_t passLen = strlen(pw);
-        if (ssidLen > 0 && ssidLen <= kDashMaxSsidLen)
-            p.putString("ap_ssid", s);
-        if (dashApPasswordLengthValid(passLen))
-            p.putString("ap_pass", pw);
-        if (doc["ap"]["hidden"].is<bool>())
-            p.putBool("ap_hidden", doc["ap"]["hidden"].as<bool>());
-    }
-    if (doc["wifi"].is<JsonObject>())
-    {
-        const char *s = doc["wifi"]["ssid"] | "";
-        const char *pw = doc["wifi"]["pass"] | "";
-        if (strlen(s) <= kDashMaxSsidLen && strlen(pw) <= kDashMaxPassLen)
-        {
-            p.putString("wifi_ssid", s);
-            p.putString("wifi_pass", pw);
-        }
-        p.putBool("wifi_static", doc["wifi"]["static"] | false);
-        p.putString("wifi_ip", (const char *)(doc["wifi"]["ip"] | ""));
-        p.putString("wifi_gw", (const char *)(doc["wifi"]["gw"] | ""));
-        p.putString("wifi_mask", (const char *)(doc["wifi"]["mask"] | ""));
-        p.putString("wifi_dns", (const char *)(doc["wifi"]["dns"] | ""));
-    }
-    if (doc["wifiNetworks"].is<JsonArray>())
-    {
-        JsonArray nets = doc["wifiNetworks"].as<JsonArray>();
-        uint8_t count = 0;
-        for (uint8_t i = 0; i < kDashMaxWifiNetworks; i++)
-            dashRemoveWifiSlotKeys(i);
-        for (JsonVariant v : nets)
-        {
-            if (count >= kDashMaxWifiNetworks || !v.is<JsonObject>())
-                break;
-            const char *s = v["ssid"] | "";
-            const char *pw = v["pass"] | "";
-            if (strlen(s) == 0 || !dashStaConfigLengthValid(String(s), String(pw)) || dashStaSsidLooksCorrupt(String(s)))
-                continue;
-            p.putString(dashWifiKey(count, "s").c_str(), s);
-            p.putString(dashWifiKey(count, "p").c_str(), pw);
-            bool st = v["static"] | false;
-            p.putBool(dashWifiKey(count, "t").c_str(), st);
-            if (st)
-            {
-                p.putString(dashWifiKey(count, "i").c_str(), (const char *)(v["ip"] | "0.0.0.0"));
-                p.putString(dashWifiKey(count, "g").c_str(), (const char *)(v["gw"] | "0.0.0.0"));
-                p.putString(dashWifiKey(count, "m").c_str(), (const char *)(v["mask"] | "255.255.255.0"));
-                p.putString(dashWifiKey(count, "d").c_str(), (const char *)(v["dns"] | "0.0.0.0"));
-            }
-            count++;
-        }
-        p.putUChar("wn_cnt", count);
-        uint8_t pref = doc["wifiPreferred"] | 0;
-        p.putUChar("wn_pref", count > 0 && pref < count ? pref : 0);
-    }
-    if (doc["updates"].is<JsonObject>())
-    {
-        if (doc["updates"]["beta"].is<bool>())
-        {
-            p.putBool("update_beta", doc["updates"]["beta"].as<bool>());
-            p.putBool("upd_beta", doc["updates"]["beta"].as<bool>());
-        }
-        if (doc["updates"]["auto"].is<bool>())
-            p.putBool("auto_upd", doc["updates"]["auto"].as<bool>());
-    }
-    else if (doc["beta"].is<bool>())
-    {
-        p.putBool("update_beta", doc["beta"].as<bool>());
-        p.putBool("upd_beta", doc["beta"].as<bool>());
-    }
-#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
-    if (doc["hw3"].is<JsonObject>())
-    {
-        if (doc["hw3"]["offsetSlew"].is<bool>())
-            p.putBool("h3_slw", doc["hw3"]["offsetSlew"].as<bool>());
-        if (doc["hw3"]["slewRate"].is<int>())
-            p.putUChar("h3_srt", dashClampHw3SlewRate(doc["hw3"]["slewRate"].as<int>()));
-        if (doc["hw3"]["custom"].is<bool>())
-            p.putBool("h3_cust", doc["hw3"]["custom"].as<bool>());
-        if (doc["hw3"]["highSpeed"].is<bool>())
-            p.putBool("h3_hse", doc["hw3"]["highSpeed"].as<bool>());
-        if (doc["hw3"]["encoding"].is<int>())
-        {
-            uint8_t enc = doc["hw3"]["encoding"].as<int>() == kHw3WireEncKph5 ? kHw3WireEncKph5 : kHw3WireEncPct4;
-            p.putUChar("h3_enc", enc);
-        }
-        if (doc["hw3"]["customTargets"].is<JsonArray>())
-        {
-            JsonArray arr = doc["hw3"]["customTargets"].as<JsonArray>();
-            char k[8];
-            for (uint8_t i = 0; i < kHw3HighSpeedBucketCount && i < arr.size(); i++)
-            {
-                snprintf(k, sizeof(k), "h3_ct%u", (unsigned)i);
-                p.putUChar(k, dashClampHw3CustomTargetForBucket(i, arr[i].as<int>()));
-            }
-        }
-        if (doc["hw3"]["highSpeedTargets"].is<JsonArray>())
-        {
-            JsonArray arr = doc["hw3"]["highSpeedTargets"].as<JsonArray>();
-            char k[8];
-            for (uint8_t i = 0; i < 5 && i < arr.size(); i++)
-            {
-                snprintf(k, sizeof(k), "h3_ht%u", (unsigned)i);
-                p.putUChar(k, dashClampHw3HighSpeedTargetForBucket(i, arr[i].as<int>()));
-            }
-        }
-    }
-#endif
-    p.end();
-
-#if !defined(PRODUCT_WIFI_MAX)
-    if (doc["can"].is<JsonObject>())
-    {
-        int tx = doc["can"]["tx"] | -1;
-        int rx = doc["can"]["rx"] | -1;
-        Preferences cp;
-        if (cp.begin("can", false))
-        {
-            if (tx >= 0 && tx <= 39 && rx >= 0 && rx <= 39 && tx != rx &&
-                !((tx >= 6 && tx <= 11) || (rx >= 6 && rx <= 11)))
-            {
-                cp.putChar("tx", (int8_t)tx);
-                cp.putChar("rx", (int8_t)rx);
-            }
-            cp.end();
-        }
-    }
-#endif
-
-#if defined(ESP_PLATFORM) && defined(DASH_STA_AP_GATEWAY)
-    if (doc["gateway"].is<JsonObject>())
-    {
-        JsonObject gw = doc["gateway"].as<JsonObject>();
-        if (gw["enabled"].is<bool>())
-            gatewayEnabled = gw["enabled"].as<bool>();
-        if (gw["blacklist"].is<const char *>())
-            gatewayDnsBlacklist = dashGatewaySanitizeBlacklist((const char *)(gw["blacklist"] | ""));
-        if (gw["whitelist"].is<const char *>())
-            gatewayDnsWhitelist = dashGatewaySanitizeWhitelist((const char *)(gw["whitelist"] | ""));
-        dashGatewaySave();
-    }
-#endif
-
-    dashLog("[BACKUP] Settings imported (reboot required)");
-    server.send(200, "application/json", "{\"ok\":true,\"reboot\":true}");
-}
-
 #endif
 
 static void handleApConfig()
@@ -5019,448 +2148,8 @@ static void handleApStatus()
     server.send(200, "application/json", j);
 }
 
-// ── OTA GitHub Update ───────────────────────────────────────────
-
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "unknown"
-#endif
-
-#if DASH_ENABLE_ONLINE_UPDATE
-
-static const char *GITHUB_REPO = "ev-open-can-tools/ev-open-can-tools";
-
-// Map driver type to release artifact filename
-static const char *getFirmwareArtifact()
-{
-#if defined(DRIVER_ESP32_EXT_MCP2515)
-    return "firmware-esp32-ext-mcp2515.bin";
-#else
-    return "firmware-esp32.bin";
-#endif
-}
-
-// Parse a semver-ish version string into (major, minor, patch, preRank, preNum).
-// Pre-release rank: 0 = stable (no suffix, sorts highest among same M.m.p),
-//                  1 = -alpha.N, 2 = -beta.N, 3 = -rc.N (higher rank = closer to stable).
-// Unknown suffix → treated as stable (rank 0).
-static void parseVersion(const String &v, int &maj, int &min, int &pat, int &preRank, int &preNum)
-{
-    maj = min = pat = 0;
-    preRank = 0;
-    preNum = 0;
-    int i = 0;
-    int len = v.length();
-    auto readInt = [&](int &out)
-    {
-        int val = 0;
-        bool any = false;
-        while (i < len && v[i] >= '0' && v[i] <= '9')
-        {
-            val = val * 10 + (v[i] - '0');
-            i++;
-            any = true;
-        }
-        if (any)
-            out = val;
-    };
-    readInt(maj);
-    if (i < len && v[i] == '.')
-    {
-        i++;
-        readInt(min);
-    }
-    if (i < len && v[i] == '.')
-    {
-        i++;
-        readInt(pat);
-    }
-    if (i < len && v[i] == '-')
-    {
-        i++;
-        String tail = v.substring(i);
-        tail.toLowerCase();
-        if (tail.startsWith("alpha"))
-            preRank = 1;
-        else if (tail.startsWith("beta"))
-            preRank = 2;
-        else if (tail.startsWith("rc"))
-            preRank = 3;
-        else
-            preRank = 0; // unknown → treat as stable
-        int dot = tail.indexOf('.');
-        if (dot >= 0)
-            preNum = tail.substring(dot + 1).toInt();
-    }
-}
-
-// Returns true iff `candidate` is strictly newer than `current`.
-static bool isVersionNewer(const String &candidate, const String &current)
-{
-    int cM, cm, cp, cR, cN;
-    int uM, um, up, uR, uN;
-    parseVersion(candidate, cM, cm, cp, cR, cN);
-    parseVersion(current, uM, um, up, uR, uN);
-    if (cM != uM)
-        return cM > uM;
-    if (cm != um)
-        return cm > um;
-    if (cp != up)
-        return cp > up;
-    // Same M.m.p — stable (rank 0) beats any prerelease (rank 1-3)
-    // For two prereleases: higher rank beats lower (rc > beta > alpha)
-    int cEff = (cR == 0) ? 1000 : cR; // stable → very high
-    int uEff = (uR == 0) ? 1000 : uR;
-    if (cEff != uEff)
-        return cEff > uEff;
-    return cN > uN;
-}
-
-static void handleUpdateCheck()
-{
-    if (!staConnected)
-    {
-        server.send(400, "application/json", "{\"ok\":false,\"error\":\"WiFi not connected\"}");
-        return;
-    }
-
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
-
-    String url;
-    if (updateBetaChannel)
-        url = "https://api.github.com/repos/" + String(GITHUB_REPO) + "/releases?per_page=1";
-    else
-        url = "https://api.github.com/repos/" + String(GITHUB_REPO) + "/releases/latest";
-
-    http.begin(client, url);
-    http.setTimeout(20000);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.addHeader("Accept", "application/vnd.github+json");
-    http.addHeader("User-Agent", "ESP32-OTA");
-    int code = http.GET();
-
-    if (code != 200)
-    {
-        http.end();
-        String msg = code <= 0
-                         ? "GitHub unreachable from ESP32. Use manual firmware upload."
-                         : "GitHub API error " + String(code);
-        server.send(502, "application/json", "{\"ok\":false,\"error\":\"" + jsonEscape(msg.c_str()) + "\"}");
-        return;
-    }
-
-    String payload = http.getString();
-    http.end();
-
-    JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, payload);
-    if (err)
-    {
-        server.send(500, "application/json", "{\"ok\":false,\"error\":\"JSON parse error\"}");
-        return;
-    }
-
-    // Find the right release
-    JsonObject release;
-    if (updateBetaChannel)
-    {
-        JsonArray arr = doc.as<JsonArray>();
-        for (JsonObject r : arr)
-        {
-            release = r;
-            break; // first (newest) release
-        }
-    }
-    else
-    {
-        release = doc.as<JsonObject>();
-    }
-
-    if (release.isNull())
-    {
-        server.send(404, "application/json", "{\"ok\":false,\"error\":\"No release found\"}");
-        return;
-    }
-
-    String tagName = release["tag_name"] | "";
-    bool prerelease = release["prerelease"] | false;
-    String version = tagName;
-    if (version.startsWith("v"))
-        version = version.substring(1);
-
-    // Find the matching firmware asset
-    String downloadUrl = "";
-    const char *artifact = getFirmwareArtifact();
-    JsonArray assets = release["assets"];
-    for (JsonObject asset : assets)
-    {
-        String name = asset["name"] | "";
-        if (name == artifact)
-        {
-            downloadUrl = String(asset["browser_download_url"] | "");
-            break;
-        }
-    }
-
-    String j = "{\"ok\":true";
-    j += ",\"current\":\"" + jsonEscape(FIRMWARE_VERSION) + "\"";
-    j += ",\"latest\":\"" + jsonEscape(version.c_str()) + "\"";
-    j += ",\"tag\":\"" + jsonEscape(tagName.c_str()) + "\"";
-    j += ",\"prerelease\":" + String(prerelease ? "true" : "false");
-    j += ",\"artifact\":\"" + jsonEscape(artifact) + "\"";
-    j += ",\"url\":\"" + jsonEscape(downloadUrl.c_str()) + "\"";
-    bool isNewer = isVersionNewer(version, String(FIRMWARE_VERSION));
-    j += ",\"update\":" + String(isNewer && downloadUrl.length() > 0 ? "true" : "false");
-    j += ",\"beta\":" + String(updateBetaChannel ? "true" : "false");
-    j += "}";
-    server.send(200, "application/json", j);
-}
-
-static void handleUpdateInstall()
-{
-    if (!staConnected)
-    {
-        server.send(400, "application/json", "{\"ok\":false,\"error\":\"WiFi not connected\"}");
-        return;
-    }
-
-    String url = server.arg("url");
-    if (url.length() == 0)
-    {
-        server.send(400, "application/json", "{\"ok\":false,\"error\":\"No URL provided\"}");
-        return;
-    }
-
-    dashLog("[OTA] Starting GitHub update from: " + url);
-    server.send(200, "application/json", "{\"ok\":true,\"msg\":\"Downloading and installing... Device will reboot.\"}");
-    delay(500);
-
-    WiFiClientSecure client;
-    client.setInsecure();
-
-    // Follow redirects — GitHub release assets redirect to S3
-    HTTPClient http;
-    http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    http.begin(client, url);
-    http.setTimeout(30000);
-    http.addHeader("Accept", "application/octet-stream");
-    int code = http.GET();
-
-    if (code != 200)
-    {
-        dashLog("[OTA] Download failed: HTTP " + String(code));
-        http.end();
-        return;
-    }
-
-    int contentLength = http.getSize();
-    if (contentLength <= 0)
-    {
-        dashLog("[OTA] Invalid content length: " + String(contentLength));
-        http.end();
-        return;
-    }
-
-    dashLog("[OTA] Downloading " + String(contentLength) + " bytes...");
-
-    if (!Update.begin(contentLength))
-    {
-        dashLog("[OTA] Update.begin failed: " + String(Update.errorString()));
-        http.end();
-        return;
-    }
-
-    WiFiClient *stream = http.getStreamPtr();
-    size_t written = Update.writeStream(*stream);
-    http.end();
-
-    if (written != (size_t)contentLength)
-    {
-        dashLog("[OTA] Written " + String(written) + " of " + String(contentLength) + " bytes: " + String(Update.errorString()));
-        Update.abort();
-        return;
-    }
-
-    if (!Update.end(true))
-    {
-        dashLog("[OTA] Update finalize failed: " + String(Update.errorString()));
-        return;
-    }
-
-    if (!Update.isFinished())
-    {
-        dashLog("[OTA] Update not finished");
-        return;
-    }
-
-    dashLog("[OTA] Update successful! Rebooting...");
-    delay(1000);
-    ESP.restart();
-}
-
-// Check GitHub for a newer release and, if found, download + install it.
-// Blocking; on success calls ESP.restart() and never returns.
-static void performAutoUpdate()
-{
-    if (!staConnected)
-        return;
-
-    dashLog("[AUTO-OTA] Checking for updates...");
-
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
-
-    String url;
-    if (updateBetaChannel)
-        url = "https://api.github.com/repos/" + String(GITHUB_REPO) + "/releases?per_page=1";
-    else
-        url = "https://api.github.com/repos/" + String(GITHUB_REPO) + "/releases/latest";
-
-    http.begin(client, url);
-    http.addHeader("Accept", "application/vnd.github+json");
-    http.addHeader("User-Agent", "ESP32-OTA");
-    int code = http.GET();
-    if (code != 200)
-    {
-        dashLog("[AUTO-OTA] GitHub API error " + String(code));
-        http.end();
-        return;
-    }
-    String payload = http.getString();
-    http.end();
-
-    JsonDocument doc;
-    if (deserializeJson(doc, payload))
-    {
-        dashLog("[AUTO-OTA] JSON parse error");
-        return;
-    }
-
-    JsonObject release;
-    if (updateBetaChannel)
-    {
-        JsonArray arr = doc.as<JsonArray>();
-        for (JsonObject r : arr)
-        {
-            release = r;
-            break;
-        }
-    }
-    else
-    {
-        release = doc.as<JsonObject>();
-    }
-    if (release.isNull())
-    {
-        dashLog("[AUTO-OTA] No release found");
-        return;
-    }
-
-    String tagName = release["tag_name"] | "";
-    String version = tagName;
-    if (version.startsWith("v"))
-        version = version.substring(1);
-    if (!isVersionNewer(version, String(FIRMWARE_VERSION)))
-    {
-        dashLog("[AUTO-OTA] No newer release (latest=" + version + ", current=" FIRMWARE_VERSION ")");
-        return;
-    }
-
-    const char *artifact = getFirmwareArtifact();
-    String downloadUrl = "";
-    for (JsonObject asset : release["assets"].as<JsonArray>())
-    {
-        String name = asset["name"] | "";
-        if (name == artifact)
-        {
-            downloadUrl = String(asset["browser_download_url"] | "");
-            break;
-        }
-    }
-    if (!downloadUrl.length())
-    {
-        dashLog("[AUTO-OTA] No matching artifact for this build");
-        return;
-    }
-
-    dashLog("[AUTO-OTA] Update " + version + " available. Installing...");
-
-    HTTPClient http2;
-    http2.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    http2.begin(client, downloadUrl);
-    http2.addHeader("Accept", "application/octet-stream");
-    int code2 = http2.GET();
-    if (code2 != 200)
-    {
-        dashLog("[AUTO-OTA] Download failed: HTTP " + String(code2));
-        http2.end();
-        return;
-    }
-    int len = http2.getSize();
-    if (len <= 0)
-    {
-        dashLog("[AUTO-OTA] Invalid content length: " + String(len));
-        http2.end();
-        return;
-    }
-    if (!Update.begin(len))
-    {
-        dashLog("[AUTO-OTA] Update.begin failed: " + String(Update.errorString()));
-        http2.end();
-        return;
-    }
-    WiFiClient *stream = http2.getStreamPtr();
-    size_t written = Update.writeStream(*stream);
-    http2.end();
-    if (written != (size_t)len)
-    {
-        dashLog("[AUTO-OTA] Written " + String(written) + "/" + String(len) + " bytes: " + String(Update.errorString()));
-        Update.abort();
-        return;
-    }
-    if (!Update.end(true))
-    {
-        dashLog("[AUTO-OTA] Finalize failed: " + String(Update.errorString()));
-        return;
-    }
-    dashLog("[AUTO-OTA] Update successful! Rebooting...");
-    delay(1000);
-    ESP.restart();
-}
-
-static void handleAutoUpdate()
-{
-    if (server.hasArg("enabled"))
-    {
-        autoUpdateEnabled = server.arg("enabled") == "1";
-        prefs.begin(PREFS_NS, false);
-        prefs.putBool("auto_upd", autoUpdateEnabled);
-        prefs.end();
-        dashLog("[AUTO-OTA] " + String(autoUpdateEnabled ? "enabled" : "disabled"));
-    }
-    String j = "{\"ok\":true,\"enabled\":";
-    j += autoUpdateEnabled ? "true" : "false";
-    j += "}";
-    server.send(200, "application/json", j);
-}
-
-static void handleUpdateBeta()
-{
-    if (server.hasArg("beta"))
-    {
-        updateBetaChannel = server.arg("beta") == "1";
-        prefs.begin(PREFS_NS, false);
-        prefs.putBool("update_beta", updateBetaChannel);
-        prefs.end();
-        dashLog("[OTA] Channel: " + String(updateBetaChannel ? "beta" : "stable"));
-    }
-    String j = "{\"ok\":true,\"beta\":" + String(updateBetaChannel ? "true" : "false");
-    j += ",\"version\":\"" + jsonEscape(FIRMWARE_VERSION) + "\"}";
-    server.send(200, "application/json", j);
-}
-
 #endif
 
 // Dashboard frame callback wrapper
@@ -5469,101 +2158,21 @@ static void webTask(void *)
 {
     for (;;)
     {
-        if (!dashSleepActive)
-        {
-            ArduinoOTA.handle();
-            server.handleClient();
-            dashCheckWifi();
-            vTaskDelay(pdMS_TO_TICKS(10));
-        }
-        else
-        {
-            vTaskDelay(pdMS_TO_TICKS(250));
-        }
+        ArduinoOTA.handle();
+        server.handleClient();
+        dashCheckWifi();
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
-#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
-static CarManagerBase *handlerPool[3] = {};
-
-static void dashInitHandlers()
-{
-    handlerPool[0] = new LegacyHandler();
-    handlerPool[1] = new HW3Handler();
-    handlerPool[2] = new HW4Handler();
-    for (int i = 0; i < 3; i++)
-    {
-        handlerPool[i]->onFrame = mcpDashOnFrame;
-    }
-}
-
-static void dashSwapHandler(uint8_t mode)
-{
-    if (mode > 2 || !handlerPool[mode])
-        return;
-    CarManagerBase *next = handlerPool[mode];
-    if (dashHandler)
-        next->enablePrint = (bool)dashHandler->enablePrint;
-    appActiveHandler = next;
-    dashHandler = next;
-    dashApplyRuntimeState();
-    // Update driver acceptance filters for the new handler.
-    // For MCP2515 (ext) dashApplyFilters() will also fine-tune the hardware
-    // filter registers. For TWAI and old MCP2515 this abstract call is enough.
-    if (dashDriver)
-    {
-#if defined(NAG_KILLER)
-        // Nag runs as a parallel hook on every frame, so CAN 880 (0x370) must
-        // pass the driver's acceptance filter even when the selected vehicle
-        // handler doesn't list it. Append 880 to the filter set for this swap.
-        const uint32_t *baseIds = next->filterIds();
-        uint8_t baseCount = next->filterIdCount();
-        uint32_t mergedIds[16];
-        uint8_t mergedCount = 0;
-        bool has880 = false;
-        for (uint8_t i = 0; i < baseCount && mergedCount < 15; i++)
-        {
-            mergedIds[mergedCount++] = baseIds[i];
-            if (baseIds[i] == 880)
-                has880 = true;
-        }
-        if (!has880)
-            mergedIds[mergedCount++] = 880;
-        dashDriver->setFilters(mergedIds, mergedCount);
-#else
-        dashDriver->setFilters(next->filterIds(), next->filterIdCount());
-#endif
-    }
-    const char *hwName = "LEGACY";
-    if (mode == 1)
-        hwName = "HW3";
-    else if (mode == 2)
-        hwName = "HW4";
-    dashLog("[CFG] Handler switched to " + String(hwName));
-}
-#endif
-
-#if defined(DRIVER_ESP32_EXT_MCP2515)
-static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver, MCP2515 *mcp)
-{
-    dashHandler = handler;
-    dashDriver = driver;
-    dashMcp = mcp;
-#else
 static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
 {
     dashHandler = handler;
     dashDriver = driver;
-#endif
-#if !defined(PRODUCT_WIFI_MAX)
     if (dashDriver)
         dashDriver->onSendFrame = mcpDashOnTxFrame;
-#endif
     startMs = millis();
     fpsLastMs = millis();
-#if !defined(PRODUCT_WIFI_MAX)
-    dashResetWriteProbe();
-#endif
 
     if (!SPIFFS.begin(true))
         dashLog("[WARN] SPIFFS mount failed");
@@ -5577,14 +2186,6 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
         dashLog("[WIFI] AP SSID is hidden");
     Serial.printf("[WIFI] AP: %s  IP: %s\n", apSSID, WiFi.softAPIP().toString().c_str());
 
-#if defined(PRODUCT_WIFI_MAX)
-    canActive = false;
-    forceActivate = false;
-    dashHandler = nullptr;
-    appActiveHandler = nullptr;
-    dashLog("[BOOT] WIFI-MAX mode: CAN/FSD disabled");
-#elif defined(PRODUCT_WIFI_NAG)
-    forceActivate = false;
     if (dashHandler)
     {
         dashHandler->onFrame = mcpDashOnFrame;
@@ -5594,14 +2195,8 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     }
     dashApplyRuntimeState();
     dashLog("[BOOT] WIFI-NAG mode: Nag killer + WiFi gateway");
-#else
-    dashInitHandlers();
-    dashSwapHandler(hwMode);
-    dashApplyFilters();
-#endif
 
-
-    ArduinoOTA.setHostname("ev-open-can-tools");
+    ArduinoOTA.setHostname("wifi-nag");
     ArduinoOTA.setPassword(DASH_OTA_PASS);
     ArduinoOTA.onStart([]()
                        { dashLog("[OTA] Starting..."); });
@@ -5614,56 +2209,26 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     server.on("/", HTTP_GET, handleRoot);
     server.on("/status", HTTP_GET, handleStatus);
     server.on("/config", HTTP_POST, handleConfig);
-#if defined(NAG_KILLER) && defined(PRODUCT_WIFI_NAG)
+#if defined(NAG_KILLER)
     server.on("/api/config", HTTP_GET, handleNagApiConfig);
     server.on("/api/stats", HTTP_GET, handleNagApiStats);
     server.on("/api/mode", HTTP_POST, handleNagApiMode);
     server.on("/api/update", HTTP_POST, handleNagApiUpdate);
 #endif
     server.on("/logging", HTTP_POST, handleLoggingConfig);
-#if !defined(PRODUCT_WIFI_MAX) && DASH_ENABLE_CAN_DEBUG_TOOLS
-    server.on("/frames", HTTP_GET, handleFrames);
-    server.on("/reset_stats", HTTP_POST, handleResetStats);
-#endif
-#if !defined(PRODUCT_WIFI_MAX)
-#if !defined(PRODUCT_WIFI_NAG)
-    server.on("/rec_start", HTTP_POST, handleRecStart);
-    server.on("/rec_stop", HTTP_POST, handleRecStop);
-    server.on("/rec_status", HTTP_GET, handleRecStatus);
-    server.on("/rec_download", HTTP_GET, handleRecDownload);
-#endif
     server.on("/disable", HTTP_POST, handleDisable);
-#if DASH_ENABLE_CAN_DEBUG_TOOLS
-    server.on("/can_pins", HTTP_GET, handleCanPins);
-    server.on("/can_pins", HTTP_POST, handleCanPinsSave);
-#endif
-#endif
     server.on("/log", HTTP_GET, handleLog);
     server.on("/reboot", HTTP_POST, handleReboot);
     server.on("/update", HTTP_POST, handleOtaResult, handleOtaUpload);
     server.on("/ap_config", HTTP_POST, handleApConfig);
     server.on("/ap_status", HTTP_GET, handleApStatus);
-#if DASH_ENABLE_SETTINGS_BACKUP
-    server.on("/settings_export", HTTP_GET, handleSettingsExport);
-    server.on("/settings_import", HTTP_POST, handleSettingsImport);
-#endif
     server.on("/wifi_scan", HTTP_GET, handleWifiScan);
     server.on("/wifi_config", HTTP_POST, handleWifiConfig);
     server.on("/wifi_status", HTTP_GET, handleWifiStatus);
     server.on("/system_status", HTTP_GET, handleSystemStatus);
-#if DASH_ENABLE_TASK_STATS
-    server.on("/task_stats", HTTP_GET, handleTaskStats);
-#endif
     server.on("/wifi_networks", HTTP_GET, handleWifiNetworks);
     server.on("/wifi_connect", HTTP_POST, handleWifiConnect);
     server.on("/wifi_delete", HTTP_POST, handleWifiDelete);
-#if DASH_ENABLE_ONLINE_UPDATE
-    server.on("/update_check", HTTP_GET, handleUpdateCheck);
-    server.on("/update_install", HTTP_POST, handleUpdateInstall);
-    server.on("/update_beta", HTTP_POST, handleUpdateBeta);
-    server.on("/auto_update", HTTP_GET, handleAutoUpdate);
-    server.on("/auto_update", HTTP_POST, handleAutoUpdate);
-#endif
 #if defined(ESP_PLATFORM) && defined(DASH_STA_AP_GATEWAY)
     server.on("/gateway_status", HTTP_GET, handleGatewayStatus);
     server.on("/gateway_dns", HTTP_GET, handleGatewayDnsGet);
@@ -5688,26 +2253,14 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
 #endif
 #endif
     Serial.println("[WEB] Dashboard: http://" + WiFi.softAPIP().toString());
-    dashLog("[BOOT] ev-open-can-tools ready");
+    dashLog("[BOOT] WIFI-NAG ready");
 }
 
 static void mcpDashboardLoop()
 {
     if (Update.isRunning())
         return;
-#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
-    dashSleepPoll();
-    if (dashSleepActive)
-        return;
-#endif
     dashSerialDiagnosticsPoll();
-#if !defined(PRODUCT_WIFI_MAX) && !defined(PRODUCT_WIFI_NAG)
-    if (recActive && (millis() - recStartMs >= kRecMaxDurationMs))
-        dashStopRecordingAndSave("time limit");
-#endif
-#if !defined(PRODUCT_WIFI_MAX)
-    dashCheckBusHealth();
-#endif
     if (canOnline && millis() - lastFrameMs > 10000)
     {
         canOnline = false;

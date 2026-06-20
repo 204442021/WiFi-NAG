@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #ifdef ESP_PLATFORM
 #include "platform/espidf_runtime.h"
 #else
@@ -93,12 +93,6 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
   .sys-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
   .sys-full{grid-column:span 4}
 }
-.task-table{width:100%;border-collapse:collapse;margin-top:4px;font-family:'SF Mono','Courier New',monospace;font-size:11px;table-layout:fixed}
-.task-table th{color:var(--tx3);font-size:9px;text-transform:uppercase;letter-spacing:.5px;text-align:left;font-weight:600;padding:3px 4px;border-bottom:1px solid var(--bd)}
-.task-table td{padding:4px;border-bottom:1px solid var(--bd);color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.task-table tr:last-child td{border-bottom:0}
-.task-table .task-name{color:var(--tx);font-weight:600;width:34%}
-.task-table .task-core{width:13%}.task-table .task-cpu{width:22%}.task-table .task-stack{width:17%}.task-table .task-state{width:14%}
 .sys-monitor{display:flex;align-items:center;justify-content:flex-end;gap:8px}
 .sys-monitor span{white-space:nowrap}
 .sys-monitor .tgl{margin-left:0}
@@ -136,10 +130,6 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .hw-btn.active{background:var(--card);color:var(--acc);border:1px solid var(--accBd);
   box-shadow:0 1px 8px rgba(0,0,0,.10)}
 .hw-btn:hover:not(.active){background:var(--card2);color:var(--tx)}
-.profile-wrap{margin-top:12px}
-.profile-label{font-size:11px;color:var(--tx3);margin-bottom:6px}
-.profile-group.hidden{display:none}
-.profile-note{font-size:10px;color:var(--tx3);margin-top:6px}
 
 /* Speed pills */
 .pills{display:flex;gap:6px;flex-wrap:wrap}
@@ -151,7 +141,6 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .setting-info{flex:1;min-width:0}
 .setting-name{font-size:13px;font-weight:500;color:var(--tx)}
 .setting-desc{font-size:11px;color:var(--tx3);margin-top:2px}
-.hw4-only.hidden{display:none}
 
 /* Toggle */
 .tgl{position:relative;width:44px;height:24px;flex-shrink:0;margin-left:12px}
@@ -163,8 +152,7 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .tgl input:checked~.tgl-track .tgl-thumb{transform:translateX(20px)}
 .tgl input:disabled~.tgl-track{opacity:.35;cursor:not-allowed}
 
-/* Sniffer */
-.sniff-ctrl{display:flex;gap:6px;margin-bottom:8px}
+/* Form controls */
 .sniff-input{flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:8px;
   padding:7px 10px;color:var(--tx);font-size:12px;font-family:inherit;transition:border .2s}
 .sniff-input{width:100%;min-width:0;box-sizing:border-box;} 
@@ -172,51 +160,14 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .sniff-input::placeholder{color:var(--tx3)}
 .sniff-btn{padding:7px 12px;background:var(--card);border:1px solid var(--bd);border-radius:8px;
   color:var(--tx2);font-size:11px;font-weight:600;cursor:pointer;transition:all .18s;font-family:inherit}
-.sniff-btn.paused{border-color:var(--warn);color:var(--warn)}
-.sniff-btn:hover:not(.paused){border-color:var(--bd2);color:var(--tx)}
+.sniff-btn:hover{border-color:var(--bd2);color:var(--tx)}
 .nag-mode-control{width:168px;flex:0 0 168px}
 .nag-range-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;width:260px;max-width:100%}
 .nag-range-grid .sniff-input{text-align:right}
 .nag-range-grid .sniff-btn{white-space:nowrap}
 .nag-torque-status{display:inline-flex;flex-wrap:wrap;gap:5px;margin-top:5px}
 .nag-status-pill{display:inline-flex;padding:2px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg2);color:var(--tx2);line-height:1.4}
-.gateway-profile-btn.active,.gateway-upstream-btn.active,.hw3-enc-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
-.sniff-box{background:var(--bg);border:1px solid var(--bd);border-radius:9px;
-  max-height:250px;overflow-y:auto;font-family:'SF Mono','Courier New',monospace}
-.sniff-box::-webkit-scrollbar{width:4px}
-.sniff-box::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:4px}
-.sniff-row{display:grid;grid-template-columns:38px 72px 1fr;gap:8px;
-  padding:6px 10px;border-bottom:1px solid var(--bd);font-size:11px;align-items:start}
-.sniff-row:last-child{border-bottom:none}
-.sniff-row.hi{border-left:2px solid var(--acc);padding-left:8px}
-.s-ts{color:var(--tx3);font-size:10px;padding-top:1px}
-.s-id{color:var(--acc);font-weight:700}
-.s-data{color:var(--tx2);word-break:break-all}
-.s-name{color:var(--ok);font-size:10px;margin-top:2px}
-
-/* EFLG */
-.eflg-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
-.eflg-pill{padding:3px 8px;border-radius:5px;font-size:10px;font-weight:600;letter-spacing:.3px}
-.eflg-ok{background:var(--okBg);color:var(--ok)}
-.eflg-warn{background:rgba(245,166,35,.1);color:var(--warn)}
-.eflg-err{background:var(--errBg);color:var(--err)}
-
-/* Mux table */
-.mux-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
-.mux-tbl th{color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:.8px;
-  text-align:left;padding:4px 8px;border-bottom:1px solid var(--bd);font-weight:500}
-.mux-tbl td{padding:5px 8px;color:var(--tx2);border-bottom:1px solid var(--bd)}
-.mux-tbl tr:last-child td{border-bottom:none}
-.mux-tbl td:first-child{color:var(--acc);font-weight:600}
-
-/* Last write check */
-.probe-status{font-size:13px;font-weight:600}
-.probe-note{font-size:11px;color:var(--tx3);line-height:1.6;margin-top:10px}
-.probe-block{margin-top:12px;padding-top:12px;border-top:1px solid var(--bd)}
-.probe-meta{font-size:11px;color:var(--tx3);margin-bottom:4px}
-.probe-label{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
-.probe-hex{font-family:'SF Mono','Courier New',monospace;font-size:12px;color:var(--tx2);word-break:break-all}
-
+.gateway-profile-btn.active,.gateway-upstream-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
 /* Buttons */
 .btn-row{display:flex;gap:8px;margin-top:14px}
 .btn{flex:1;padding:10px;border:1px solid;border-radius:9px;background:transparent;
@@ -241,11 +192,6 @@ body.wifi-nag .stat-grid>.btn-reboot{align-items:center;justify-content:center;t
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .modal-btn-primary{background:var(--accBg);border-color:var(--accBd);color:var(--acc)}
 .modal-btn-primary:hover{background:var(--acc);color:#fff}
-.owner-modal-card{width:min(100%,390px);border-color:var(--accBd);box-shadow:0 18px 48px rgba(0,0,0,.38)}
-.owner-modal-title{font-size:17px;font-weight:800;color:var(--acc);letter-spacing:.3px}
-.owner-modal-subtitle{margin-top:6px;font-size:14px;font-weight:700;color:var(--tx)}
-.owner-modal-msg{margin-top:12px;font-size:13px;color:var(--tx2);line-height:1.8;white-space:pre-line}
-.owner-modal-msg .ok{color:var(--ok);font-weight:700}
 .dns-modal-card{width:min(100%,640px)}
 .dns-modal-list{margin-top:10px;max-height:60vh;overflow:auto;border:1px solid var(--bd);border-radius:9px;padding:8px;background:var(--bg)}
 .dns-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 8px;border-bottom:1px solid var(--bd)}
@@ -282,11 +228,6 @@ body.wifi-nag .stat-grid>.btn-reboot{align-items:center;justify-content:center;t
 .log-box::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:4px}
 .lf{color:var(--ok)}.lh{color:var(--acc)}.le{color:var(--err)}.lc{color:var(--warn)}.lo{color:var(--tx2)}
 
-/* Recorder */
-.rec-bar{height:4px;background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:6px}
-.rec-fill{height:100%;background:var(--ok);border-radius:2px;transition:width .3s,background .3s;width:0%}
-.rec-info{display:flex;justify-content:space-between;font-size:11px;color:var(--tx3);margin-bottom:10px}
-
 /* Warning */
 .warn-bar{margin:0 16px 14px;padding:10px 14px;border-radius:9px;
   background:var(--errBg);border:1px solid var(--errBd);font-size:11px;color:var(--err);line-height:1.7}
@@ -301,7 +242,6 @@ body.wifi-nag .stat-grid>.btn-reboot{align-items:center;justify-content:center;t
 .ui-mode-detected{font-size:10px;color:var(--tx3);margin-left:auto}
 .car-side{display:none}
 .nag-nav-only{display:none !important}
-.hw3-enc-buttons{display:none;gap:6px;flex-wrap:wrap}
 body.ui-car{width:100vw;max-width:none;margin:0;padding-left:204px;font-size:16px;line-height:1.55}
 body.ui-car .car-side{position:fixed;left:0;top:0;bottom:0;width:188px;display:flex;flex-direction:column;gap:9px;
   padding:16px 12px;background:linear-gradient(180deg,var(--card),var(--bg2));border-right:1px solid var(--bd);z-index:1000;box-shadow:8px 0 28px rgba(0,0,0,.05)}
@@ -339,9 +279,6 @@ body.ui-car .sys-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 body.ui-car .sys-wide{grid-column:span 2}
 body.ui-car .sys-full{grid-column:span 4}
 body.ui-car .modal-card{width:min(100%,560px);border-radius:16px}
-body.ui-car .owner-modal-card{width:min(100%,520px)}
-body.ui-car #hw3-enc{display:none}
-body.ui-car .hw3-enc-buttons{display:flex}
 body.ui-car *{transition:none !important;animation:none !important;scroll-behavior:auto !important}
 @media (max-width:900px){
   body.ui-car{padding-left:0}
@@ -349,39 +286,15 @@ body.ui-car *{transition:none !important;animation:none !important;scroll-behavi
   body.ui-car .stat-grid{grid-template-columns:repeat(3,1fr);margin-left:16px;margin-right:16px}
   body.ui-car .card,body.ui-car .hdr,body.ui-car .ui-mode-strip{margin-left:16px;margin-right:16px}
 }
-body:not(.can-debug-on) .can-debug-panel{display:none !important}
-body.wifi-max .can-only,
-body.wifi-max .fps-bar,
-body.wifi-max #config-hardware-section,
-body.wifi-max #hw3-speed-section,
-body.wifi-max #legacy-mpp-section,
-body.wifi-max #hw3-slew-section,
-body.wifi-max #can-debug-card,
-body.wifi-max .warn-bar,
-body.wifi-max .owner-modal-card{display:none !important}
-body.wifi-max #hw-badge{font-size:0}
-body.wifi-max #hw-badge::after{content:'WIFI-MAX';font-size:11px}
-body.wifi-nag .nag-hide,
-body.wifi-nag #hw3-speed-section,
-body.wifi-nag #legacy-mpp-section,
-body.wifi-nag #hw3-slew-section,
-body.wifi-nag #firmware-update-card,
-body.wifi-nag #can-debug-card,
-body.wifi-nag .can-debug-panel,
-body.wifi-nag #sys-task-load,
-body.wifi-nag .owner-modal-card{display:none !important}
 .nag-only{display:none !important}
 body.wifi-nag .nag-only.setting-row{display:flex !important}
 body.wifi-nag .nag-nav-only{display:flex !important}
 body.wifi-nag #hw-badge{font-size:0}
 body.wifi-nag #hw-badge::after{content:'WIFI-NAG';font-size:11px}
-body.wifi-nag .car-nav-btn.can-only[onclick*="config-hardware-section"],
-body.wifi-nag .car-nav-btn.can-only[onclick*="hw3-speed-section"]{display:none !important}
 body.wifi-nag .hdr-title{font-weight:800;letter-spacing:.2px}
 body.wifi-nag .hw-badge{border-color:var(--goldBd);background:var(--goldBg);color:var(--gold)}
 body.wifi-nag #config-hardware-section{padding-top:2px;border-top:0}
 body.wifi-nag #config-hardware-section .subsec-head{padding:10px 0 8px;border-bottom:1px solid var(--bd)}
-body.wifi-nag #btn-fsd-toggle,
 body.wifi-nag #config-card>.card-hdr .card-min-btn,
 body.wifi-nag #config-hardware-section>.subsec-head .subsec-btn{display:none !important}
 body.wifi-nag #can-write-row{padding-top:14px}
@@ -431,9 +344,8 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
 <div class="hdr">
   <div class="hdr-top">
     <div class="hdr-left">
-      <div class="hdr-title">ev-open-can-tools</div>
-      <span class="hw-badge" id="hw-badge">HW3</span>
-      <span class="gtw-badge" id="gtw-badge" title="GTW_autopilot">GTW &mdash;</span>
+      <div class="hdr-title">EVtools WIFI-NAG</div>
+      <span class="hw-badge" id="hw-badge">WIFI-NAG</span>
     </div>
     <button class="theme-btn" onclick="toggleLanguage()" id="lang-btn">中文</button>
     <button class="theme-btn" onclick="toggleTheme()" id="theme-btn">&#9788; Light</button>
@@ -463,11 +375,8 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
   <div class="stat can-only"><div class="stat-lbl">RX</div><div class="stat-val v-acc" id="s-rx">0</div></div>
   <div class="stat can-only"><div class="stat-lbl">TX</div><div class="stat-val v-acc" id="s-tx">0</div></div>
   <div class="stat can-only"><div class="stat-lbl">TX Errors</div><div class="stat-val v-dim" id="s-txerr">0</div></div>
-  <div class="stat can-only nag-hide"><div class="stat-lbl">Follow dist</div><div class="stat-val v-dim" id="s-fd">--</div></div>
-  <div class="stat can-only nag-hide"><div class="stat-lbl">Profile</div><div class="stat-val v-dim" id="s-prof">--</div></div>
-  <div class="stat can-only nag-hide"><div class="stat-lbl">Limit Offset</div><div class="stat-val v-dim" id="s-soff">0</div></div>
   <div class="stat"><div class="stat-lbl">Uptime</div><div class="stat-val v-dim" id="s-up">0s</div></div>
-  <button class="btn can-only" id="btn-fsd-toggle" onclick="toggleFsdTopButton()">CAN TX On</button>
+  <button class="btn can-only" id="btn-can-toggle" onclick="toggleCanWriteTopButton()">CAN Write On</button>
   <button class="btn btn-reboot" onclick="reboot()">Reboot</button>
 </div>
 
@@ -520,55 +429,21 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
     <div class="sys-item"><div class="sys-lbl">Bluetooth LE</div><div class="sys-val" id="sys-ble">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">Wireless</div><div class="sys-val" id="sys-wireless">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">MAC / Firmware</div><div class="sys-val" id="sys-fw">--</div></div>
-    <div class="sys-item sys-full" id="sys-task-load">
-      <div class="sys-lbl">Task Load</div>
-      <table class="task-table">
-        <thead><tr><th class="task-name">task</th><th class="task-core">core</th><th class="task-cpu">cpu%</th><th class="task-stack">stack</th><th class="task-state">state</th></tr></thead>
-        <tbody id="sys-task-rows"><tr><td colspan="5" class="v-dim">--</td></tr></tbody>
-      </table>
-    </div>
   </div>
 </div>
 
 <div class="card" id="config-card">
   <div class="card-hdr">
-    <div class="card-title">Configuration <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Device settings for hardware mode, WiFi, CAN pins and logging.">i</span></div>
+    <div class="card-title">Configuration <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Device settings for Nag, WiFi, DNS and logging.">i</span></div>
     <div class="card-meta">Device settings</div>
   </div>
 
   <div class="subsec" id="config-hardware-section" data-subkey="config-hardware">
     <div class="subsec-head">
-      <div class="subsec-title">Hardware <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Select the autopilot hardware generation and matching speed profile set.">i</span></div>
-      <div class="subsec-meta">Autopilot generation</div>
+      <div class="subsec-title">Nag / CAN Write <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Read-only monitoring when off; Nag 0x370 echo writes when on.">i</span></div>
+      <div class="subsec-meta">WIFI-NAG</div>
     </div>
     <div class="subsec-body">
-      <div class="hw-seg nag-hide" id="hw-seg">
-        <button class="hw-btn" data-v="0" onclick="setHW(0)">Legacy</button>
-        <button class="hw-btn active" data-v="1" onclick="setHW(1)">HW3</button>
-        <button class="hw-btn" data-v="2" onclick="setHW(2)">HW4</button>
-      </div>
-      <div class="profile-wrap nag-hide">
-        <div class="profile-label">Profile</div>
-        <div class="profile-group" id="sp3-group">
-          <div class="hw-seg" id="sp3-seg">
-            <button class="hw-btn" data-v="-1" onclick="setProfileAuto()">Auto</button>
-            <button class="hw-btn" data-v="0" onclick="setProfile(0)">Chill</button>
-            <button class="hw-btn" data-v="1" onclick="setProfile(1)">Normal</button>
-            <button class="hw-btn" data-v="2" onclick="setProfile(2)">Hurry</button>
-          </div>
-        </div>
-        <div class="profile-group hidden" id="sp4-group">
-          <div class="hw-seg" id="sp4-seg">
-            <button class="hw-btn" data-v="-1" onclick="setProfileAuto()">Auto</button>
-            <button class="hw-btn" data-v="0" onclick="setProfile(0)">Chill</button>
-            <button class="hw-btn" data-v="1" onclick="setProfile(1)">Normal</button>
-            <button class="hw-btn" data-v="2" onclick="setProfile(2)">Hurry</button>
-            <button class="hw-btn" data-v="3" onclick="setProfile(3)">Max</button>
-            <button class="hw-btn" data-v="4" onclick="setProfile(4)">Sloth</button>
-          </div>
-        </div>
-        <div class="profile-note" id="profile-note">Available profiles depend on the selected hardware.</div>
-      </div>
       <div class="setting-row" id="can-write-row">
         <div class="setting-info">
           <div class="setting-name">CAN Write</div>
@@ -603,138 +478,6 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
           <button class="sniff-btn" onclick="saveNagAv2()">Save</button>
         </div>
       </div>
-    </div>
-  </div>
-
-
-  <div class="subsec" id="hw3-speed-section" data-subkey="config-hw3-speed">
-    <div class="subsec-head">
-      <div class="subsec-title">HW3 Custom Speed Limit <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Writes only the 1021 mux2 offset when custom speed is enabled. Maximum target is limited to +50% of the detected speed limit so FSD activation mux0 remains untouched.">i</span></div>
-      <div class="subsec-meta" id="hw3-speed-meta">Off</div>
-    </div>
-    <div class="subsec-body">
-      <div class="setting-row" style="padding-top:0">
-        <div class="setting-info">
-          <div class="setting-name">Custom table</div>
-          <div class="setting-desc">30/40/50/60/70 km/h buckets. Max +50% target: 45/60/75/90/105 km/h.</div>
-        </div>
-        <label class="tgl"><input type="checkbox" id="hw3-cust-tgl" onchange="saveHw3Speed()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px">
-        <div class="stat" style="padding:6px"><div class="stat-lbl">30-></div><input class="sniff-input" id="hw3-ct-0" type="number" min="0" max="45" value="45" onchange="saveHw3Speed()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">40-></div><input class="sniff-input" id="hw3-ct-1" type="number" min="0" max="60" value="60" onchange="saveHw3Speed()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">50-></div><input class="sniff-input" id="hw3-ct-2" type="number" min="0" max="75" value="75" onchange="saveHw3Speed()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">60-></div><input class="sniff-input" id="hw3-ct-3" type="number" min="0" max="90" value="90" onchange="saveHw3Speed()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">70-></div><input class="sniff-input" id="hw3-ct-4" type="number" min="0" max="105" value="105" onchange="saveHw3Speed()" style="width:100%;text-align:right"></div>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-name">High-speed boost (&gt;=80 km/h)</div>
-          <div class="setting-desc">80/100/120 km/h buckets. Max +50% target: 120/150/180 km/h.</div>
-        </div>
-        <label class="tgl"><input type="checkbox" id="hw3-hs-tgl" onchange="saveHw3Speed()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px">
-        <div class="stat" style="padding:6px"><div class="stat-lbl">80-></div><input class="sniff-input" id="hw3-hs-0" type="number" min="0" max="120" value="90" onchange="saveHw3Speed()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">100-></div><input class="sniff-input" id="hw3-hs-1" type="number" min="0" max="150" value="110" onchange="saveHw3Speed()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">120-></div><input class="sniff-input" id="hw3-hs-2" type="number" min="0" max="180" value="130" onchange="saveHw3Speed()" style="width:100%;text-align:right"></div>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-name">Wire encoding</div>
-          <div class="setting-desc">PCT4=current, KPH5=legacy fleets</div>
-        </div>
-        <select class="sniff-input" id="hw3-enc" onchange="saveHw3Speed()" style="width:96px;flex:0 0 auto">
-          <option value="1">PCT4</option>
-          <option value="0">KPH5</option>
-        </select>
-        <div class="hw3-enc-buttons" id="hw3-enc-buttons">
-          <button type="button" class="sniff-btn hw3-enc-btn" data-v="1" onclick="setHw3Encoding(1)">PCT4</button>
-          <button type="button" class="sniff-btn hw3-enc-btn" data-v="0" onclick="setHw3Encoding(0)">KPH5</button>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">
-        <div class="stat" style="padding:8px"><div class="stat-lbl">Fused</div><div class="stat-val" id="hw3-fused">0</div></div>
-        <div class="stat" style="padding:8px"><div class="stat-lbl">Stock limit offset</div><div class="stat-val" id="hw3-stock-off">0</div></div>
-        <div class="stat" style="padding:8px"><div class="stat-lbl">Write raw</div><div class="stat-val" id="hw3-tgt-raw">0</div></div>
-      </div>
-      <div style="font-size:11px;color:var(--tx3);margin-top:6px" id="hw3-speed-status"></div>
-    </div>
-  </div>
-
-  <div class="subsec" id="legacy-mpp-section" data-subkey="config-legacy-mpp">
-    <div class="subsec-head">
-      <div class="subsec-title">Legacy Custom Speed Limit <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Raise UI_mppSpeedLimit on CAN 760 byte 6 to a target km/h based on what the gateway is currently sending. Same bucket layout as HW3. Only writes when target is higher than current - never lowers.">i</span></div>
-      <div class="subsec-meta" id="legacy-mpp-meta">Off</div>
-    </div>
-    <div class="subsec-body">
-      <div class="setting-row" style="padding-top:0">
-        <div class="setting-info">
-          <div class="setting-name">Master enable</div>
-          <div class="setting-desc">Allow this module to write to UI_mppSpeedLimit</div>
-        </div>
-        <label class="tgl"><input type="checkbox" id="legacy-mpp-tgl" onchange="saveLegacyMpp()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-name">Custom table</div>
-          <div class="setting-desc">30/40/50/60/70 km/h buckets. Max +50% target: 45/60/75/90/105 km/h.</div>
-        </div>
-        <label class="tgl"><input type="checkbox" id="legacy-mpp-cust-tgl" onchange="saveLegacyMpp()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px">
-        <div class="stat" style="padding:6px"><div class="stat-lbl">30-></div><input class="sniff-input" id="legacy-mpp-ct-0" type="number" min="0" max="45" value="45" onchange="saveLegacyMpp()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">40-></div><input class="sniff-input" id="legacy-mpp-ct-1" type="number" min="0" max="60" value="60" onchange="saveLegacyMpp()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">50-></div><input class="sniff-input" id="legacy-mpp-ct-2" type="number" min="0" max="75" value="75" onchange="saveLegacyMpp()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">60-></div><input class="sniff-input" id="legacy-mpp-ct-3" type="number" min="0" max="90" value="90" onchange="saveLegacyMpp()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">70-></div><input class="sniff-input" id="legacy-mpp-ct-4" type="number" min="0" max="105" value="105" onchange="saveLegacyMpp()" style="width:100%;text-align:right"></div>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-name">High-speed boost (&gt;=80 km/h)</div>
-          <div class="setting-desc">80/100/120 km/h buckets. Max target: 120/150/155 km/h.</div>
-        </div>
-        <label class="tgl"><input type="checkbox" id="legacy-mpp-hs-tgl" onchange="saveLegacyMpp()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px">
-        <div class="stat" style="padding:6px"><div class="stat-lbl">80-></div><input class="sniff-input" id="legacy-mpp-hs-0" type="number" min="0" max="120" value="90" onchange="saveLegacyMpp()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">100-></div><input class="sniff-input" id="legacy-mpp-hs-1" type="number" min="0" max="150" value="110" onchange="saveLegacyMpp()" style="width:100%;text-align:right"></div>
-        <div class="stat" style="padding:6px"><div class="stat-lbl">120-></div><input class="sniff-input" id="legacy-mpp-hs-2" type="number" min="0" max="155" value="130" onchange="saveLegacyMpp()" style="width:100%;text-align:right"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:10px">
-        <div class="stat" style="padding:8px"><div class="stat-lbl">Bus raw</div><div class="stat-val" id="legacy-mpp-bus-raw">0</div></div>
-        <div class="stat" style="padding:8px"><div class="stat-lbl">Sent raw</div><div class="stat-val" id="legacy-mpp-sent-raw">0</div></div>
-      </div>
-      <div style="font-size:11px;color:var(--tx3);margin-top:6px" id="legacy-mpp-status"></div>
-    </div>
-  </div>
-
-  <div class="subsec" id="hw3-slew-section" data-subkey="config-hw3-slew">
-    <div class="subsec-head">
-      <div class="subsec-title">HW3 Offset Slew <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Limits downward HW3 mux 2 offset changes sent by the built-in FSD chain.">i</span></div>
-      <div class="subsec-meta" id="hw3-slew-meta">Off</div>
-    </div>
-    <div class="subsec-body">
-      <div class="setting-row" style="padding-top:0">
-        <div class="setting-info">
-          <div class="setting-name">Ramp-down limiter</div>
-          <div class="setting-desc">Opt-in only; increases still pass immediately</div>
-        </div>
-        <label class="tgl"><input type="checkbox" id="hw3-slew-tgl" onchange="saveHw3Slew()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-name">Offset drop rate</div>
-          <div class="setting-desc" id="hw3-slew-rate-hint">Default 25%/s, max 25%/s</div>
-        </div>
-        <input class="sniff-input" id="hw3-slew-rate" type="number" min="1" max="25" value="25" onchange="saveHw3Slew()" style="width:72px;text-align:right;flex:0 0 auto">
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">
-        <div class="stat" style="padding:8px"><div class="stat-lbl">Target</div><div class="stat-val" id="hw3-slew-target">0</div></div>
-        <div class="stat" style="padding:8px"><div class="stat-lbl">Last</div><div class="stat-val" id="hw3-slew-last">0</div></div>
-        <div class="stat" style="padding:8px"><div class="stat-lbl">Capped</div><div class="stat-val" id="hw3-slew-count">0</div></div>
-      </div>
-      <div style="font-size:11px;color:var(--tx3);margin-top:6px" id="hw3-slew-status"></div>
     </div>
   </div>
 
@@ -898,22 +641,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
     </div>
   </div>
 
-  <div class="subsec can-debug-panel" data-subkey="config-can-pins">
-    <div class="subsec-head">
-      <div class="subsec-title">CAN Pins <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Set the ESP32 GPIO pins used for the CAN transceiver. Wrong values can disable CAN.">i</span></div>
-      <div class="subsec-meta" id="can-pins-status">default</div>
-    </div>
-    <div class="subsec-body">
-      <div style="display:flex;gap:6px;align-items:center">
-        <input class="sniff-input" id="can-tx" type="number" min="0" max="39" placeholder="TX GPIO" style="flex:1">
-        <input class="sniff-input" id="can-rx" type="number" min="0" max="39" placeholder="RX GPIO" style="flex:1">
-        <button class="sniff-btn" onclick="saveCanPins()">Save</button>
-      </div>
-      <div style="font-size:11px;color:var(--tx3);margin-top:6px" id="can-pins-hint">Reboot required after change</div>
-    </div>
-  </div>
-
-  <div class="subsec can-debug-panel" data-subkey="config-dashboard-log" style="margin-top:14px">
+  <div class="subsec" data-subkey="config-dashboard-log" style="margin-top:14px">
     <div class="subsec-head">
       <div class="subsec-title">Debug Log <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Shows recent WebUI and firmware log lines.">i</span></div>
       <div class="subsec-meta">Recent debug output</div>
@@ -952,42 +680,11 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
     <button class="sniff-btn" id="ota-reset-btn" onclick="resetOtaCredentials()" style="width:100%;margin-top:6px">Reset OTA Credentials</button>
     <div style="margin-top:10px;font-size:11px;color:var(--tx3);line-height:1.7">
       Use the generated PlatformIO firmware.bin for this board.<br>
-      Current build path: <span style="color:var(--acc);font-family:monospace">.pio/build/waveshare_ESP32_S3_RS485_CAN/firmware.bin</span>
+      Current build path: <span style="color:var(--acc);font-family:monospace">.pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin</span>
     </div>
   </div>
 </div>
-<div class="card" id="can-debug-card">
-  <div class="card-hdr">
-    <div class="card-title">CAN Debug <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Enable debug panels: firmware update, debug log and CAN pin tools.">i</span></div>
-    <div class="card-meta" id="can-debug-meta">Off</div>
-  </div>
-  <div class="setting-row" style="padding-top:0">
-    <div class="setting-info">
-      <div class="setting-name">Enable CAN debug tools</div>
-      <div class="setting-desc">Shows firmware update, debug log and CAN pin tools</div>
-    </div>
-    <label class="tgl"><input type="checkbox" id="can-debug-tgl" onchange="toggleCanDebug()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
-  </div>
-</div>
-
 <div class="warn-bar">CAN bus writes affect vehicle behavior. Remove device immediately if unexpected behavior occurs. Not affiliated with any vehicle manufacturer.</div>
-
-<div class="modal-backdrop" id="owner-modal" onclick="ownerNoticeBackdrop(event)">
-  <div class="modal-card owner-modal-card" role="dialog" aria-modal="true" aria-labelledby="owner-title">
-    <div class="owner-modal-title" id="owner-title">&#x3010;FSD&#x8F66;&#x4E3B;&#x4EA4;&#x6D41;&#x7FA4;&#x3011;</div>
-    <div class="owner-modal-subtitle">&#x836F;&#x4E0D;&#x80FD;&#x505C; &#x4E13;&#x5C5E;&#x5FAE;&#x96EA;ESP32S3&#x56FA;&#x4EF6;</div>
-    <div class="owner-modal-msg">&#x57FA;&#x4E8E;&#x5B98;&#x65B9;3.0.0 &#x5B8C;&#x6574; IDF&#x6846;&#x67B6;&#x79FB;&#x690D;
-&#x6DF1;&#x5EA6;&#x4F18;&#x5316;&#xFF1A;
-<span class="ok">&#x2705;</span> WiFi AP + NAPT &#x8F6C;&#x53D1;&#x901F;&#x5EA6;
-<span class="ok">&#x2705;</span> DNS &#x8FC7;&#x6EE4;&#x4E0E;&#x89E3;&#x6790;&#x6548;&#x7387;
-<span class="ok">&#x2705;</span> &#x81EA;&#x5B9A;&#x4E49;&#x9650;&#x901F;
-
-Version: 3.0.0-beta.5</div>
-    <div class="modal-actions">
-      <button class="sniff-btn modal-btn-primary" onclick="closeOwnerNotice()">&#x77E5;&#x9053;&#x4E86;</button>
-    </div>
-  </div>
-</div>
 
 <div class="modal-backdrop" id="confirm-modal" onclick="dashConfirmBackdrop(event)">
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
@@ -1001,387 +698,22 @@ Version: 3.0.0-beta.5</div>
 </div>
 
 <script>
-const HW=['Legacy','HW3','HW4'];
-const SP3=['Chill','Normal','Hurry'];
-const SP4=['Chill','Normal','Hurry','Max','Sloth'];
 const $=id=>document.getElementById(id);
 let dashLang=localStorage.getItem('dashLang')||((navigator.language||'').toLowerCase().startsWith('zh')?'zh':'en');
 const I18N_ZH={
-'Light':'浅色','Dark':'深色','Waiting for CAN frames':'等待 CAN 帧','CAN running':'CAN 通讯正常','CAN OK':'通讯正常','CAN waiting':'等待 CAN 帧','RX total':'接收累计','Dashboard disconnected':'仪表盘已断开','Dashboard reconnecting':'仪表盘重连中',
-'CAN Bus':'CAN 总线','Injection':'注入','Frame rate':'CAN 帧率','CAN Frame Rate':'CAN 帧率','CAN Frames':'CAN 帧','Frames received per second / total RX':'每秒接收帧 / 接收累计','RX Frames':'接收帧','TX Frames':'发送帧','Errors':'错误','AD Status':'AP 状态','Profile':'配置档','Offset':'偏移','Uptime':'运行时间',
-'Offline':'离线','Online':'在线','Active':'运行中','Inactive':'未激活','BLOCKED':'已阻止','Waiting AP':'等待 AP','No frames':'无帧','Sniffer paused':'嗅探暂停',
-'WiFi Hotspot':'WiFi 热点','Change the WiFi hotspot name and password':'修改 WiFi 热点名称和密码','SSID':'SSID','Password':'密码','Hidden':'隐藏','WiFi Internet':'WiFi 互联网','Not configured':'未配置','Save up to 4 networks (e.g. home + phone hotspot).':'最多保存 4 个网络（如家庭 WiFi + 手机热点）。','Add network':'添加网络','WiFi SSID':'WiFi SSID','Scan':'扫描','Save & Connect':'保存并连接','Use static IP':'使用静态 IP',
-'STA-AP Gateway':'STA-AP 网关','Gateway status unavailable':'网关状态不可用','Gateway':'网关','Enable STA-AP NAT routing for hotspot clients when WiFi Internet is connected.':'WiFi 互联网连接后，为热点客户端启用 STA-AP NAT 路由。','Conservative Mode':'保守模式','Aggressive Mode':'激进模式','Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.':'保守模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手。','Aggressive Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant / app vehicle control.':'激进模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手 / 控车。','Custom DNS profile':'自定义 DNS 配置','Blacklist':'黑名单','Whitelist':'白名单','Save DNS':'保存 DNS','Blocked':'阻断记录','DNS Filter List':'DNS 过滤清单','Add to Whitelist':'加入白名单','Blacklisted':'黑名单','Already whitelisted':'已在白名单','Clear':'清空','No blocked domains recorded':'没有阻断记录','Cleared':'已清空','Gateway not available':'网关不可用','domain is blacklisted':'域名在黑名单中，禁止加入白名单','cannot add domain':'无法加入域名',
-'CAN Pins':'CAN 引脚','default':'默认','TX GPIO':'TX GPIO','RX GPIO':'RX GPIO','Reboot required after saving custom pins.':'保存自定义引脚后需要重启。','Dashboard Log':'调试日志','Debug Log':'调试日志','Download':'下载','Import':'导入','Open':'打开',
-'Firmware Update':'固件更新','Beta Channel':'Beta 通道','Include pre-release / beta firmware versions':'包含预发布 / beta 固件版本','Auto-Update on Boot':'启动后自动更新','Check and install updates automatically ~15 s after WiFi connects':'WiFi 连接约 15 秒后自动检查并安装更新','Check for Updates':'检查更新','Manual firmware upload':'手动上传固件','Tap to select firmware .bin':'点击选择固件 .bin','Or drag and drop a file here':'或将文件拖放到这里','Uploading...':'上传中...','Flash Firmware':'刷写固件','Reset OTA Credentials':'重置 OTA 凭据',
-  'System Health':'系统状态','System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','CAN Debug':'CAN 调试','CAN调试':'CAN 调试','Enable CAN debug tools':'启用 CAN 调试工具','Shows firmware update, logs, sniffer and recorder panels':'显示固件更新、日志、嗅探器和记录器面板','Chip':'芯片','CPU':'CPU','CPU Load':'CPU 负载','Task Load':'任务负载','task':'任务','core':'核心','cpu%':'CPU%','stack':'栈余量','state':'状态','Task stats unavailable':'任务负载不可用','Core 0':'核心 0','Core 1':'核心 1','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Heap RAM':'堆内存','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','On':'开启','Off':'关闭','off':'关闭','not enabled':'未启用','unavailable':'不可用','offline':'离线','not present':'不存在','STA online':'STA 在线','STA offline':'STA 离线','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','warming up':'采样中',
-'CAN':'CAN','Pause':'暂停','Resume':'继续','Ready':'就绪','Saved':'已保存','Recording...':'记录中...',
-'Cancel':'取消','Continue':'继续','Confirm':'确认','Copy':'复制','Close':'关闭','Show':'显示','Hide':'隐藏','Loading...':'加载中...','Saving...':'保存中...','Saved! Reboot to apply.':'已保存！重启后生效。','Saved':'已保存','Error':'错误','Save failed':'保存失败','Connection error':'连接错误','Connection to ':'到 ',
-'Enabled':'已启用','Disabled':'已禁用','on':'开启','waiting':'等待中','blocked':'已阻断','NAT':'NAT','Connected':'已连接','Connecting to ':'正在连接 ','Connect':'连接','Reconnect':'重连','Connect failed':'连接失败','Delete':'删除','Edit':'编辑','No networks saved.':'未保存网络。','firmware default':'固件默认','saved':'已保存'
-};
-Object.assign(I18N_ZH,{
-  'Configuration':'\u914d\u7f6e',
-  'CONFIGURATION':'\u914d\u7f6e',
-  'Hardware':'\u786c\u4ef6',
-  'Device settings':'\u8bbe\u5907\u8bbe\u7f6e',
-  'Autopilot generation':'Autopilot \u4ee3\u9645',
-  'Select the autopilot hardware generation and matching speed profile set.':'\u9009\u62e9 Autopilot \u786c\u4ef6\u4ee3\u9645\u548c\u5bf9\u5e94\u7684\u901f\u5ea6\u914d\u7f6e\u6863\u3002',
-  'Configure the device hotspot name, password and visibility. Saved in NVS.':'配置设备热点名称、密码和可见性，保存到 NVS。',
-  'Stored in NVS (non-volatile storage). The SSID and password survive firmware updates and reboots. Only a full factory erase via USB clears them.':'保存在 NVS 非易失存储中。SSID 和密码会在固件更新、重启后保留，只有通过 USB 完整擦除出厂设置才会清除。',
-  'Hotspot Name':'热点名称',
-  'New Password (min 8)':'新密码（至少 8 位）',
-  'Hide SSID':'隐藏 SSID',
-  "Don't broadcast the hotspot name — clients must enter it manually":'不广播热点名称，客户端需要手动输入。',
-  'Changes take effect after reboot. Leave password empty to keep current.':'更改将在重启后生效。密码留空表示保留当前密码。',
-  'Up to 4 saved networks. The device tries each in turn until one connects.':'最多保存 4 个网络，设备会依次尝试直到连接成功。',
-  'Save up to 4 networks (e.g. home + phone hotspot). Device tries each in turn. Stored in NVS — survives firmware updates.':'最多保存 4 个网络（如家庭 WiFi + 手机热点）。设备会依次尝试连接，并保存在 NVS 中，固件更新后仍会保留。',
-  'Static IP (optional)':'静态 IP（可选）',
-  'Set a fixed IP configuration instead of using DHCP.':'使用固定 IP 配置，而不是 DHCP 自动获取。',
-  'IP (e.g. 192.168.1.100)':'IP（例如 192.168.1.100）',
-  'Gateway (e.g. 192.168.1.1)':'网关（例如 192.168.1.1）',
-  'Mask (255.255.255.0)':'掩码（255.255.255.0）',
-  'DNS (e.g. 8.8.8.8)':'DNS（例如 8.8.8.8）',
-  'Routes hotspot clients through the configured WiFi Internet uplink, with DNS filtering.':'通过已配置的 WiFi 互联网连接为热点客户端转发网络，并执行 DNS 过滤。',
-  'Conservative Mode':'保守模式',
-  'Aggressive Mode':'激进模式',
-  'Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.':'保守模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手。',
-  'Aggressive Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant / app vehicle control.':'激进模式：WiFi 接入 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 车机语音助手 / 控车。',
-  'Custom DNS profile':'自定义 DNS 配置',
-  'Enable STA-AP NAT routing for hotspot clients when WiFi Internet is connected':'WiFi 互联网连接后，为热点客户端启用 STA-AP NAT 路由。',
-  'Blocked domains, one per line':'阻止域名，每行一个',
-  'Allowed domains, one per line':'允许域名，每行一个',
-  'Test domain':'测试域名',
-  'Test DNS':'测试 DNS',
-  'DNS test failed':'DNS 测试失败',
-  'would be blocked':'会被阻断',
-  'would be allowed':'会被放行',
-  'matched blacklist':'命中黑名单',
-  'not in blacklist':'不在黑名单中',
-  'matched whitelist':'命中白名单',
-  'not in whitelist':'不在白名单中',
-  'gateway disabled':'网关未启用',
-  'empty domain':'域名为空',
-  'Filtered DNS Entries':'DNS 过滤记录',
-  'items':'条',
-  'Whitelist allows specific subdomain exceptions; blocked root domains cannot be reopened.':'白名单允许具体子域名例外；不能直接放开黑名单根域名。',
-  'Blacklist blocked':'黑名单禁止加入白名单',
-  'Not allowed':'不可加入',
-  'DNS filter list unavailable':'DNS 过滤记录不可用'
-  ,'Enter hotspot name':'请输入热点名称'
-  ,'Password min 8 chars':'密码至少 8 位'
-  ,'Scanning...':'扫描中...'
-  ,'Save Changes':'保存更改'
-});
-Object.assign(I18N_ZH,{
-  // Core terminology refinements (Tesla FSD / CAN context)
-  'CAN Write':'CAN \u5199\u5165',
-  'CAN Write On':'\u5f00\u542f CAN \u5199\u5165',
-  'CAN Write Off':'\u5173\u95ed CAN \u5199\u5165',
-  'Read Only':'\u53ea\u8bfb\u6a21\u5f0f',
-  'READ ONLY':'\u53ea\u8bfb\u6a21\u5f0f',
-  'CAN WRITE ON':'CAN \u5199\u5165\u5f00\u542f',
-  'CAN write is enabled. Nag echo can transmit.':'CAN \u5199\u5165\u5df2\u5f00\u542f\uff0cNag echo \u53ef\u53d1\u9001\u3002',
-  'Read-only mode. CAN frames are monitored but not written.':'\u53ea\u8bfb\u6a21\u5f0f\uff1a\u53ea\u76d1\u542c CAN \u5e27\uff0c\u4e0d\u5199\u5165\u3002',
-  'Read-only when off; Nag 0x370 echo when on':'\u5173\u95ed\u65f6\u53ea\u8bfb\uff1b\u5f00\u542f\u65f6\u5141\u8bb8 Nag 0x370 echo',
-  'Stop Injection':'停止 CAN 注入','Resume Injection':'恢复 CAN 注入','Stop Injecting':'停止 CAN 注入',
-  'FSD Switch':'FSD 开关','Turn FSD Off':'FSD 关闭','Turn FSD On':'开启 FSD',
-  'FSD Master Switch':'FSD 总开关','Enable FSD activation':'启用 FSD 激活',
-  'Turns built-in Legacy/HW3/HW4 FSD activation and CAN injection on or off together.':'同时开启或关闭内置 HW3 FSD 激活链路和 CAN 注入。',
-  'ON = built-in Legacy/HW3/HW4 FSD activation and CAN injection are enabled together.':'开启 = 使用内置 Legacy/HW3/HW4 FSD 激活链路，并同时允许 CAN 注入。',
-  'Built-in FSD chain is active. Legacy/HW3/HW4 injection is controlled by this switch.':'内置 FSD 链路已启用。Legacy/HW3/HW4 注入都由此开关统一控制。',
-  'FSD chain and CAN injection are disabled and stay off after reboot.':'FSD 链路和 CAN 注入已关闭，重启后也保持关闭。',
-  'FSD chain and CAN injection are disabled.':'FSD 链路和 CAN 注入已关闭。',
-  'Built-in FSD chain is active.':'内置 FSD 链路已启用。',
-  'Turn FSD off':'FSD 关闭','Turn Off':'关闭',
-  'Heap RAM':'堆内存','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存',
-  // Header / status
-  'Reboot':'重启设备','RX':'接收','TX':'发送','TX Errors':'发送错误','Follow dist':'跟车距离','Speed Offset':'限速偏移','Limit Offset':'限速偏移',
-  'AD active — injecting':'AP 已激活 — CAN 注入运行中',
-  'AP active — injecting':'AP 已激活 — CAN 注入运行中',
-  'FSD requested — injecting':'FSD 已请求 — CAN 注入运行中',
-  'CAN active — injecting':'CAN 在线 — 注入运行中',
-  'Waiting for AP — injection armed':'等待 AP — 注入待命',
-  'CAN active — monitoring':'CAN 在线 — 监听中',
-  'Stop injecting? This remains disabled after reboot until you press Resume Injection.':'停止 CAN 注入？该状态在重启后仍保持，直到按下"恢复 CAN 注入"。',
-  'Stop injection':'停止 CAN 注入','Stop':'停止',
-  'Reboot device?':'重启设备？',
-  // System Health card
-  'cores':'核',
-  'Frames received per second':'每秒接收 CAN 帧数',
-  'GTW 2047 Replay Count':'GTW 2047 重放次数',
-  'Modified GTW_autopilot frames sent per observed 0x7FF frame':'每观察到一帧 0x7FF 后发送的 GTW_autopilot 修改帧数',
-  'Author (optional)':'作者（可选）','Version':'版本',
-  'Fast builder':'快速构建','Add Shortcut':'添加快捷规则',
-  
-  
-  
-  
-  'No rules':'无规则',
-  'Add Rule':'添加规则','+ Add Rule':'+ 添加规则','Remove Rule':'删除规则',
-  'Idle':'空闲',
-  'Download JSON':'下载 JSON','JSON Preview':'JSON 预览','Reset':'重置','Author':'作者',
-  // Configuration card
-  'Device settings for hardware mode, WiFi, CAN pins, logging and backup.':'设备的硬件模式、WiFi、CAN 引脚、日志与备份设置。',
-  'Device settings for hardware mode, WiFi, CAN pins and logging.':'\u8bbe\u5907\u7684\u786c\u4ef6\u6a21\u5f0f\u3001WiFi\u3001CAN \u5f15\u811a\u4e0e\u65e5\u5fd7\u8bbe\u7f6e\u3002',
-  'Select the autopilot hardware generation and matching speed profile set.':'选择 Autopilot 硬件代际和对应的速度配置档。',
-  'Autopilot generation':'Autopilot 代际',
-  'Available profiles depend on the selected hardware.':'可用配置档取决于所选硬件。',
-  'Auto follows the vehicle follow distance.':'自动模式跟随车辆跟车距离。',
-  'Manual SP3 profile is locked.':'已锁定手动 SP3 配置档。',
-  'Manual SP4 profile is locked.':'已锁定手动 SP4 配置档。',
-  'Profiles are only available on HW3 and HW4.':'仅 HW3 与 HW4 支持配置档。',
-  // HW3 Custom Speed
-  'HW3 Custom Speed Limit':'HW3 自定义限速',
-  'Legacy Custom Speed Limit':'Legacy 自定义限速',
-  'Raise UI_mppSpeedLimit on CAN 760 byte 6 to a target km/h based on what the gateway is currently sending. Same bucket layout as HW3. Only writes when target is higher than current - never lowers.':'根据网关当前发送的 UI_mppSpeedLimit (CAN 760 byte 6) 按桶查表得到目标 km/h，仅在目标值高于当前值时写回，从不降低。桶布局与 HW3 一致。',
-  'Master enable':'总开关',
-  'Allow this module to write to UI_mppSpeedLimit':'允许此模块写入 UI_mppSpeedLimit',
-  'Bus raw':'总线原始值',
-  'Sent raw':'写入原始值',
-  'Override AP fused speed limit by writing a synthetic offset into 1021 mux 2. Custom uses the per-bucket table; High-speed uses target km/h values above 80 km/h.':'通过向 1021 mux 2 写入合成偏移来覆盖 AP 融合限速。Custom 使用分段表；High-speed 处理 80 km/h 以上的目标速度。',
-  'Custom table':'自定义分段表',
-  '30/40/50/60/70 km/h buckets':'30/40/50/60/70 km/h 分段',
-  'High-speed boost (>=80 km/h)':'??????>=80 km/h?',
-  '80/100/120 km/h target speeds':'80/100/120 km/h 目标速度',
-  'Wire encoding':'报文编码',
-  'PCT4=current, KPH5=legacy fleets':'PCT4=当前编码，KPH5=旧版车队',
-  'Fused':'融合限速','Stock off':'原车限速偏移','Stock limit offset':'原车限速偏移','Tgt raw':'写入 raw','Write raw':'写入 raw',
-  // HW3 slew
-  'Limits downward HW3 mux 2 offset changes sent by the built-in FSD chain.':'限制内置 HW3 mux2 偏移下调速度，避免限速突然下降。',
-  'Ramp-down limiter':'下行限速器',
-  'Opt-in only; increases still pass immediately':'仅手动开启，向上调整仍立即生效',
-  'Slew Rate':'限速偏移下降速率','Offset drop rate':'限速偏移下降速率','Target':'目标','Last':'上次','Capped':'触发限制',
-  // AP Injection Gate
-  'Start after AP':'AP 激活后启动',
-  // WiFi
-  'No networks saved.':'未保存网络。','No networks found':'未找到网络',
-  'Edit':'编辑','Delete':'删除','Delete WiFi':'删除 WiFi',
-  'Leave empty to keep current':'留空表示保留当前密码',
-  'Password required':'请输入密码','Enter SSID':'请输入 SSID','Scan failed':'扫描失败',
-  // STA-AP Gateway
-  'Routes hotspot clients through the configured WiFi Internet uplink, with DNS filtering.':'通过已配置的 WiFi 互联网上行为热点客户端转发，并提供 DNS 过滤。',
-  'Filter List':'过滤清单','Clear':'清空','Refresh':'刷新',
-  'Current: Blacklist mode - saving automatically':'当前：黑名单模式 - 自动保存中',
-  'Current: Blacklist mode - click mode to save immediately':'当前：黑名单模式 - 点击模式立即保存',
-  'Current: Blacklist mode - saved':'当前：黑名单模式 - 已保存',
-  'Already in blacklist':'已在黑名单',
-  'Gateway not available':'网关不可用',
-  // CAN Pins
-  'Save CAN pins':'保存 CAN 引脚',
-  'Reboot required after change':'修改后需要重启',
-  'Enter both TX and RX':'请同时填写 TX 和 RX',
-  'Saved. Rebooting...':'已保存，重启中...',
-  // Dashboard log
-  'Recent dashboard output':'最近调试输出',
-  'Recent debug output':'最近调试输出',
-  'Shows recent dashboard and firmware log lines. This is the dashboard logging output, not the CAN sniffer.':'显示最近 WebUI 与固件日志；这不是 CAN 嗅探器。',
-  'Shows recent WebUI and firmware log lines. This is debug logging output, not the CAN sniffer.':'显示最近 WebUI 与固件日志；这不是 CAN 嗅探器。',
-  'Shows recent WebUI and firmware log lines.':'\u663e\u793a\u6700\u8fd1\u7684 WebUI \u4e0e\u56fa\u4ef6\u65e5\u5fd7\u3002',
-  'Enable debug panels: firmware update, debug log and CAN pin tools.':'\u542f\u7528\u8c03\u8bd5\u9762\u677f\uff1a\u56fa\u4ef6\u66f4\u65b0\u3001\u8c03\u8bd5\u65e5\u5fd7\u548c CAN \u5f15\u811a\u5de5\u5177\u3002',
-  'Shows firmware update, debug log and CAN pin tools':'\u663e\u793a\u56fa\u4ef6\u66f4\u65b0\u3001\u8c03\u8bd5\u65e5\u5fd7\u548c CAN \u5f15\u811a\u5de5\u5177',
-  'Turns dashboard log output on or off.':'开启或关闭 WebUI 与固件调试日志输出。',
-  'Turns WebUI debug log output on or off.':'开启或关闭 WebUI 与固件调试日志输出。',
-  'Dashboard Logging':'调试日志开关',
-  'Debug logging':'调试日志开关',
-  'Toggle dashboard log output':'开启或关闭 WebUI 与固件调试日志输出',
-  'Toggle WebUI and firmware debug output':'开启或关闭 WebUI 与固件调试日志输出',
-  'Waiting...':'等待中...','Loading...':'加载中...','Saving...':'保存中...','Checking...':'检查中...',
-  'Downloading...':'下载中...','Uploading...':'上传中...','Installing...':'安装中...',
-  'Preparing...':'准备中...','Downloaded':'已下载','Installed':'已安装',
-  // Settings backup
-  'Export or restore saved device settings as JSON.':'导出或还原已保存的设备设置（JSON 格式）。',
-  'Upload & Restore':'上传并还原',
-  'Restore settings':'还原设置','Restore':'还原',
-  'Export failed':'导出失败','Invalid JSON':'JSON 格式错误',
-  'Restored. Rebooting...':'已还原，重启中...','Import failed':'导入失败','Upload failed':'上传失败',
-  'Copied to clipboard':'已复制到剪贴板','Copy failed':'复制失败',
-  'Copied support details. Paste them into the support question.':'已复制支持信息，请粘贴到问题描述中。',
-  // Firmware update
-  'Version info':'版本信息',
-  'Check for updates, enable beta builds and upload firmware manually.':'检查更新、启用 Beta 构建或手动上传固件。',
-  'Shows pre-release firmware versions when available.':'若有预发布版本则一并显示。',
-  'Checks for firmware updates automatically shortly after WiFi connects.':'WiFi 连接后自动检查固件更新。',
-  'No update URL':'未提供更新地址',
-  'Install firmware update? The device will reboot.':'安装固件更新？设备将会重启。',
-  'Install update':'安装更新','Install':'安装',
-  'Downloading & installing...':'下载并安装中...',
-  'Update installed! Rebooting...':'更新已安装，重启中...',
-  'Update failed':'更新失败',
-  'Manual firmware upload (.bin)':'手动上传固件 (.bin)',
-  'Upload a local firmware .bin file directly to the device.':'将本地固件 .bin 文件直接上传到设备。',
-  'Done! Device is rebooting...':'完成！设备正在重启...',
-  'OTA Username:':'OTA 用户名：','OTA Password:':'OTA 密码：',
-  'Flashing...':'刷写中...','OTA Credentials Reset':'OTA 凭据已重置',
-  'Up to date':'已是最新','Update available':'发现可用更新',
-  // CAN tools card
-  'Sniffer, recorder and bus status':'嗅探、记录与总线状态',
-  'Live CAN tools for sniffing, recording, controller status and checking the last injected write.':'实时 CAN 工具：嗅探、记录、控制器状态以及最后写入校验。',
-  'Shows the latest 30 CAN frames live. You can filter by ID or name, switch between wire IDs and DBC IDs, and pause the view.':'实时显示最近 30 帧 CAN 报文。可按 ID 或名称过滤，可在线束 ID 和 DBC ID 之间切换并暂停。',
-  'Filter by ID or name':'按 ID 或名称过滤',
-  'Filter by wire/DBC ID or name':'按 线束/DBC ID 或名称过滤',
-  'Records live CAN traffic up to the frame limit and lets you download it as a CSV file.':'实时记录 CAN 报文直到达到上限，可导出为 CSV 文件。',
-  'Download CSV':'下载 CSV','Mux':'多路','OK':'正常',
-  'Bus-Off':'总线关闭','TX Passive':'TX 被动','RX Passive':'RX 被动',
-  'TX Warn':'TX 警告','RX Warn':'RX 警告','RX Overflow':'RX 溢出',
-  'Shows CAN controller health, error flags and the RX, TX and error counters per mux.':'显示 CAN 控制器状态、错误标志以及每个 mux 的 RX/TX/错误计数。',
-  'Compares the last injected frame with the latest bus frame that has the same CAN ID and mux. Helpful to spot overwrites, but not proof that a module accepted the change.':'比较最近一次注入帧与同一 CAN ID/mux 的最新总线帧。有助于发现覆盖，但不能证明模块已接受变更。',
-  'No injected frame yet':'尚未注入帧','Sent':'已发送','Bus':'总线',
-  'Waiting for next matching bus frame':'等待下一帧匹配的总线报文',
-  'Matching frame seen on bus':'已在总线上看到匹配帧',
-  'Latest bus frame differs from injected frame':'最新总线帧与注入帧不一致',
-  'Driver transmit failed':'驱动发送失败',
-  'No matching RX frame seen yet':'尚未看到匹配的 RX 帧',
-  'Reset Stats':'重置统计',
-  // CAN debug card
-  'Enable debug panels: firmware update, debug log and live CAN tools.':'启用调试面板：固件更新、调试日志和实时 CAN 工具。',
-  // Confirm modal / common
-  'Confirm':'确认','Continue':'继续','Cancel':'取消',
-  // Warnings
-  'CAN bus writes affect vehicle behavior. Remove device immediately if unexpected behavior occurs. Not affiliated with any vehicle manufacturer.':'CAN 总线写入会影响车辆行为。一旦出现异常请立即拔除设备。与任何车厂无关联。',
-  'Discard current - never lowers.':'????????? UI_mppSpeedLimit (CAN 760 byte 6) ???????? km/h???????????????????????? HW3 ???',
-  'Manual firmware upload only. Select a local .bin and flash it to the device.':'?????????????? .bin ???????',
-  'Manual OTA':'?? OTA',
-  'Use the generated PlatformIO firmware.bin for this board.':'?????????? PlatformIO firmware.bin?',
-  'Current build path:':'???????',
-  'Set the ESP32 GPIO pins used for the CAN transceiver. Wrong values can disable CAN.':'?? CAN ?????? ESP32 GPIO ?????????? CAN ?????',
-  'Custom CAN pins saved in NVS. Reboot required after change.':'??? CAN ?????? NVS?????????',
-  'Using firmware default CAN pins. Save only if your hardware wiring differs.':'???????? CAN ??????????????????',
-  'Save CAN pins':'?? CAN ??',
-  'Restored. Reboot required.':'?????????',
-
-});
-
-// Final Chinese overrides for recently changed WebUI labels.
-Object.assign(I18N_ZH,{
-  'High-speed boost (>=80 km/h)':'\u9ad8\u901f\u5206\u6bb5\u63d0\u901f\uff08>=80 km/h\uff09',
-  '80/100/120 km/h buckets. Max +50% target: 120/150/180 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u6700\u5927\u63d0\u901f 50%\uff0c\u76ee\u6807\u4e0a\u9650\uff1a120/150/180 km/h\u3002',
-  '30/40/50/60/70 km/h buckets. Max +50% target: 45/60/75/90/105 km/h.':'30/40/50/60/70 km/h \u5206\u6bb5\u3002\u6700\u5927\u63d0\u901f 50%\uff0c\u76ee\u6807\u4e0a\u9650\uff1a45/60/75/90/105 km/h\u3002',
-  'Default 25%/s, max 25%/s':'\u9ed8\u8ba4 25%/\u79d2\uff0c\u6700\u9ad8 25%/\u79d2',
-  'Use 1-25, max 25':'\u8bf7\u8f93\u5165 1-25\uff0c\u6700\u9ad8 25',
-  'Manual firmware upload only. Select a local .bin and flash it to the device.':'\u4ec5\u4fdd\u7559\u624b\u52a8\u56fa\u4ef6\u4e0a\u4f20\u3002\u9009\u62e9\u672c\u5730 .bin \u5e76\u5237\u5199\u5230\u8bbe\u5907\u3002',
-  'Manual OTA':'\u624b\u52a8 OTA',
-  'Use the generated PlatformIO firmware.bin for this board.':'\u8bf7\u4f7f\u7528\u4e3a\u6b64\u677f\u5361\u751f\u6210\u7684 PlatformIO firmware.bin\u3002',
-  'Current build path:':'\u5f53\u524d\u6784\u5efa\u8def\u5f84\uff1a',
-  'Set the ESP32 GPIO pins used for the CAN transceiver. Wrong values can disable CAN.':'\u8bbe\u7f6e CAN \u6536\u53d1\u5668\u4f7f\u7528\u7684 ESP32 GPIO \u5f15\u811a\u3002\u9519\u8bef\u914d\u7f6e\u4f1a\u5bfc\u81f4 CAN \u65e0\u6cd5\u5de5\u4f5c\u3002',
-  'Custom CAN pins saved in NVS. Reboot required after change.':'\u81ea\u5b9a\u4e49 CAN \u5f15\u811a\u5df2\u4fdd\u5b58\u5728 NVS\uff0c\u4fee\u6539\u540e\u9700\u8981\u91cd\u542f\u3002',
-  'Using firmware default CAN pins. Save only if your hardware wiring differs.':'\u6b63\u5728\u4f7f\u7528\u56fa\u4ef6\u9ed8\u8ba4 CAN \u5f15\u811a\u3002\u53ea\u6709\u786c\u4ef6\u63a5\u7ebf\u4e0d\u540c\u65f6\u624d\u9700\u8981\u4fdd\u5b58\u3002',
-  'Save CAN pins':'\u4fdd\u5b58 CAN \u5f15\u811a',
-  'Restored. Reboot required.':'\u5df2\u8fd8\u539f\uff0c\u9700\u8981\u91cd\u542f\u3002',
-  'Raise UI_mppSpeedLimit on CAN 760 byte 6 to a target km/h based on what the gateway is currently sending. Same bucket layout as HW3. Only writes when target is higher than current - never lowers.':'\u6839\u636e\u7f51\u5173\u5f53\u524d\u53d1\u9001\u7684 UI_mppSpeedLimit (CAN 760 byte 6) \u6309\u5206\u6bb5\u8868\u5f97\u5230\u76ee\u6807 km/h\uff0c\u4ec5\u5728\u76ee\u6807\u503c\u9ad8\u4e8e\u5f53\u524d\u503c\u65f6\u5199\u56de\uff0c\u4ece\u4e0d\u964d\u4f4e\u3002\u5206\u6bb5\u5e03\u5c40\u4e0e HW3 \u4e00\u81f4\u3002',
-  '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
-  'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
-  'AP':'AP',
-  'STA':'STA',
-  'DNS':'DNS',
-  'Upstream':'\u4e0a\u6e38',
-  'Clients':'\u5ba2\u6237\u7aef',
-  'compiled':'\u5df2\u7f16\u8bd1',
-  'not compiled':'\u672a\u7f16\u8bd1',
-  'no task':'\u65e0\u4efb\u52a1',
-  'bind ok':'\u7ed1\u5b9a\u6b63\u5e38',
-  'bind wait':'\u7b49\u5f85\u7ed1\u5b9a',
-  'fd':'fd',
-  'none':'\u65e0',
-  'CAN/WiFi Auto Sleep':'CAN/WiFi \u81ea\u52a8\u4f11\u7720',
-  'After Park + vehicle lock stays stable for 10s, turn off AP/STA WiFi and CAN injection. CAN RX wakes the device.':'P \u6863 + \u8f66\u8f86\u9501\u5b9a\u72b6\u6001\u7a33\u5b9a 10 \u79d2\u540e\uff0c\u5173\u95ed AP/STA WiFi \u548c CAN \u6ce8\u5165\uff0cCAN RX \u5524\u9192\u8bbe\u5907\u3002',
-  'Sleep diag: waiting for status':'\u4f11\u7720\u8bca\u65ad\uff1a\u7b49\u5f85\u72b6\u6001'
-});
-Object.assign(I18N_ZH,{
-  'Nag Mode':'Nag \u6a21\u5f0f',
-  'A = fixed +1.80 Nm. A_V2 warms up, then sweeps inside the range.':'A = \u56fa\u5b9a +1.80 Nm\uff1bA_V2 \u9884\u70ed\u540e\u5728\u8303\u56f4\u5185\u5faa\u73af\u626b\u63cf\u3002',
-  'A: fixed +1.80 Nm echo':'A\uff1a\u56fa\u5b9a +1.80 Nm echo',
-  'A_V2: warmup + sweep':'A_V2\uff1a\u9884\u70ed + \u626b\u63cf',
-  'A_V2 Range':'A_V2 \u8303\u56f4',
-  'Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.':'Nm \u7aef\u70b9\u9650\u5236\u5728 -1.80 .. +1.80\uff0c\u53cd\u5411\u65f6\u81ea\u52a8\u4ea4\u6362\u3002',
-  'OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'OFF = \u53ea\u8bfb CAN \u76d1\u542c\uff1bON = \u5141\u8bb8 Nag 880 (0x370) counter+1 echo \u5199\u5165\u3002',
-  'Save':'\u4fdd\u5b58',
-  'Offline':'\u79bb\u7ebf',
-  'CAN WRITE ON':'\u5199\u5165\u5f00\u542f'
-});
-Object.assign(I18N_ZH,{
-  'Upstream DNS':'\u4e0a\u6e38 DNS',
-  'Auto':'\u81ea\u52a8',
-  'Custom':'\u81ea\u5b9a\u4e49',
-  'Custom DNS, e.g. 8.8.8.8':'\u81ea\u5b9a\u4e49 DNS\uff0c\u4f8b\u5982 8.8.8.8',
-  'Reset DNS Stats':'\u6e05\u96f6 DNS \u7edf\u8ba1',
-  'Resetting DNS stats...':'\u6b63\u5728\u6e05\u96f6 DNS \u7edf\u8ba1...',
-  'DNS stats reset':'DNS \u7edf\u8ba1\u5df2\u6e05\u96f6',
-  'Network Performance Mode':'\u7f51\u7edc\u6027\u80fd\u6a21\u5f0f',
-  'Reduce WebUI polling while AP+STA+NAPT is forwarding traffic':'AP+STA+NAPT \u8f6c\u53d1\u6d41\u91cf\u65f6\u964d\u4f4e WebUI \u8f6e\u8be2',
-  'ON: status 5s, network diagnostics 30s, heavy lists manual only':'\u5f00\uff1a\u72b6\u6001 5 \u79d2\uff0c\u7f51\u7edc\u8bca\u65ad 30 \u79d2\uff0c\u91cd\u5217\u8868\u4ec5\u624b\u52a8',
-  'OFF: status 2s, network diagnostics 10s, DNS/filter lists auto refresh':'\u5173\uff1a\u72b6\u6001 2 \u79d2\uff0c\u7f51\u7edc\u8bca\u65ad 10 \u79d2\uff0cDNS/\u8fc7\u6ee4\u5217\u8868\u81ea\u52a8\u5237\u65b0',
-  'invalid upstream DNS':'\u4e0a\u6e38 DNS \u5730\u5740\u65e0\u6548',
-  'custom upstream DNS required':'\u9700\u8981\u586b\u5199\u81ea\u5b9a\u4e49\u4e0a\u6e38 DNS',
-  'Auto uses DHCP DNS from the connected WiFi; public DNS can avoid stale slow/fail counters from a bad router DNS.':'\u81ea\u52a8\u4f7f\u7528\u5df2\u8fde\u63a5 WiFi \u5206\u914d\u7684 DHCP DNS\uff1b\u516c\u5171 DNS \u53ef\u4ee5\u907f\u514d\u8def\u7531\u5668 DNS \u5f02\u5e38\u5bfc\u81f4\u7684 slow/fail \u7d2f\u8ba1\u8bef\u5224\u3002',
-  'Using Ali DNS 223.5.5.5.':'\u4f7f\u7528\u963f\u91cc DNS 223.5.5.5\u3002',
-  'Using Tencent DNS 119.29.29.29.':'\u4f7f\u7528\u817e\u8baf DNS 119.29.29.29\u3002',
-  'Enter a custom upstream DNS IPv4 address.':'\u8f93\u5165\u81ea\u5b9a\u4e49\u4e0a\u6e38 DNS IPv4 \u5730\u5740\u3002',
-  'UI Mode':'UI \u6a21\u5f0f',
-  'Car':'\u8f66\u673a',
-  'Phone':'\u624b\u673a',
-  'Manual':'\u624b\u52a8',
-  'Detected: Car':'\u5df2\u8bc6\u522b\uff1a\u8f66\u673a',
-  'Detected: Phone':'\u5df2\u8bc6\u522b\uff1a\u624b\u673a',
-  'Manual: Car':'\u624b\u52a8\uff1a\u8f66\u673a',
-  'Manual: Phone':'\u624b\u52a8\uff1a\u624b\u673a',
-  'Auto UI':'\u81ea\u52a8 UI',
-  'Status':'\u72b6\u6001',
-  'Speed':'\u9650\u901f',
-  'System':'\u7cfb\u7edf',
-  'Clock / Bus':'\u65f6\u949f / \u603b\u7ebf',
-  'Internal RAM':'\u5185\u90e8 RAM',
-  'Uptime / Core':'\u8fd0\u884c / \u6838\u5fc3',
-  'Flash / App':'Flash / App',
-  'Car UI: status 7s, network diagnostics 45s, heavy lists manual only':'\u8f66\u673a UI\uff1a\u72b6\u6001 7 \u79d2\uff0c\u7f51\u7edc\u8bca\u65ad 45 \u79d2\uff0c\u91cd\u5217\u8868\u4ec5\u624b\u52a8'
-});
-const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
-Object.assign(I18N_EN,{
-  'CAN 调试':'CAN Debug',
-  'CAN调试':'CAN Debug'
-});
-const I18N_RX=[
-  [/^Enabled \u2022 NAT on \u2022 blocked (\d+)$/,'已启用 \u2022 NAT 开启 \u2022 已阻断 $1'],
-  [/^Enabled \u2022 NAT waiting \u2022 blocked (\d+)$/,'已启用 \u2022 NAT 等待中 \u2022 已阻断 $1'],
-  [/^Disabled \u2022 NAT waiting \u2022 blocked (\d+)$/,'已禁用 \u2022 NAT 等待中 \u2022 已阻断 $1'],
-  [/^Enabled \u2022 NAT on \u2022 blocked (\d+) \u2022 DNS cache (\d+)\/(\d+)$/,'已启用 \u2022 NAT 开启 \u2022 已阻断 $1 \u2022 DNS 缓存 $2/$3'],
-  [/^Enabled \u2022 NAT waiting \u2022 blocked (\d+) \u2022 DNS cache (\d+)\/(\d+)$/,'已启用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 DNS 缓存 $2/$3'],
-  [/^Disabled \u2022 NAT waiting \u2022 blocked (\d+) \u2022 DNS cache (\d+)\/(\d+)$/,'已禁用 \u2022 NAT 等待中 \u2022 已阻断 $1 \u2022 DNS 缓存 $2/$3'],
-  [/^Connected: (.+) \u2022 ([0-9a-fA-F:.]+) \u2022 switch to that WiFi and open this IP$/,'已连接：$1 \u2022 $2 \u2022 请切换到该 WiFi 并打开此 IP'],
-  [/^Connected: (.+) \u2022 ([0-9a-fA-F:.]+)$/,'已连接：$1 \u2022 $2'],
-  [/^Add network \((\d+)\/(\d+)\)$/,'添加网络 ($1/$2)'],
-  [/^Connected: (.+)$/,'已连接：$1'],[/^Connecting to (.+)\.\.\.$/,'正在连接 $1...'],
-  [/^(\d+) saved \u2022 trying to connect\.\.\.$/,'已保存 $1 个 \u2022 正在尝试连接...'],
-  [/^(\d+) client(s?)$/,'$1 个客户端'],[/^(\d+) frames$/,'$1 帧'],[/^(\d+) \/ (\d+) frames$/,'$1 / $2 帧'],
-  [/^(\d+) frames saved$/,'已保存 $1 帧'],
-  [/^Up to date \(v(.+)\)$/,'已是最新 (v$1)'],[/^Update available!$/,'发现可用更新！'],
-  [/^(.+)\s*[\u2022?]\s*(\d+) cores\s*[\u2022?]\s*(\d+) MHz now$/,'$1 \u2022 $2 核 \u2022 当前 $3 MHz'],
-  [/^(\d+) cores\s*[\u2022?]\s*now (\d+) MHz\s*[\u2022?]\s*max (\d+) MHz$/,'$1 核 \u2022 当前 $2 MHz \u2022 最大 $3 MHz'],
-  [/^CPU0 (\d+)%\s*[\u2022?]\s*CPU1 (\d+)%$/,'CPU0 $1% \u2022 CPU1 $2%'],
-  [/^(\d+) tasks$/,'$1 个任务'],
-  [/^(\d+) installed$/,'已安装 $1 个'],
-  [/^(\d+) \/ (\d+) installed$/,'已安装 $1 / $2 个'],
-  [/^(\d+) rule$/,'$1 条规则'],[/^(\d+) rules$/,'$1 条规则'],
-  [/^Max (\d+) networks$/,'最多 $1 个网络'],
-  [/^Delete network "(.+)"\?$/,'确认删除网络 "$1"？'],
-  [/^Save CAN pins TX=(\d+) RX=(\d+) and reboot\? Wrong pins disable CAN\.$/,'保存 CAN 引脚 TX=$1 RX=$2 并重启？错误引脚会导致 CAN 无法工作。'],
-  [/^custom TX=(\d+) RX=(\d+)$/,'自定义 TX=$1 RX=$2'],
-  [/^firmware default TX=(\d+) RX=(\d+)$/,'固件默认 TX=$1 RX=$2'],
-  [/^Restore settings from (.+) and reboot\?$/,'从 $1 还原设置并重启？'],
-  [/^Loaded "(.+)" into editor$/,'已将 "$1" 加载到编辑器'],
-  [/^Use 1-(\d+)$/,'请输入 1-$1'],
-  [/^Done (\d+)\/(\d+)$/,'已完成 $1/$2'],
-  [/^Stopped (\d+)\/(\d+)$/,'已停止 $1/$2'],
-  [/^Running (\d+)\/(\d+) · every (\d+) ms$/,'运行中 $1/$2 · 间隔 $3 毫秒'],
-  [/^Waiting for CAN 0x([0-9A-Fa-f]+)$/,'等待 CAN 0x$1'],
-  [/^Whitelist (\d+)\/(\d+)\s*[\u2022?]\s*Blacklist (\d+)\/(\d+)$/,'白名单 $1/$2 \u2022 黑名单 $3/$4'],
-  [/^allowed (\d+)\s*[\u2022?]\s*blocked (\d+)$/,'允许 $1 \u2022 阻断 $2'],
-  [/^Connection to (.+) lost\. Reload after reconnecting\.$/,'与 $1 的连接已断开，重新连接后请刷新。'],
-  [/^Connection to (.+) lost\. Switch to your normal WiFi and open http:\/\/(.+)$/,'与 $1 的连接已断开，请切换到常用 WiFi 后打开 http://$2'],
-  [/^GTW_autopilot: ([A-Z_]+) \((\d+)\)$/,'GTW_autopilot：$1 ($2)'],
-  [/^(\d+)%\/s \(about ([\d.]+) km\/h\/s at 60 km\/h\)$/,'$1%/秒（60 km/h 时约 $2 km/h/秒）'],
-  [/^(\d+)%\/s$/,'$1%/秒'],
-  [/^Showing DBC JSON IDs with (.+) prefix$/,'显示带 $1 前缀的 DBC JSON ID']
-];
+  'Light':'浅色','Dark':'深色','Waiting for CAN frames':'等待 CAN 帧','CAN running':'CAN 正常','CAN OK':'CAN 正常','CAN waiting':'等待 CAN','No frames':'无帧',
+  'CAN Bus':'CAN 总线','CAN Frames':'CAN 帧','TX Errors':'发送错误','Uptime':'运行时间','Reboot':'重启','CAN Write':'CAN 写入','CAN Write On':'开启 CAN 写入','CAN Write Off':'关闭 CAN 写入','READ ONLY':'只读模式','CAN WRITE ON':'CAN 写入开启',
+  'Configuration':'配置','Device settings':'设备设置','Nag Mode':'Nag 模式','A_V2 Range':'A_V2 范围','Save':'保存','Saved':'已保存','Saving...':'保存中...','Save failed':'保存失败','Read Only':'只读模式',
+  'CAN write is enabled. Nag echo can transmit.':'CAN 写入已开启，Nag echo 可发送。','Read-only mode. CAN frames are monitored but not written.':'只读模式：只监听 CAN 帧，不写入。',
+  'WiFi Hotspot':'WiFi 热点','WiFi Internet':'WiFi Internet','STA-AP Gateway':'STA-AP 网关','Gateway':'网关','Gateway status unavailable':'网关状态不可用','Upstream DNS':'上游 DNS','Network Performance Mode':'网络性能模式',
+  'Auto':'自动','Custom':'自定义','Save DNS':'保存 DNS','Reset DNS Stats':'清零 DNS 统计','Filter List':'过滤清单','Refresh':'刷新','Clear':'清空','Blacklist':'黑名单','Whitelist':'白名单','Test DNS':'测试 DNS',
+  'System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','Chip':'芯片','CPU':'CPU','CPU Load':'CPU 负载','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Heap RAM':'堆内存','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','warming up':'采样中','unavailable':'不可用','offline':'离线','not enabled':'未启用','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','STA online':'STA 在线','STA offline':'STA 离线','on':'开启','off':'关闭',
+  'Debug Log':'调试日志','Debug logging':'调试日志','Recent debug output':'最近调试输出','Toggle WebUI and firmware debug output':'开启或关闭 WebUI 与固件调试日志输出','Waiting...':'等待中...','Download':'下载',
+  'Firmware Update':'固件更新','Manual OTA':'手动 OTA','Manual firmware upload only. Select a local .bin and flash it to the device.':'仅保留手动固件上传。选择本地 .bin 并刷写到设备。','Tap to select firmware .bin':'点击选择 firmware .bin','Or drag and drop a file here':'或将文件拖到这里','Uploading...':'上传中...','Flash Firmware':'刷写固件','Reset OTA Credentials':'重置 OTA 凭据','OTA Username:':'OTA 用户名：','OTA Password:':'OTA 密码：','Flashing...':'刷写中...','Connection error':'连接错误',
+  'Confirm':'确认','Continue':'继续','Cancel':'取消','Reboot device?':'重启设备？','CAN bus writes affect vehicle behavior. Remove device immediately if unexpected behavior occurs. Not affiliated with any vehicle manufacturer.':'CAN 写入会影响车辆行为。如出现异常请立即拔除设备。与任何车厂无关联。'
+};const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
+Object.assign(I18N_EN,{});
+const I18N_RX=[];
 function trText(value){
   let s=String(value);
   if(dashLang!=='zh')return I18N_EN[s]||s;
@@ -1391,48 +723,10 @@ function trText(value){
 }
 const setText=(id,value)=>{const el=$(id);if(el)el.textContent=trText(value);};
 const setClass=(id,value)=>{const el=$(id);if(el)el.className=value;};
-function profileNamesForHw(hw){return hw===2?SP4:SP3;}
-function profileDisplayName(hw,sp,auto){
-  const name=(profileNamesForHw(hw)||[])[clampProfileForHw(hw,sp)]||'--';
-  return auto?'Auto ('+name+')':name;
+function injectionStatusLabel(armed){
+  return armed?(dashLang==='zh'?'\u5199\u5165\u5f00\u542f':'CAN WRITE ON'):(dashLang==='zh'?'\u53ea\u8bfb\u6a21\u5f0f':'READ ONLY');
 }
-function gtwAutopilotName(v){
-  return ['NONE','HIGHWAY','ENHANCED','SELF_DRIVING','BASIC'][v]||'UNKNOWN';
-}
-function gtwAutopilotShort(v,ad){
-  v=Number(v);
-  if(v===3)return 'AP-FSD';
-  if(v===2)return 'AP-EAP';
-  if(v===4)return 'AP-BASIC';
-  if(v===1)return 'AP-HWY';
-  if(v===0)return 'AP-NONE';
-  return ad?'AD':'AP-?';
-}
-function gtwAutopilotBadge(v){
-  if(v<0)return 'GTW --';
-  if(v===3)return 'GTW SELF';
-  return 'GTW '+gtwAutopilotName(v);
-}
-function injectionStatusLabel(injecting,armed,apGate,d){
-  if(document.body&&document.body.classList.contains('wifi-nag')){
-    return armed?(dashLang==='zh'?'\u5199\u5165\u5f00\u542f':'CAN WRITE ON'):(dashLang==='zh'?'\u53ea\u8bfb\u6a21\u5f0f':'READ ONLY');
-  }
-  if(injecting){
-    const tag=gtwAutopilotShort(d.gtwap,d.apActive);
-    return (dashLang==='zh'?'运行中':'Active')+' '+tag;
-  }
-  if(armed&&apGate)return dashLang==='zh'?'等待 AP':'Waiting AP';
-  return dashLang==='zh'?'已阻止':'BLOCKED';
-}
-function updateGtwBadge(v){
-  const el=$('gtw-badge');if(!el)return;
-  v=Number(v);
-  const known=!isNaN(v)&&v>=0;
-  el.textContent=gtwAutopilotBadge(known?v:-1);
-  el.className='gtw-badge '+(known?'known':'');
-  el.title=known?trText('GTW_autopilot: '+gtwAutopilotName(v)+' ('+v+')'):trText('GTW_autopilot: not seen yet');
-}
-let state={hw:1,can:true,sp:0,spAuto:true,hw3OffsetSlew:false,hw3SlewRate:25,nagMode:0,nagAv2Min:-1.8,nagAv2Max:1.8};
+let state={can:true,nagMode:0,nagAv2Min:-1.8,nagAv2Max:1.8};
 let otaFile=null;
 let otaUser=localStorage.getItem('otaU')||'',otaPass=localStorage.getItem('otaP')||'';
 let logSince=0;
@@ -1445,10 +739,7 @@ let dashboardPollStopped=false;
 let systemStatusTimer=null;
 let systemStatusEnabled=false;
 let wifiNagInitialUiApplied=false;
-let taskStatsTimer=null;
 let dashboardStaIp='';
-let canDebugEnabled=localStorage.getItem('canDebug')==='1';
-let canDebugPollTimers=[];
 let networkPerformanceMode=localStorage.getItem('netPerfMode')!=='0';
 let uiModeSetting=localStorage.getItem('uiMode')||'auto';
 let uiModeEffective='phone';
@@ -1491,7 +782,7 @@ function setCollapsedPanel(el,collapsed,persist){
 }
 function expandCarEssentials(){
   ['system-card','config-card'].forEach(id=>setCollapsedPanel($(id),false,true));
-  ['config-hardware-section','hw3-speed-section','wifi-internet-section','gateway-section'].forEach(id=>setCollapsedPanel($(id),false,true));
+  ['config-hardware-section','wifi-internet-section','gateway-section'].forEach(id=>setCollapsedPanel($(id),false,true));
 }
 function expandWifiNagDefaults(){
   ['config-card','config-hardware-section','wifi-hotspot-section','wifi-internet-section','gateway-section'].forEach(id=>setCollapsedPanel($(id),false,true));
@@ -1506,42 +797,16 @@ function updateUiModeUi(){
   const el=$('ui-mode-detected');if(el){el.textContent=(uiModeSetting==='auto'?label:('Manual: '+(uiModeEffective==='car'?'Car':'Phone')));applyDashboardI18n(el);}
   const side=$('car-side-mode');if(side){side.textContent=trText(uiModeSetting==='auto'?'Auto':'Manual')+' / '+trText(uiModeEffective==='car'?'Car':'Phone');}
 }
-function applyWifiMaxMode(d){
-  const on=!!(d&&d.wifiMax);
-  const nag=!!(d&&d.wifiNag);
-  document.body.classList.toggle('wifi-max',on);
-  document.body.classList.toggle('wifi-nag',nag);
-  if(!on&&!nag)return;
-  if(nag){
-    const title=document.querySelector('.hdr-title');if(title)title.textContent='EVtools WIFI-NAG';
-    setText('hw-badge','WIFI-NAG');
-    setText('s-inj-lbl','CAN Write');
-    const hwTitle=document.querySelector('#config-hardware-section .subsec-title');
-    if(hwTitle&&hwTitle.childNodes.length)hwTitle.childNodes[0].nodeValue=trText('CAN Write')+' ';
-    const hwMeta=document.querySelector('#config-hardware-section .subsec-meta');
-    if(hwMeta)hwMeta.textContent='Read-only when off; Nag 0x370 echo when on';
-    if(!wifiNagInitialUiApplied){
-      wifiNagInitialUiApplied=true;
-      setCollapsedPanel($('system-card'),false,false);
-      expandWifiNagDefaults();
-    }
-    canDebugEnabled=false;
-    localStorage.setItem('canDebug','0');
-    stopCanDebugPolling();
-    setCanDebugUi();
+function applyWifiNagMode(){
+  document.body.classList.add('wifi-nag');
+  const title=document.querySelector('.hdr-title');if(title)title.textContent='EVtools WIFI-NAG';
+  setText('hw-badge','WIFI-NAG');
+  setText('s-inj-lbl','CAN Write');
+  if(!wifiNagInitialUiApplied){
+    wifiNagInitialUiApplied=true;
+    setCollapsedPanel($('system-card'),false,false);
+    expandWifiNagDefaults();
   }
-  if(!on)return;
-  if(canDebugEnabled){
-    canDebugEnabled=false;
-    localStorage.setItem('canDebug','0');
-    stopCanDebugPolling();
-    setCanDebugUi();
-  }
-  const title=document.querySelector('.hdr-title');if(title)title.textContent='EVtools WIFI-MAX';
-  const hdr=$('hdr-desc');if(hdr)hdr.textContent='WiFi repeater / DNS filter';
-  setText('hw-badge','WIFI-MAX');
-  setText('s-up',fmtUp(d.up));
-  const dot=$('dot');if(dot)dot.className='sdot dot-on';
 }
 function applyUiMode(){
   uiModeSetting=normalizeUiMode(uiModeSetting);
@@ -1573,8 +838,6 @@ function stopDashboardPolling(){
   dashboardPollTimers.forEach(clearInterval);
   dashboardPollTimers=[];
   if(systemStatusTimer){clearInterval(systemStatusTimer);systemStatusTimer=null;}
-  if(taskStatsTimer){clearInterval(taskStatsTimer);taskStatsTimer=null;}
-  stopCanDebugPolling();
   $('dot').className='sdot dot-off';
   $('hdr-desc').textContent='Dashboard disconnected';
   let msg='Connection to '+location.hostname+' lost. Reload after reconnecting.';
@@ -1615,6 +878,7 @@ function startDashboardPolling(){
   dashboardPollTimers.push(intervalVisible(loadWifiStatus,car?45000:(fast?10000:30000)));
   dashboardPollTimers.push(intervalVisible(loadApStatus,car?45000:(fast?10000:30000)));
   dashboardPollTimers.push(intervalVisible(loadGatewayStatus,car?45000:(fast?10000:30000)));
+  dashboardPollTimers.push(intervalVisible(pollLog,5000));
   if(fast){
     dashboardPollTimers.push(intervalVisible(loadWifiNetworks,30000));
     dashboardPollTimers.push(intervalVisible(loadGatewayBlocked,5000));
@@ -1630,42 +894,6 @@ function setNetworkPerformanceMode(enabled,persist){
     poll();loadWifiStatus();loadApStatus();loadGatewayStatus();
     if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
   }
-}
-
-function setCanDebugUi(){
-  document.body.classList.toggle('can-debug-on',canDebugEnabled);
-  const t=$('can-debug-tgl');if(t)t.checked=canDebugEnabled;
-  setText('can-debug-meta',canDebugEnabled?'On':'Off');
-}
-function positionCanDebugPanels(){
-  const anchor=$('can-debug-card');if(!anchor)return;
-  let after=anchor;
-  Array.from(document.querySelectorAll('body > .can-debug-panel')).forEach(panel=>{
-    if(panel!==after.nextSibling)after.parentNode.insertBefore(panel,after.nextSibling);
-    after=panel;
-  });
-}
-function startCanDebugPolling(){
-  if(document.body&&(document.body.classList.contains('wifi-max')||document.body.classList.contains('wifi-nag')))return;
-  if(canDebugPollTimers.length||dashboardPollStopped)return;
-  canDebugPollTimers.push(setInterval(pollLog,5000));
-  pollLog();if(!(document.body&&document.body.classList.contains('wifi-nag')))pollRec();if(typeof loadUpdateInfo==='function')loadUpdateInfo();if(typeof peRender==='function')peRender();
-}
-function stopCanDebugPolling(){
-  canDebugPollTimers.forEach(clearInterval);
-  canDebugPollTimers=[];
-  if(recIsActive){stopRec();}
-}
-function applyCanDebug(){
-  setCanDebugUi();
-  if(canDebugEnabled)startCanDebugPolling();
-  else stopCanDebugPolling();
-}
-function toggleCanDebug(){
-  if(document.body&&(document.body.classList.contains('wifi-max')||document.body.classList.contains('wifi-nag')))return;
-  canDebugEnabled=!!$('can-debug-tgl').checked;
-  localStorage.setItem('canDebug',canDebugEnabled?'1':'0');
-  applyCanDebug();
 }
 
 function noteDashboardPoll(ok){
@@ -1708,7 +936,7 @@ function orderDashboardCards(){
   if(!stat||!stat.parentNode)return;
   const cards=Array.from(document.querySelectorAll('.card'));
   const findCard=label=>cards.find(c=>{const t=c.querySelector('.card-title');return t&&t.textContent.trim().toLowerCase().startsWith(label);});
-  [findCard('configuration'),findCard('system status'),$('can-debug-card')].filter(Boolean).reverse().forEach(c=>{
+  [findCard('configuration'),findCard('system status')].filter(Boolean).reverse().forEach(c=>{
     stat.parentNode.insertBefore(c,stat.nextSibling);
   });
 }
@@ -1755,7 +983,7 @@ function initSubsectionMinimizers(){
     };
     hdr.appendChild(btn);
     const stored=localStorage.getItem(key);
-    const carDefaultOpen=isCarUiActive()&&['config-hardware','config-hw3-speed','config-wifi-internet','config-gateway'].includes(explicitKey);
+    const carDefaultOpen=isCarUiActive()&&['config-hardware','config-wifi-internet','config-gateway'].includes(explicitKey);
     const collapsed=stored===null?!carDefaultOpen:stored==='1';
     sec.classList.toggle('collapsed',collapsed);
     btn.textContent=collapsed?'Show':'Hide';
@@ -1785,20 +1013,7 @@ async function fetchJsonWithTimeout(url,options,timeoutMs){
   }
 }
 
-function showOwnerNotice(){
-  const modal=$('owner-modal');
-  if(!modal)return;
-  modal.style.display='flex';
-  document.body.style.overflow='hidden';
-}
-function closeOwnerNotice(){
-  const modal=$('owner-modal');
-  if(modal)modal.style.display='none';
-  document.body.style.overflow='';
-}
-function ownerNoticeBackdrop(ev){
-  if(ev.target===$('owner-modal'))closeOwnerNotice();
-}
+
 function dashConfirmResolve(ok){
   if(!dashConfirmState)return;
   const resolve=dashConfirmState.resolve;
@@ -1905,7 +1120,6 @@ function toggleLanguage(){
     setInterval(refreshAutoTheme,60000);
     updateLanguageButton();
     applyDashboardI18n(document.body);
-    setTimeout(()=>{if(!document.body.classList.contains('wifi-max')&&!document.body.classList.contains('wifi-nag'))showOwnerNotice();},1200);
     const obs=new MutationObserver(muts=>{
       if(dashLang!=='zh')return;
       muts.forEach(m=>{
@@ -1917,83 +1131,15 @@ function toggleLanguage(){
   });
 })();
 
-function updateHW4(hw){
-  document.querySelectorAll('.hw4-only').forEach(el=>el.classList.toggle('hidden',hw!==2));
-}
-
-function updateHardwareDependentSections(hw){
-  const speedSec=$('hw3-speed-section');
-  const slewSec=$('hw3-slew-section');
-  const legacySec=$('legacy-mpp-section');
-  if(speedSec)speedSec.style.display=hw===1?'':'none';
-  if(slewSec)slewSec.style.display=hw===1?'':'none';
-  if(legacySec)legacySec.style.display=hw===0?'':'none';
-}
-
-function expandActiveHardwareSection(hw){
-  const sec=hw===0?$('legacy-mpp-section'):hw===1?$('hw3-speed-section'):null;
-  if(!sec)return;
-  sec.classList.remove('collapsed');
-  if(sec.dataset.collapseKey)localStorage.setItem(sec.dataset.collapseKey,'0');
-  const btn=sec.querySelector('.subsec-btn');
-  if(btn)btn.textContent='Hide';
-}
-
-function clampProfileForHw(hw,sp){
-  if(hw===2)return Math.max(0,Math.min(4,Number(sp)||0));
-  if(hw===0||hw===1)return Math.max(0,Math.min(2,Number(sp)||0));
-  return 0;
-}
-
-function updateProfileControls(hw,sp,spAuto){
-  const sp3=$('sp3-group'),sp4=$('sp4-group'),note=$('profile-note');
-  const safeSp=clampProfileForHw(hw,sp);
-  if(sp3)sp3.classList.toggle('hidden',!(hw===0||hw===1));
-  if(sp4)sp4.classList.toggle('hidden',hw!==2);
-  updateHardwareDependentSections(hw);
-  const sp3Seg=$('sp3-seg'),sp4Seg=$('sp4-seg');
-  updateProfileSeg(sp3Seg,safeSp,spAuto);
-  updateProfileSeg(sp4Seg,safeSp,spAuto);
-  if(note){
-    if(spAuto)note.textContent='Auto follows the vehicle follow distance.';
-    else if(hw===0||hw===1)note.textContent='Manual SP3 profile is locked.';
-    else if(hw===2)note.textContent='Manual SP4 profile is locked.';
-    else note.textContent='Profiles are available on Legacy, HW3 and HW4.';
-  }
-}
-
-function updateProfileSeg(el,sp,spAuto){
-  if(!el)return;
-  el.querySelectorAll('.hw-btn').forEach(b=>{
-    const v=parseInt(b.dataset.v);
-    b.classList.toggle('active',spAuto?v===-1:v===sp);
-  });
-}
-
 function updSeg(el,v,cls){
+  if(!el)return;
   el.querySelectorAll('.'+cls).forEach(b=>b.classList.toggle('active',parseInt(b.dataset.v)===v));
 }
 
-function setHW(v){state.hw=v;state.sp=clampProfileForHw(v,state.sp);updSeg($('hw-seg'),v,'hw-btn');updateHW4(v);updateProfileControls(v,state.sp,state.spAuto);expandActiveHardwareSection(v);pushCfg();}
-
-function setProfileAuto(){
-  state.spAuto=true;
-  updateProfileControls(state.hw,state.sp,state.spAuto);
-  pushCfg();
-}
-
-function setProfile(v){
-  state.spAuto=false;
-  state.sp=clampProfileForHw(state.hw,v);
-  updateProfileControls(state.hw,state.sp,state.spAuto);
-  pushCfg();
-}
-
 function updateInjectButtons(active){
-  const btn=$('btn-fsd-toggle');
+  const btn=$('btn-can-toggle');
   if(btn){
-    const nag=document.body&&document.body.classList.contains('wifi-nag');
-    btn.textContent=trText(nag?(active?'CAN Write Off':'CAN Write On'):(active?'Turn FSD Off':'Turn FSD On'));
+    btn.textContent=trText(active?'CAN Write Off':'CAN Write On');
     btn.classList.toggle('btn-stop',!!active);
     if(!active){
       btn.style.background='var(--accBg)';
@@ -2007,150 +1153,12 @@ function updateInjectButtons(active){
   }
 }
 
-function sleepZh(){return dashLang==='zh';}
-function sleepT(en,zh){return sleepZh()?zh:en;}
-function ageText(v){
-  v=Number(v);
-  return v>=0?(v+'s '+sleepT('ago','前')):sleepT('not seen','未收到');
-}
-function fmtSleepDuration(v){
-  v=Number(v);
-  if(!Number.isFinite(v)||v<0)return sleepT('unknown','未知');
-  return fmtUp(v);
-}
-function sleepStateText(v){
-  const m={off:['off','关闭'],awake:['awake','已唤醒'],pending:['pending','倒计时'],sleep:['sleep','休眠中']};
-  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
-}
-function sleepReasonText(v){
-  const m={
-    'off':['off','关闭'], 'sleeping':['sleeping','休眠中'], 'ota running':['OTA running','OTA 进行中'],
-    'waiting 0x118 gear or locked fallback':['waiting gear or lock fallback','等待档位或锁车兜底'],
-    'waiting locked fallback':['waiting locked fallback','等待锁车兜底'],
-    'waiting P or park state':['waiting P or park state','等待 P 档或停车状态'],
-    'waiting park fallback':['waiting park fallback','等待停车兜底'],
-    'waiting driver empty':['waiting vehicle empty','等待车内无人'],
-    'gear not P':['gear not P','档位不是 P'],
-    'waiting lock 0x273/0x339':['waiting lock signal','等待锁车信号'], 'driver present':['driver present','驾驶员在车内'],
-    'DI drive power':['DI drive power','DI 行驶电源'], 'EPAS drive power':['EPAS drive power','EPAS 行驶电源'],
-    'pending 10s':['pending 10s','10 秒倒计时'], 'ready':['ready','已就绪']
-  };
-  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
-}
-function sleepWakeSourceText(v){
-  const m={none:['none','无'],CAN:['CAN wake','CAN 唤醒'],reboot:['reboot/power','重启/上电'],sleeping:['sleeping','休眠中']};
-  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
-}
-function sleepWakeReasonText(v){
-  const m={none:['none','无'],active:['active sleep','正在休眠'],gear:['gear wake','档位唤醒'],unlock:['unlock wake','解锁唤醒'],driver:['driver wake','驾驶员/DI 唤醒'],epas:['EPAS wake','EPAS 唤醒'],poweron:['power-on','上电'],external:['external reset','外部复位'],software:['software reset','软件复位'],brownout:['brownout','欠压复位'],deepsleep:['deep-sleep reset','深睡复位'],panic:['panic','异常复位'],task_wdt:['task watchdog','任务看门狗'],interrupt_wdt:['interrupt watchdog','中断看门狗'],other_wdt:['watchdog','看门狗']};
-  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
-}
-function sleepLockSourceText(v){
-  const m={none:['none','无'],fallback:['fallback inferred','兜底推断']};
-  const x=m[String(v||'')];return x?sleepT(x[0],x[1]):(v||'--');
-}
-function gearText(v){
-  v=Number(v);
-  return ({1:'P',2:'R',3:'N',4:'D',7:'SNA'})[v]||('raw '+v);
-}
-function uiLockText(v){
-  v=Number(v);
-  return ({0:'IDLE',1:'LOCK',2:'UNLOCK',3:'REMOTE_UNLOCK',4:'REMOTE_LOCK',7:'SNA'})[v]||('raw '+v);
-}
-function vcsecVehicleLockText(v){
-  v=Number(v);
-  return ({
-    0:'SNA',1:'NFC_UNLOCKED',2:'NFC_LOCKED',3:'SELECTIVE_UNLOCKED',
-    4:'BLE_UNLOCKED',5:'BLE_LOCKED',6:'ACTIVE_SELECTIVE_UNLOCKED',
-    7:'ACTIVE_BLE_UNLOCKED',8:'ACTIVE_BLE_LOCKED',9:'ACTIVE_UI_UNLOCKED',
-    10:'ACTIVE_UI_LOCKED',11:'REMOTE_UNLOCKED',12:'REMOTE_LOCKED',
-    13:'CRASH_UNLOCKED',14:'INTERNAL_UNLOCKED',15:'INTERNAL_LOCKED'
-  })[v]||('raw '+v);
-}
-function simpleLockText(v){
-  v=Number(v);
-  return ({0:'SNA',1:'UNLOCKED',2:'LOCKED'})[v]||('raw '+v);
-}
-function boolTriText(v){
-  if(v===null||typeof v==='undefined')return sleepT('unknown','未知');
-  return v?sleepT('YES','是'):sleepT('NO','否');
-}
-function updateAutoSleepStatus(d){
-  const el=$('auto-sleep-status');
-  if(!el)return;
-  const locked=!!d.sleepLocked;
-  const ready=!!d.sleepReady;
-  const park=!!d.sleepParkState;
-  const empty=!!d.sleepVehicleEmpty;
-  const countdown=Number(d.sleepCountdownMs);
-  const sep=' \u2022 ';
-  const cd=countdown>=0?(sep+sleepT('sleep in ','\u4f11\u7720\u5012\u8ba1\u65f6 ')+Math.ceil(countdown/1000)+'s'):'';
-  const stateLine=sleepT('Status','\u72b6\u6001')+': '+(d.autoSleep?'ON':'OFF')+' / '+sleepStateText(d.sleepState)+sep+sleepReasonText(d.sleepReason)+cd;
-  const lockSrc=sleepLockSourceText(d.sleepLockSource);
-  const cabin=empty?sleepT('empty','\u65e0\u4eba'):(d.sleepDriverPresent===true?sleepT('occupied','\u6709\u4eba'):sleepT('unknown','\u672a\u77e5'));
-  const sleepKind=d.sleepLockFallback?sleepT('park fallback sleep','\u505c\u8f66\u515c\u5e95\u4f11\u7720'):(locked?sleepT('lock-signal sleep','\u9501\u8f66\u4fe1\u53f7\u4f11\u7720'):sleepT('software sleep','\u8f6f\u4ef6\u4f11\u7720'));
-  const wakeKind=sleepWakeSourceText(d.sleepLastWakeSource)+' / '+sleepWakeReasonText(d.sleepLastWakeReason);
-  const lines=[
-    stateLine,
-    sleepT('Gear','\u6863\u4f4d')+': '+gearText(d.sleepGear)+sep+sleepT('Park','\u505c\u8f66')+': '+boolTriText(park)+sep+sleepT('Locked','\u9501\u8f66')+': '+boolTriText(locked)+' ('+lockSrc+')',
-    sleepT('Cabin','\u8f66\u5185')+': '+cabin,
-    sleepT('Sleep count','\u4f11\u7720\u6b21\u6570')+': '+sleepT('session','\u672c\u6b21')+' '+(d.sleepCount||0)+' / '+sleepT('total','\u7d2f\u8ba1')+' '+(d.sleepTotalCount||0),
-    sleepT('Last sleep','\u4e0a\u6b21\u4f11\u7720')+': '+fmtSleepDuration(d.sleepLastDurationSec),
-    sleepT('Wake count','\u5524\u9192\u6b21\u6570')+': CAN '+(d.sleepCanWakeCount||0)+' / '+sleepT('reboot','\u91cd\u542f')+' '+(d.sleepRebootWakeCount||0),
-    sleepT('Sleep type','\u4f11\u7720\u7c7b\u578b')+': '+sleepKind,
-    sleepT('Wake type','\u5524\u9192\u7c7b\u578b')+': '+wakeKind
-  ];
-  el.style.whiteSpace='pre-wrap';
-  el.textContent=lines.join('\n');
-  el.style.borderColor=ready?'rgba(61,186,114,.35)':locked?'rgba(245,166,35,.35)':'var(--bd)';
-}
-
 function updateFsdControl(d){
   const enabled=!!d.ci;
-  const nag=document.body&&document.body.classList.contains('wifi-nag');
   state.can=enabled;
-  const tgl=$('fsd-tgl');if(tgl)tgl.checked=enabled;
-  const apRestore=$('ap-restore-tgl');if(apRestore&&typeof d.apAutoRestore!=='undefined')apRestore.checked=!!d.apAutoRestore;
   const writeTgl=$('can-write-tgl');if(writeTgl)writeTgl.checked=enabled;
   const nagMeta=$('nag-echo-meta');if(nagMeta&&typeof d.nagEcho!=='undefined')nagMeta.textContent='echo: '+d.nagEcho;
-  if(nag)updateNagControl(d);
-  const autoSleep=$('auto-sleep-tgl');if(autoSleep&&typeof d.autoSleep!=='undefined')autoSleep.checked=!!d.autoSleep;
-  if(!nag)updateAutoSleepStatus(d);
-  setText('fsd-meta',nag?(enabled?'CAN Write':'Read Only'):(enabled?'On':'Off'));
-  const st=$('fsd-status');
-  if(st){
-    st.textContent=nag?
-      (enabled?'CAN write is enabled. Nag echo can transmit.':'Read-only mode. CAN frames are monitored but not written.'):
-      (enabled?
-        'Built-in FSD chain is active. Legacy/HW3/HW4 injection is controlled by this switch.':
-        'FSD chain and CAN injection are disabled and stay off after reboot.');
-    st.style.color=enabled?'var(--ok)':'var(--tx3)';
-  }
-}
-async function saveFsdSwitch(){
-  const tgl=$('fsd-tgl'),st=$('fsd-status');
-  const enabled=tgl&&tgl.checked?'1':'0';
-  if(st){st.textContent='Saving...';st.style.color='var(--tx3)';}
-  try{
-    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'can='+enabled});
-    const d=await r.json();
-    if(!d.ok)throw new Error();
-    state.can=enabled==='1';
-    const nag=document.body&&document.body.classList.contains('wifi-nag');
-    if(st){st.textContent=nag?(state.can?'CAN write is enabled. Nag echo can transmit.':'Read-only mode. CAN frames are monitored but not written.'):(state.can?'Built-in FSD chain is active.':'FSD chain and CAN injection are disabled.');st.style.color=state.can?'var(--ok)':'var(--tx3)';}
-    poll();
-  }catch(e){if(st){st.textContent='Save failed';st.style.color='var(--err)';}}
-}
-
-async function saveApRestore(){
-  const t=$('ap-restore-tgl');
-  if(!t)return;
-  try{
-    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'apRestore='+(t.checked?'1':'0')});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-  }catch(e){
-    addLog('AP/EAP auto restore save failed','le');
-  }
+  updateNagControl(d);
 }
 
 async function saveCanWrite(){
@@ -2212,145 +1220,6 @@ async function saveNagAv2(){
   }catch(e){addLog('A_V2 range save failed','le');}
 }
 
-async function saveAutoSleep(){
-  if(document.body&&document.body.classList.contains('wifi-nag'))return;
-  const t=$('auto-sleep-tgl');
-  if(!t)return;
-  try{
-    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'autoSleep='+(t.checked?'1':'0')});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-  }catch(e){
-    addLog('CAN/WiFi auto sleep save failed','le');
-  }
-}
-
-async function pushCfg(){
-  const body='hw='+state.hw+'&sp='+state.sp+'&spa='+(state.spAuto?'1':'0')+'&can='+(state.can?'1':'0');
-  try{await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});}catch(e){}
-}
-
-function updateHw3SlewControl(d){
-  const enabled=!!d.hw3OffsetSlew;
-  const rate=Math.max(1,Math.min(25,parseInt(d.hw3SlewRate,10)||25));
-  state.hw3OffsetSlew=enabled;state.hw3SlewRate=rate;
-  const tgl=$('hw3-slew-tgl');if(tgl)tgl.checked=enabled;
-  const inp=$('hw3-slew-rate');if(inp&&document.activeElement!==inp)inp.value=rate;
-  setText('hw3-slew-meta',enabled?('On \u2022 '+rate+'%'):'Off');
-  setText('hw3-slew-rate-hint',rate+'%/s (about '+(rate*0.6).toFixed(1)+' km/h/s at 60 km/h)');
-  setText('hw3-slew-target',d.hw3OffsetTarget===undefined?'0':d.hw3OffsetTarget);
-  setText('hw3-slew-last',d.hw3OffsetLast===undefined?'0':d.hw3OffsetLast);
-  setText('hw3-slew-count',d.hw3SlewCount||0);
-}
-async function saveHw3Slew(){
-  const tgl=$('hw3-slew-tgl'),inp=$('hw3-slew-rate'),st=$('hw3-slew-status');
-  let rate=parseInt(inp.value,10);
-  if(isNaN(rate)||rate<1||rate>25){st.textContent='Use 1-25, max 25';st.style.color='var(--err)';return;}
-  const enabled=tgl.checked?'1':'0';
-  st.textContent='Saving...';st.style.color='var(--tx3)';
-  try{
-    const body='hw3OffsetSlew='+enabled+'&hw3SlewRate='+rate;
-    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
-    const d=await r.json();
-    if(!d.ok)throw new Error();
-    state.hw3OffsetSlew=enabled==='1';state.hw3SlewRate=rate;
-    st.textContent='Saved';st.style.color='var(--ok)';
-    poll();
-  }catch(e){st.textContent='Save failed';st.style.color='var(--err)';}
-}
-
-const hw3CustomMax=[45,60,75,90,105];
-const hw3HighMax=[120,150,180];
-function clampToSlot(v,max){v=parseInt(v,10);return isNaN(v)?0:Math.max(0,Math.min(max,v));}
-function updateHw3EncodingButtons(enc){
-  document.querySelectorAll('.hw3-enc-btn').forEach(btn=>{
-    const active=String(btn.dataset.v||'1')===String(enc);
-    btn.classList.toggle('active',active);
-    btn.setAttribute('aria-pressed',active?'true':'false');
-  });
-}
-function setHw3Encoding(enc){
-  const eSel=$('hw3-enc');
-  if(eSel)eSel.value=String(enc===0?0:1);
-  updateHw3EncodingButtons(enc===0?0:1);
-  saveHw3Speed();
-}
-function updateHw3SpeedControl(d){
-  const cust=!!d.hw3CustomSpeed,hse=!!d.hw3HighSpeedEnable;
-  const enc=parseInt(d.hw3WireEncoding,10)===0?0:1;
-  const cTgl=$('hw3-cust-tgl');if(cTgl)cTgl.checked=cust;
-  const hTgl=$('hw3-hs-tgl');if(hTgl)hTgl.checked=hse;
-  const eSel=$('hw3-enc');if(eSel&&document.activeElement!==eSel)eSel.value=String(enc);
-  updateHw3EncodingButtons(enc);
-  const ct=Array.isArray(d.hw3CustomTarget)?d.hw3CustomTarget:[];
-  for(let i=0;i<5;i++){const el=$('hw3-ct-'+i);if(el&&document.activeElement!==el&&ct[i]!==undefined)el.value=clampToSlot(ct[i],hw3CustomMax[i]);}
-  const hs=Array.isArray(d.hw3HighSpeedTarget)?d.hw3HighSpeedTarget:[];
-  for(let i=0;i<3;i++){const el=$('hw3-hs-'+i);if(el&&document.activeElement!==el&&hs[i]!==undefined)el.value=clampToSlot(hs[i],hw3HighMax[i]);}
-  const flags=[];
-  if(cust)flags.push('Custom');
-  if(hse)flags.push('HighSpd');
-  flags.push(enc?'PCT4':'KPH5');
-  setText('hw3-speed-meta',(cust||hse)?flags.join(' \u2022 '):('Off \u2022 '+(enc?'PCT4':'KPH5')));
-  const flKph=parseInt(d.fusedSpeedLimitKph,10)||0;
-  setText('hw3-fused',flKph?String(flKph)+' km/h':((d.fusedSpeedLimitRaw==31)?'NONE':'SNA'));
-  setText('hw3-stock-off',(d.hw3StockOffset===undefined)?'0':String(d.hw3StockOffset)+' km/h');
-  setText('hw3-tgt-raw',d.hw3OffsetTarget===undefined?'0':d.hw3OffsetTarget);
-}
-async function saveHw3Speed(){
-  const st=$('hw3-speed-status');
-  const cust=$('hw3-cust-tgl').checked?'1':'0';
-  const hse=$('hw3-hs-tgl').checked?'1':'0';
-  const enc=$('hw3-enc').value==='0'?'0':'1';
-  const parts=['hw3CustomSpeed='+cust,'hw3HighSpeedEnable='+hse,'hw3WireEncoding='+enc];
-  for(let i=0;i<5;i++){const el=$('hw3-ct-'+i),v=clampToSlot(el.value,hw3CustomMax[i]);el.value=v;parts.push('hw3CustomT'+i+'='+v);}
-  for(let i=0;i<3;i++){const el=$('hw3-hs-'+i),v=clampToSlot(el.value,hw3HighMax[i]);el.value=v;parts.push('hw3HighTarget'+i+'='+v);}
-  st.textContent='Saving...';st.style.color='var(--tx3)';
-  try{
-    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:parts.join('&')});
-    const d=await r.json();
-    if(!d.ok)throw new Error();
-    st.textContent='Saved';st.style.color='var(--ok)';
-    poll();
-  }catch(e){st.textContent='Save failed';st.style.color='var(--err)';}
-}
-
-function updateLegacyMppControl(d){
-  const sec=$('legacy-mpp-section');
-  if(sec)sec.style.display=(state.hw===0)?'':'none';
-  const en=!!d.legacyMppOverride,cust=!!d.legacyMppCustomEnable,hse=!!d.legacyMppHighSpeedEnable;
-  const t=$('legacy-mpp-tgl');if(t)t.checked=en;
-  const ct=$('legacy-mpp-cust-tgl');if(ct)ct.checked=cust;
-  const ht=$('legacy-mpp-hs-tgl');if(ht)ht.checked=hse;
-  const cArr=Array.isArray(d.legacyMppCustomTarget)?d.legacyMppCustomTarget:[];
-  for(let i=0;i<5;i++){const el=$('legacy-mpp-ct-'+i);if(el&&document.activeElement!==el&&cArr[i]!==undefined)el.value=cArr[i];}
-  const hArr=Array.isArray(d.legacyMppHighSpeedTarget)?d.legacyMppHighSpeedTarget:[];
-  for(let i=0;i<3;i++){const el=$('legacy-mpp-hs-'+i);if(el&&document.activeElement!==el&&hArr[i]!==undefined)el.value=hArr[i];}
-  setText('legacy-mpp-bus-raw',(d.legacyMppLastRaw!==undefined?d.legacyMppLastRaw:0)+(d.legacyMppLastRaw?' ('+(d.legacyMppLastRaw*5)+' km/h)':''));
-  setText('legacy-mpp-sent-raw',(d.legacyMppLastSentRaw!==undefined?d.legacyMppLastSentRaw:0)+(d.legacyMppLastSentRaw?' ('+(d.legacyMppLastSentRaw*5)+' km/h)':''));
-  const flags=[];
-  if(en)flags.push('On');
-  if(cust)flags.push('Custom');
-  if(hse)flags.push('HighSpd');
-  setText('legacy-mpp-meta',flags.length?flags.join(' \u2022 '):'Off');
-}
-const legacyCustomMax=[45,60,75,90,105];
-const legacyHighMax=[120,150,155];
-async function saveLegacyMpp(){
-  const st=$('legacy-mpp-status');
-  const en=$('legacy-mpp-tgl').checked?'1':'0';
-  const cust=$('legacy-mpp-cust-tgl').checked?'1':'0';
-  const hse=$('legacy-mpp-hs-tgl').checked?'1':'0';
-  const parts=['legacyMppOverride='+en,'legacyMppCustomEnable='+cust,'legacyMppHighSpeedEnable='+hse];
-  for(let i=0;i<5;i++){const v=parseInt($('legacy-mpp-ct-'+i).value,10);if(!isNaN(v))parts.push('legacyMppCustomT'+i+'='+Math.max(0,Math.min(legacyCustomMax[i],v)));}
-  for(let i=0;i<3;i++){const v=parseInt($('legacy-mpp-hs-'+i).value,10);if(!isNaN(v))parts.push('legacyMppHighTarget'+i+'='+Math.max(0,Math.min(legacyHighMax[i],v)));}
-  st.textContent='Saving...';st.style.color='var(--tx3)';
-  try{
-    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:parts.join('&')});
-    const d=await r.json();
-    if(!d.ok)throw new Error();
-    st.textContent='Saved';st.style.color='var(--ok)';
-    poll();
-  }catch(e){st.textContent='Save failed';st.style.color='var(--err)';}
-}
 async function pushLogging(){
   const body='eprn='+($('tgl-eprn').checked?'1':'0');
   try{await fetch('/logging',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});}catch(e){}
@@ -2360,17 +1229,16 @@ async function pushLogging(){
 
 async function emergencyStop(){
   try{
-    const nag=document.body&&document.body.classList.contains('wifi-nag');
     updateInjectButtons(false);
     state.can=false;
-    setText('s-inj',nag?'READ ONLY':'BLOCKED');
+    setText('s-inj','READ ONLY');
     setClass('s-inj','stat-val v-err');
     await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'can=0'});
   }catch(e){}
   poll();
 }
-async function resumeInj(){try{state.can=true;updateInjectButtons(true);const nag=document.body&&document.body.classList.contains('wifi-nag');await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:nag?'can=1':('hw='+state.hw+'&sp='+state.sp+'&spa='+(state.spAuto?'1':'0')+'&can=1')});}catch(e){}poll();}
-async function toggleFsdTopButton(){if(state.can)await emergencyStop();else await resumeInj();}
+async function resumeInj(){try{state.can=true;updateInjectButtons(true);await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'can=1'});}catch(e){}poll();}
+async function toggleCanWriteTopButton(){if(state.can)await emergencyStop();else await resumeInj();}
 async function reboot(){if(!await dashConfirm('Reboot device?','Reboot','Reboot'))return;try{await fetch('/reboot',{method:'POST'});}catch(e){}}
 
 function fmtUp(s){
@@ -2415,40 +1283,27 @@ function setFillElement(el,value){
 function setFill(id,value){
   setFillElement($(id),value);
 }
-function taskCpuHtml(value){
-  const v=clampPct(value);
-  return '<div class="sys-mini"><span>'+escapeHtml(value)+'%</span><div class="sys-mini-bar"><div class="sys-mini-fill" style="width:'+v+'%;background:'+progressColor(v)+'"></div></div></div>';
-}
 function fmtAddr(n){
   n=Number(n)||0;
   return n?'0x'+n.toString(16).toUpperCase():'--';
-}
-function resetTaskStatsUi(){
-  const tb=$('sys-task-rows');
-  if(tb)tb.innerHTML='<tr><td colspan="5" class="v-dim">--</td></tr>';
 }
 function resetSystemStatusUi(){
   ['sys-chip','sys-cpu','sys-clocks','sys-board','sys-temp','sys-reset','sys-runtime','sys-heap','sys-internal','sys-largest','sys-minheap','sys-psram','sys-tasks','sys-flash','sys-spiffs','sys-rssi','sys-wifi-mode','sys-apclients','sys-ble','sys-wireless','sys-fw'].forEach(id=>setText(id,'--'));
   setText('sys-summary',trText('Monitoring off'));
   setText('sys-cpu-load',trText('off'));
   ['sys-cpu0-fill','sys-cpu1-fill','sys-heap-fill','sys-internal-fill','sys-psram-fill','sys-app-fill','sys-spiffs-fill'].forEach(id=>setFill(id,0));
-  resetTaskStatsUi();
 }
 function startSystemMonitor(){
   if(systemStatusEnabled)return;
   systemStatusEnabled=true;
   const t=$('sys-monitor-tgl');if(t)t.checked=true;
-  const nag=document.body&&document.body.classList.contains('wifi-nag');
   loadSystemStatus();
-  if(!nag)loadTaskStats();
   systemStatusTimer=setInterval(loadSystemStatus,1000);
-  if(!nag)taskStatsTimer=setInterval(loadTaskStats,2000);
 }
 function stopSystemMonitor(){
   systemStatusEnabled=false;
   const t=$('sys-monitor-tgl');if(t)t.checked=false;
   if(systemStatusTimer){clearInterval(systemStatusTimer);systemStatusTimer=null;}
-  if(taskStatsTimer){clearInterval(taskStatsTimer);taskStatsTimer=null;}
   resetSystemStatusUi();
 }
 function toggleSystemMonitor(){
@@ -2460,39 +1315,6 @@ function initSystemMonitor(){
 }
 function escapeHtml(s){
   return String(s===undefined?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-function parseTaskStats(text){
-  const rows=[];
-  const lines=String(text||'').split(/\r?\n/);
-  for(const line of lines){
-    const m=line.match(/^\s*([0-9]+(?:\.[0-9]+)?)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+?)\s*$/);
-    if(!m)continue;
-    const name=m[6].trim();
-    if(!name||name==='task')continue;
-    rows.push({cpu:m[1],core:m[2],prio:m[3],stack:m[4],state:m[5],task:name});
-  }
-  return rows;
-}
-async function loadTaskStats(){
-  if(!systemStatusEnabled)return;
-  return runPoll('task_stats',async()=>{
-    const tb=$('sys-task-rows');if(!tb)return;
-    try{
-      const r=await fetch('/task_stats',{cache:'no-store'});
-      const text=await r.text();
-      const rows=parseTaskStats(text).slice(0,10);
-      if(!rows.length){resetTaskStatsUi();return;}
-      tb.innerHTML=rows.map(x=>
-        '<tr><td class="task-name" title="'+escapeHtml(x.task)+'">'+escapeHtml(x.task)+'</td>'+
-        '<td class="task-core">'+escapeHtml(x.core)+'</td>'+
-        '<td class="task-cpu">'+taskCpuHtml(x.cpu)+'</td>'+
-        '<td class="task-stack">'+escapeHtml(x.stack)+'</td>'+
-        '<td class="task-state">'+escapeHtml(x.state)+'</td></tr>'
-      ).join('');
-    }catch(e){
-      tb.innerHTML='<tr><td colspan="5" class="v-dim">'+trText('Task stats unavailable')+'</td></tr>';
-    }
-  });
 }
 async function loadSystemStatus(){
   if(!systemStatusEnabled)return;
@@ -2544,71 +1366,6 @@ async function loadSystemStatus(){
       setText('sys-summary','System status unavailable');
     }
   });
-}
-function fmtAgeMs(ms){
-  if(ms<1000)return ms+' ms';
-  if(ms<10000)return (ms/1000).toFixed(1)+' s';
-  if(ms<60000)return Math.round(ms/1000)+' s';
-  return fmtUp(Math.floor(ms/1000));
-}
-function toHex(n,p){return n.toString(16).toUpperCase().padStart(p,'0')}
-function fmtProbeData(data,dlc){
-  if(!Array.isArray(data)||!dlc)return '--';
-  return data.slice(0,dlc).map(v=>toHex((v||0)&255,2)).join(' ');
-}
-function renderWriteProbe(p){
-  const status=$('probe-status');
-  if(!p||!p.active){
-    status.textContent='No injected frame yet';
-    status.className='probe-status v-dim';
-    $('probe-tx-meta').textContent='--';
-    $('probe-tx').textContent='--';
-    $('probe-rx-meta').textContent='--';
-    $('probe-rx').textContent='--';
-    return;
-  }
-  const id='CAN 0x'+toHex((p.id||0)&0x7FF,3)+(p.mux>=0?' 路 mux '+p.mux:'');
-  $('probe-tx-meta').textContent=id+' 路 '+fmtAgeMs(p.txa||0)+' ago';
-  $('probe-tx').textContent=fmtProbeData(p.tx,p.txdlc);
-  if(p.hasrx){
-    $('probe-rx-meta').textContent=id+' 路 '+fmtAgeMs(p.rxa||0)+' ago';
-    $('probe-rx').textContent=fmtProbeData(p.rx,p.rxdlc);
-  }else{
-    $('probe-rx-meta').textContent='No matching RX frame seen yet';
-    $('probe-rx').textContent='--';
-  }
-  let text='Waiting for next matching bus frame';
-  let cls='probe-status v-acc';
-  if(p.state===2){text='Matching frame seen on bus';cls='probe-status v-ok';}
-  else if(p.state===3){text='Latest bus frame differs from injected frame';cls='probe-status v-warn';}
-  else if(p.state===4){text='Driver transmit failed';cls='probe-status v-err';}
-  status.textContent=text;
-  status.className=cls;
-}
-
-// CAN pins
-async function loadCanPins(){
-  try{
-    const d=await fetchPollJson('/can_pins',2000);
-    const tx=$('can-tx'),rx=$('can-rx'),st=$('can-pins-status'),hint=$('can-pins-hint');
-    if(tx){tx.value=d.tx>=0?d.tx:'';tx.placeholder=d.tx>=0?'TX GPIO '+d.tx:'TX GPIO';}
-    if(rx){rx.value=d.rx>=0?d.rx:'';rx.placeholder=d.rx>=0?'RX GPIO '+d.rx:'RX GPIO';}
-    const label=(d.customized?'custom':'firmware default')+' TX='+d.tx+' RX='+d.rx;
-    if(st){st.textContent=label;st.style.color=d.customized?'var(--acc)':'var(--tx3)';applyDashboardI18n(st);}
-    if(hint){hint.textContent=d.customized?'Custom CAN pins saved in NVS. Reboot required after change.':'Using firmware default CAN pins. Save only if your hardware wiring differs.';applyDashboardI18n(hint);}
-  }catch(e){const st=$('can-pins-status');if(st){st.textContent='unavailable';st.style.color='var(--err)';}}
-}
-async function saveCanPins(){
-  const tx=parseInt($('can-tx').value,10),rx=parseInt($('can-rx').value,10),hint=$('can-pins-hint');
-  if(isNaN(tx)||isNaN(rx)){if(hint){hint.textContent='Enter TX and RX GPIO';hint.style.color='var(--err)';}return;}
-  if(!await dashConfirm('Save CAN pins TX='+tx+' RX='+rx+' and reboot? Wrong pins disable CAN.','Save CAN pins','Save'))return;
-  try{
-    const r=await fetch('/can_pins',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'tx='+tx+'&rx='+rx});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok||!d.ok)throw new Error(d.error||'save failed');
-    if(hint){hint.textContent='Saved. Reboot required.';hint.style.color='var(--ok)';}
-    loadCanPins();
-  }catch(e){if(hint){hint.textContent=e.message||'Save failed';hint.style.color='var(--err)';}}
 }
 // OTA upload
 function fileSelected(file){
@@ -2687,70 +1444,38 @@ async function poll(){
   return runPoll('status',async()=>{
     try{
       const d=await fetchPollJson('/status',5000,true);
-    applyWifiMaxMode(d);
-    if(d.wifiMax){
+      applyWifiNagMode();
+      const on=!!d.can,armed=!!d.ci,fpsVal=Number(d.fps||0);
+      const hdrDesc=$('hdr-desc');
+      const rxTotal=Number(d.rx||0);
+      if(hdrDesc)hdrDesc.textContent=on?(trText('CAN running')+' \u2022 '+fpsVal.toFixed(1)+' Hz \u2022 RX '+rxTotal):trText('Waiting for CAN frames');
+      state.can=armed;
+      updateFsdControl(d);
+      updateInjectButtons(armed);
+      setClass('dot','sdot '+(d.txerr>5?'dot-warn':on?'dot-on':'dot-off'));
+      setText('s-can',on?trText('CAN OK'):trText('CAN waiting'));
+      setClass('s-can','stat-val '+(on?'v-ok':'v-err'));
+      setText('s-inj',injectionStatusLabel(armed));
+      setClass('s-inj','stat-val '+(armed?'v-ok':'v-err'));
+      setText('s-fps',on?(fpsVal.toFixed(1)+' Hz / RX '+rxTotal):(fpsVal.toFixed(1)+' Hz / '+trText('No frames')));
+      setClass('s-fps','stat-val '+(fpsVal>5?'v-acc':'v-dim'));
+      setText('s-rx',d.rx);
+      setText('s-tx',d.tx);
+      setText('s-txerr',d.txerr);
+      setClass('s-txerr','stat-val '+(d.txerr>0?'v-warn':'v-dim'));
+      setText('s-up',fmtUp(d.up));
+      setFill('fps-fill',Math.min(fpsVal/20*100,100));
+      setText('hw-badge','WIFI-NAG');
+      const eprn=$('tgl-eprn');if(eprn&&typeof d.eprn!=='undefined')eprn.checked=d.eprn;
       if(!dashboardInitialLoaded){
         dashboardInitialLoaded=true;
         loadWifiNetworks();loadWifiStatus();loadApStatus();loadGatewayDns();loadGatewayStatus();if(!isCarUiActive())loadGatewayBlocked();
       }
-      return;
-    }
-    const on=!!d.can,armed=!!d.ci,injecting=typeof d.ia==='undefined'?armed:!!d.ia,fpsVal=Number(d.fps||0);
-    const hdrDesc=$('hdr-desc');
-    const rxTotal=Number(d.rx||0);
-    if(hdrDesc)hdrDesc.textContent=on?(trText('CAN running')+' \u2022 '+fpsVal.toFixed(1)+' Hz \u2022 RX '+rxTotal):trText('Waiting for CAN frames');
-    state.hw=d.hw;state.sp=clampProfileForHw(d.hw,d.sp);state.spAuto=typeof d.spAuto==='undefined'?state.spAuto:!!d.spAuto;state.can=armed;
-    updateFsdControl(d);
-    if(!d.wifiNag){
-      updateHw3SlewControl(d);
-      updateHw3SpeedControl(d);
-      updateLegacyMppControl(d);
-    }
-    setClass('dot','sdot '+(d.txerr>5?'dot-warn':on?'dot-on':'dot-off'));
-    const apActive=typeof d.apActive==='undefined'?!!d.AD:!!d.apActive;
-    const adEnabled=typeof d.adEnabled==='undefined'?false:!!d.adEnabled;
-    updateInjectButtons(armed);
-
-    setText('s-can',on?trText('CAN OK'):trText('CAN waiting'));
-    setClass('s-can','stat-val '+(on?'v-ok':'v-err'));
-    setText('s-inj',injectionStatusLabel(injecting,armed,d.apGate,d));
-    setClass('s-inj','stat-val '+(injecting?'v-ok':(armed&&d.apGate?'v-warn':'v-err')));
-    setText('s-AD',apActive?'Active':'Inactive');
-    setClass('s-AD','stat-val '+(apActive?'v-ok':'v-dim'));
-    setText('s-fps',on?(fpsVal.toFixed(1)+' Hz / RX '+rxTotal):(fpsVal.toFixed(1)+' Hz / '+trText('No frames')));
-    setClass('s-fps','stat-val '+(fpsVal>5?'v-acc':'v-dim'));
-    setText('s-rx',d.rx);
-    setText('s-tx',d.tx);
-    setText('s-txerr',d.txerr);
-    setClass('s-txerr','stat-val '+(d.txerr>0?'v-warn':'v-dim'));
-    setText('s-fd',d.fd||'--');
-    setText('s-prof',profileDisplayName(d.hw,state.sp,state.spAuto));
-    setText('s-soff',d.soff||'0');
-    setText('s-up',fmtUp(d.up));
-    setText('s-mcp-raw','EFLG: 0x'+toHex(d.eflg,2));
-    setFill('fps-fill',Math.min(fpsVal/20*100,100));
-    if(d.wifiNag)setText('hw-badge','WIFI-NAG');
-    else{
-      setText('hw-badge',HW[d.hw]||'?');
-      updateGtwBadge(d.gtwap);
-    }
-    try{renderWriteProbe(d.probe);}catch(e){}
-    if(!d.wifiNag){
-      const hwSeg=$('hw-seg');if(hwSeg)updSeg(hwSeg,d.hw,'hw-btn');updateHW4(d.hw);updateProfileControls(d.hw,state.sp,state.spAuto);
-    }
-    const eprn=$('tgl-eprn');if(eprn&&typeof d.eprn!=='undefined')eprn.checked=d.eprn;
-    if(!dashboardInitialLoaded){
-      dashboardInitialLoaded=true;
-      loadWifiNetworks();loadWifiStatus();loadApStatus();loadCanPins();loadGatewayDns();loadGatewayStatus();if(!isCarUiActive())loadGatewayBlocked();
-      if(canDebugEnabled)startCanDebugPolling();
-    }
     }catch(e){}
   });
 }
 
 function colorLog(l){
-  if(l.includes('AD=ON')||l.includes('AD active'))return'<span class="lf">'+l+'</span>';
-  if(l.match(/\[HW[34]\]|\[LEGACY\]|\[HW3\]/))return'<span class="lh">'+l+'</span>';
   if(l.includes('ERR')||l.includes('FAIL'))return'<span class="le">'+l+'</span>';
   if(l.includes('[CFG]'))return'<span class="lc">'+l+'</span>';
   if(l.includes('[OK]')||l.includes('[BOOT]'))return'<span class="lf">'+l+'</span>';
@@ -2776,52 +1501,7 @@ async function pollLog(){
   });
 }
 
-async function resetStats(){try{await fetch('/reset_stats',{method:'POST'});}catch(e){}poll();}
-
-let recIsActive=false,recInterval=null;
-async function toggleRec(){recIsActive?await stopRec():await startRec();}
-async function startRec(){
-  if(document.body&&document.body.classList.contains('wifi-nag'))return;
-  try{
-    await fetch('/rec_start',{method:'POST'});
-    recIsActive=true;
-    const b=$('rec-btn');
-    b.textContent='Stop Recording';
-    b.style.borderColor='var(--err)';b.style.color='var(--err)';
-    $('rec-dl').style.display='none';
-    recInterval=setInterval(pollRec,800);
-  }catch(e){}
-}
-async function stopRec(){
-  if(document.body&&document.body.classList.contains('wifi-nag'))return;
-  clearInterval(recInterval);recIsActive=false;
-  try{await fetch('/rec_stop',{method:'POST'});}catch(e){}
-  const b=$('rec-btn');
-  b.textContent='Start Recording';b.style.borderColor='';b.style.color='';
-  await pollRec();
-}
-async function pollRec(){
-  if(document.body&&document.body.classList.contains('wifi-nag'))return;
-  if(document.hidden)return;
-  try{
-    const d=await(await fetch('/rec_status')).json();
-    const pct=Math.min(d.count/d.cap*100,100);
-    setFill('rec-fill',pct);
-    $('rec-count').textContent=d.count+' / '+d.cap+' frames';
-    if(d.active){
-      $('rec-status').textContent='Recording...';$('rec-status').style.color='var(--err)';
-      $('rec-meta').textContent='Recording...';
-    } else {
-      $('rec-meta').textContent=d.saved?d.count+' frames saved':'Idle';
-      $('rec-status').textContent=d.saved?'Saved':'Ready';
-      $('rec-status').style.color=d.saved?'var(--ok)':'';
-      $('rec-dl').style.display=d.saved?'':'none';
-      if(recIsActive){recIsActive=false;clearInterval(recInterval);const b=$('rec-btn');b.textContent='Start Recording';b.style.borderColor='';b.style.color='';}
-    }
-  }catch(e){}
-}
-
-// 鈹€鈹€ AP Hotspot management 鈹€鈹€
+// AP Hotspot management
 async function saveAP(){
   const ssid=$('ap-ssid').value,pass=$('ap-pass').value,hidden=$('ap-hidden').checked?'1':'0';
   if(!ssid){$('ap-status').textContent='Enter hotspot name';$('ap-status').style.color='var(--err)';return;}
@@ -3377,11 +2057,10 @@ document.addEventListener('visibilitychange',()=>{
   if(!dashboardVisible())return;
   poll();loadWifiStatus();loadApStatus();loadGatewayStatus();
   if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
-  if(canDebugEnabled){pollLog();if(!(document.body&&document.body.classList.contains('wifi-nag')))pollRec();}
+  pollLog();
 });
-orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();if(isCarUiActive())expandCarEssentials();initSystemMonitor();positionCanDebugPanels();setCanDebugUi();updateHW4(1);updateProfileControls(1,0,true);loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();poll();
+orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();if(isCarUiActive())expandCarEssentials();initSystemMonitor();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();poll();
 </script>
 </body>
 </html>
 )HTML";
-

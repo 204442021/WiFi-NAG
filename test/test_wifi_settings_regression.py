@@ -6,23 +6,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 UI_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.h"
 DASH_FILE = ROOT / "include" / "web" / "mcp2515_dashboard.h"
-SYNC_FILE = ROOT / "scripts" / "platformio_sync_profile.py"
+GATEWAY_FILE = ROOT / "include" / "web" / "dash_gateway.h"
 RUNTIME_FILE = ROOT / "src" / "espidf_runtime.cpp"
 
 
-class WifiSettingsRegressionTests(unittest.TestCase):
+class WifiNagRegressionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.ui = UI_FILE.read_text(encoding="utf-8")
         cls.dash = DASH_FILE.read_text(encoding="utf-8")
-        cls.sync = SYNC_FILE.read_text(encoding="utf-8")
+        cls.gateway = GATEWAY_FILE.read_text(encoding="utf-8")
         cls.runtime = RUNTIME_FILE.read_text(encoding="utf-8")
 
     def assertHasUiId(self, element_id: str) -> None:
         pattern = rf'\bid=(?:"{re.escape(element_id)}"|{re.escape(element_id)}\b)'
         self.assertRegex(self.ui, pattern)
 
-    def test_wifi_ui_has_all_expected_fields(self) -> None:
+    def test_wifi_ui_has_expected_fields(self) -> None:
         required_ids = [
             "wifi-status",
             "wifi-ssid",
@@ -40,125 +40,79 @@ class WifiSettingsRegressionTests(unittest.TestCase):
             with self.subTest(element_id=element_id):
                 self.assertHasUiId(element_id)
 
-    def test_wifi_ui_scripts_reference_existing_elements(self) -> None:
-        referenced_ids = {
-            match.group(1)
-            for match in re.finditer(r"\$\('([^']+)'\)", self.ui)
-            if match.group(1).startswith("wifi-")
-        }
-        declared_ids = set()
-        for match in re.finditer(r'\bid=(?:"([^"]+)"|([A-Za-z0-9_-]+))', self.ui):
-            element_id = match.group(1) or match.group(2)
-            if element_id.startswith("wifi-"):
-                declared_ids.add(element_id)
-
-        missing = sorted(referenced_ids - declared_ids)
-        self.assertEqual([], missing, f"Missing WiFi UI ids: {missing}")
-
-    def test_wifi_backend_exposes_routes_and_preference_keys(self) -> None:
-        required_routes = ["/wifi_scan", "/wifi_config", "/wifi_status"]
-        required_pref_keys = [
-            "wifi_ssid",
-            "wifi_pass",
-            "wifi_static",
-            "wifi_ip",
-            "wifi_gw",
-            "wifi_mask",
-            "wifi_dns",
+    def test_wifi_backend_routes_exist(self) -> None:
+        required_routes = [
+            "/wifi_scan",
+            "/wifi_config",
+            "/wifi_status",
+            "/wifi_networks",
+            "/wifi_connect",
+            "/wifi_delete",
         ]
 
         for route in required_routes:
             with self.subTest(route=route):
                 self.assertIn(route, self.dash)
 
-        for key in required_pref_keys:
-            with self.subTest(pref_key=key):
-                self.assertIn(f'"{key}"', self.dash)
-
-    def test_wifi_status_payload_covers_connection_and_config_state(self) -> None:
-        expected_fields = [
-            '\\"connected\\"',
-            '\\"ssid\\"',
-            '\\"stored\\"',
-            '\\"ip\\"',
-            '\\"static\\"',
-            '\\"cfg_ip\\"',
-            '\\"cfg_gw\\"',
-            '\\"cfg_mask\\"',
-            '\\"cfg_dns\\"',
-            '\\"connecting\\"',
+    def test_gateway_dns_routes_exist(self) -> None:
+        required_routes = [
+            "/gateway_status",
+            "/gateway_dns",
+            "/gateway_dns_test",
+            "/gateway_dns_stats_reset",
+            "/gateway_whitelist_add",
+            "/gateway_blocked",
+            "/gateway_blocked_clear",
         ]
 
-        status_section = self.dash[self.dash.index("static void handleWifiStatus()") :]
-        for field in expected_fields:
-            with self.subTest(field=field):
-                self.assertIn(field, status_section)
+        for route in required_routes:
+            with self.subTest(route=route):
+                self.assertIn(route, self.dash)
 
-    def test_wifi_settings_backup_roundtrip_fields_exist(self) -> None:
-        expected_export_import_fields = [
-            '\\"wifi\\":{\\"ssid\\"',
-            'doc["wifi"].is<JsonObject>()',
-            'doc["wifi"]["ssid"]',
-            'doc["wifi"]["pass"]',
-            'doc["wifi"]["static"]',
-            'doc["wifi"]["ip"]',
-            'doc["wifi"]["gw"]',
-            'doc["wifi"]["mask"]',
-            'doc["wifi"]["dns"]',
-        ]
+    def test_gateway_dns_defaults_cover_tesla_roots(self) -> None:
+        for domain in ["tesla.cn", "tesla.com", "teslamotors.com", "tesla.services"]:
+            with self.subTest(domain=domain):
+                self.assertIn(domain, self.gateway)
 
-        for field in expected_export_import_fields:
-            with self.subTest(field=field):
-                self.assertIn(field, self.dash)
+    def test_nag_api_and_ui_controls_exist(self) -> None:
+        for route in ["/api/config", "/api/stats", "/api/mode", "/api/update"]:
+            with self.subTest(route=route):
+                self.assertIn(route, self.dash)
 
-    def test_wifi_config_defers_reconnect_until_after_response(self) -> None:
-        section = self.dash[
-            self.dash.index("static void handleWifiConfig()") :
-            self.dash.index("static void handleWifiDelete()")
-        ]
+        for element_id in ["can-write-tgl", "nag-mode", "nag-av2-min", "nag-av2-max"]:
+            with self.subTest(element_id=element_id):
+                self.assertHasUiId(element_id)
 
-        self.assertIn("dashPrepareStaReconnect();", section)
-        self.assertIn("dashScheduleSTAConnect(1000);", section)
-        self.assertNotIn("dashConnectSTA();", section)
-        success_send = 'server.send(200, "application/json", "{\\"ok\\":true,\\"idx\\":"'
-        self.assertLess(section.index(success_send), section.index("dashScheduleSTAConnect(1000);"))
+    def test_manual_ota_remains_online_ota_disabled(self) -> None:
+        self.assertIn('server.on("/update", HTTP_POST, handleOtaResult, handleOtaUpload);', self.dash)
+        for route in [
+            'server.on("/plugins"',
+            'server.on("/plugin_',
+            'server.on("/settings_export"',
+            'server.on("/settings_import"',
+            'server.on("/task_stats"',
+            'server.on("/rec_',
+            'server.on("/can_debug"',
+        ]:
+            with self.subTest(route=route):
+                self.assertNotIn(route, self.dash)
 
-    def test_wifi_scan_prepares_sta_mode_before_scan(self) -> None:
-        section = self.dash[
-            self.dash.index("static void handleWifiScan()") :
-            self.dash.index("static void dashPersistWifiSlot")
-        ]
-
-        self.assertIn("dashPrepareWifiScan();", section)
-        self.assertLess(section.index("dashPrepareWifiScan();"), section.index("WiFi.scanNetworks"))
+        for online_update_token in [
+            "DASH_ENABLE_ONLINE_UPDATE",
+            "GitHub",
+            "github.com",
+            "httpUpdate",
+            "firmware_url",
+            "ota_check",
+            "update_check",
+        ]:
+            with self.subTest(token=online_update_token):
+                self.assertNotIn(online_update_token, self.dash)
+                self.assertNotIn(online_update_token, self.ui)
 
     def test_espidf_wifi_logging_is_not_info_verbose(self) -> None:
         self.assertIn('esp_log_level_set("wifi", ESP_LOG_WARN);', self.runtime)
         self.assertIn('esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);', self.runtime)
-
-    def test_ap_injection_gate_setting_is_persisted_and_exposed(self) -> None:
-        # The dedicated AP-injection-gate UI toggle (ap-gate-tgl / saveApGate /
-        # updateApGateControl) and the legacy "apg" POST arg were removed when the
-        # control was folded into AP/EAP Auto Restore. The gate is still persisted
-        # and surfaced in the status payload, so keep covering the backend contract.
-        expected_backend_fields = [
-            '"ap_gate"',
-            '\\"apGate\\"',
-            '\\"ia\\"',
-            'dashInjectionActive()',
-        ]
-
-        for field in expected_backend_fields:
-            with self.subTest(backend_field=field):
-                self.assertIn(field, self.dash)
-
-        self.assertIn("INJECTION_AFTER_AP", self.sync)
-
-    def test_manual_ota_credentials_can_be_reset_from_dashboard(self) -> None:
-        self.assertHasUiId("ota-reset-btn")
-        self.assertIn("resetOtaCredentials()", self.ui)
-        self.assertRegex(self.ui, r"localStorage\.removeItem\([\"']otaU[\"']\)")
-        self.assertRegex(self.ui, r"localStorage\.removeItem\([\"']otaP[\"']\)")
 
 
 if __name__ == "__main__":

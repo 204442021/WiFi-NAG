@@ -1,18 +1,8 @@
-# Documentation
+# WIFI-NAG Documentation
 
-[Project Home](../) | [Dashboard Guide](dashboard.md) | [Build & Flash](building.md) | [Plugin System](plugins.md) | [Release Notes](../CHANGELOG.md)
+This repository now documents one maintained firmware target: WIFI-NAG for ESP32-S3 native TWAI CAN with WiFi AP+STA, NAPT, DNS proxy/filtering, WebUI, and Nag suppression on CAN ID `880 / 0x370`.
 
-This section backs the GitHub Pages site for the project and collects the living documentation for setup, runtime dashboard use, and the plugin system.
+- [Build & Flash](building.md)
+- [Dashboard](dashboard.md)
 
-## Start Here
-
-- [Dashboard Guide](dashboard.md) explains every major dashboard card, what is persisted, and which functions are ESP32-only
-- [Build & Flash](building.md) covers supported PlatformIO environments, profile selection, and first-boot flow
-- [Plugin System](plugins.md) documents the JSON format, install paths, limits, examples, and dashboard workflow
-- [Release Notes](../CHANGELOG.md) tracks shipped features and fixes per version
-
-## Documentation Map
-
-- The [project homepage](../) is the high-level landing page
-- Pages under `docs/` are published by GitHub Pages as `/docs/*.html`
-- The dashboard plugin help link points at the rendered plugin reference, so those examples stay aligned with the live documentation
+Legacy/HW3/HW4 FSD activation, MCP2515, SAME51, plugins, CAN recorder/sniffer tools, online OTA, settings backup, and task-stats pages are not maintained in this product line.
