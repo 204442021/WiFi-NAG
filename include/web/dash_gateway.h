@@ -196,29 +196,17 @@ static bool dashGatewayAllocateState()
     for (uint8_t q##Idx = 0; q##Idx < kDashGatewayMaxPending; q##Idx++) \
         if (auto &q = gatewayPendingQueries[q##Idx]; true)
 
-static String dashGatewayTrim(String s)
-{
-    std::string v = static_cast<std::string>(s);
-    size_t a = 0;
-    while (a < v.size() && std::isspace(static_cast<unsigned char>(v[a])))
-        a++;
-    size_t b = v.size();
-    while (b > a && std::isspace(static_cast<unsigned char>(v[b - 1])))
-        b--;
-    return v.substr(a, b - a);
-}
-
-static String dashGatewayLower(String s)
-{
-    std::string v = static_cast<std::string>(s);
-    std::transform(v.begin(), v.end(), v.begin(), [](unsigned char c)
-                   { return static_cast<char>(std::tolower(c)); });
-    return v;
-}
-
 static String dashGatewayNormalizeDomain(const String &domain)
 {
-    String d = dashGatewayLower(dashGatewayTrim(domain));
+    size_t start = 0;
+    size_t end = domain.length();
+    while (start < end && std::isspace(static_cast<unsigned char>(domain[start])))
+        start++;
+    while (end > start && std::isspace(static_cast<unsigned char>(domain[end - 1])))
+        end--;
+
+    String d = domain.substring(start, end);
+    d.toLowerCase();
     while (d.endsWith("."))
         d = d.substring(0, d.length() - 1);
     if (d.startsWith("*."))
@@ -265,18 +253,22 @@ static bool dashGatewayDomainMatchesCompiledRule(const char *domain, size_t doma
            std::memcmp(domain + domainLen - rule.len, rule.domain, rule.len) == 0;
 }
 
-static size_t dashGatewayCompiledRuleMatchLen(const String &domain, const DashGatewayDomainRule *rules, uint16_t count)
+static size_t dashGatewayCompiledRuleMatchLenRaw(const char *domain, size_t domainLen, const DashGatewayDomainRule *rules, uint16_t count)
 {
-    String d = dashGatewayNormalizeDomain(domain);
-    const char *dc = d.c_str();
-    size_t dl = d.length();
+    if (!domain || domainLen == 0 || !rules || count == 0)
+        return 0;
     size_t best = 0;
     for (uint16_t i = 0; i < count; i++)
     {
-        if (dashGatewayDomainMatchesCompiledRule(dc, dl, rules[i]) && rules[i].len > best)
+        if (dashGatewayDomainMatchesCompiledRule(domain, domainLen, rules[i]) && rules[i].len > best)
             best = rules[i].len;
     }
     return best;
+}
+
+static size_t dashGatewayCompiledRuleMatchLenNormalized(const String &domain, const DashGatewayDomainRule *rules, uint16_t count)
+{
+    return dashGatewayCompiledRuleMatchLenRaw(domain.c_str(), domain.length(), rules, count);
 }
 
 static void dashGatewayCompileList(const String &list, DashGatewayDomainRule *rules, uint16_t maxRules, uint16_t &outCount)
@@ -525,13 +517,12 @@ static String dashGatewaySanitizeBlacklist(const String &list)
     return out.substring(0, kDashGatewayListMax);
 }
 
-static bool dashGatewayDnsAllowed(const String &domain)
+static bool dashGatewayDnsAllowedNormalized(const String &domain)
 {
-    String d = dashGatewayNormalizeDomain(domain);
-    if (d.length() == 0)
+    if (domain.length() == 0)
         return false;
-    size_t blockLen = dashGatewayCompiledRuleMatchLen(d, gatewayBlacklistRules, gatewayBlacklistRuleCount);
-    size_t allowLen = dashGatewayCompiledRuleMatchLen(d, gatewayWhitelistRules, gatewayWhitelistRuleCount);
+    size_t blockLen = dashGatewayCompiledRuleMatchLenNormalized(domain, gatewayBlacklistRules, gatewayBlacklistRuleCount);
+    size_t allowLen = dashGatewayCompiledRuleMatchLenNormalized(domain, gatewayWhitelistRules, gatewayWhitelistRuleCount);
     if (allowLen > 0)
         return true;
     if (blockLen > 0)
@@ -542,12 +533,13 @@ static bool dashGatewayDnsAllowed(const String &domain)
 static String dashGatewayDnsDecisionJson(const String &input)
 {
     String domain = dashGatewayNormalizeDomain(input);
-    size_t blockLen = dashGatewayCompiledRuleMatchLen(domain, gatewayBlacklistRules, gatewayBlacklistRuleCount);
-    size_t allowLen = dashGatewayCompiledRuleMatchLen(domain, gatewayWhitelistRules, gatewayWhitelistRuleCount);
+    size_t blockLen = dashGatewayCompiledRuleMatchLenNormalized(domain, gatewayBlacklistRules, gatewayBlacklistRuleCount);
+    size_t allowLen = dashGatewayCompiledRuleMatchLenNormalized(domain, gatewayWhitelistRules, gatewayWhitelistRuleCount);
     bool blacklisted = blockLen > 0;
     bool whitelisted = allowLen > 0;
-    bool allowed = domain.length() > 0 && dashGatewayDnsAllowed(domain);
+    bool allowed = dashGatewayDnsAllowedNormalized(domain);
     String j = "{\"domain\":\"";
+    j.reserve(domain.length() + 160);
     j += jsonEscape(domain.c_str());
     j += "\",\"enabled\":";
     j += gatewayEnabled ? "true" : "false";
@@ -572,30 +564,6 @@ static String dashGatewayDnsDecisionJson(const String &input)
         j += "not in blacklist";
     j += "\"}";
     return j;
-}
-
-__attribute__((unused)) static bool dashGatewayParseDnsName(const uint8_t *buf, size_t len, String &out)
-{
-    if (len < 13)
-        return false;
-    size_t pos = 12;
-    std::string name;
-    while (pos < len)
-    {
-        uint8_t n = buf[pos++];
-        if (n == 0)
-            break;
-        if ((n & 0xC0) != 0 || n > 63 || pos + n > len)
-            return false;
-        if (!name.empty())
-            name += '.';
-        name.append(reinterpret_cast<const char *>(buf + pos), n);
-        pos += n;
-    }
-    if (name.empty())
-        return false;
-    out = name;
-    return true;
 }
 
 static bool dashGatewayParseDnsQuestion(const uint8_t *buf, size_t len, String &name, uint16_t &qtype, size_t *questionEnd = nullptr)
@@ -632,11 +600,10 @@ static void dashGatewayDnsCacheClear()
     std::memset(gatewayDnsCache, 0, sizeof(DashGatewayDnsCacheEntry) * kDashGatewayDnsCacheEntries);
 }
 
-static size_t dashGatewayDnsCacheLookup(const String &domain, uint16_t qtype, uint32_t nowSec, uint8_t *out, size_t outCap)
+static size_t dashGatewayDnsCacheLookupNormalized(const String &domain, uint16_t qtype, uint32_t nowSec, uint8_t *out, size_t outCap)
 {
     if (!gatewayDnsCache || domain.length() == 0)
         return 0;
-    String d = dashGatewayNormalizeDomain(domain);
     for (size_t i = 0; i < kDashGatewayDnsCacheEntries; i++)
     {
         DashGatewayDnsCacheEntry &e = gatewayDnsCache[i];
@@ -649,7 +616,7 @@ static size_t dashGatewayDnsCacheLookup(const String &domain, uint16_t qtype, ui
         }
         if (e.qtype != qtype || e.respLen == 0 || e.respLen > outCap)
             continue;
-        if (std::strcmp(e.domain, d.c_str()) != 0)
+        if (std::strcmp(e.domain, domain.c_str()) != 0)
             continue;
         std::memcpy(out, e.resp, e.respLen);
         e.lastUsedSec = nowSec;
@@ -660,7 +627,7 @@ static size_t dashGatewayDnsCacheLookup(const String &domain, uint16_t qtype, ui
     return 0;
 }
 
-static void dashGatewayDnsCachePut(const String &domain, uint16_t qtype, uint32_t nowSec, const uint8_t *resp, size_t respLen)
+static void dashGatewayDnsCachePutNormalized(const String &domain, uint16_t qtype, uint32_t nowSec, const uint8_t *resp, size_t respLen)
 {
     if (!gatewayDnsCache || domain.length() == 0 || !resp || respLen < 12 || respLen > kDashGatewayDnsCacheRespMax)
         return;
@@ -668,7 +635,6 @@ static void dashGatewayDnsCachePut(const String &domain, uint16_t qtype, uint32_
     // reflect live policy/upstream state rather than linger in the bridge.
     if ((resp[3] & 0x0F) != 0 || dashGatewayReadU16(resp + 6) == 0)
         return;
-    String d = dashGatewayNormalizeDomain(domain);
     size_t target = kDashGatewayDnsCacheEntries;
     uint32_t oldest = 0xFFFFFFFFu;
     for (size_t i = 0; i < kDashGatewayDnsCacheEntries; i++)
@@ -679,7 +645,7 @@ static void dashGatewayDnsCachePut(const String &domain, uint16_t qtype, uint32_
             target = i;
             break;
         }
-        if (e.qtype == qtype && std::strcmp(e.domain, d.c_str()) == 0)
+        if (e.qtype == qtype && std::strcmp(e.domain, domain.c_str()) == 0)
         {
             target = i;
             break;
@@ -694,7 +660,7 @@ static void dashGatewayDnsCachePut(const String &domain, uint16_t qtype, uint32_
         return;
     DashGatewayDnsCacheEntry &e = gatewayDnsCache[target];
     std::memset(&e, 0, sizeof(e));
-    std::snprintf(e.domain, sizeof(e.domain), "%s", d.c_str());
+    std::snprintf(e.domain, sizeof(e.domain), "%s", domain.c_str());
     e.qtype = qtype;
     e.respLen = static_cast<uint16_t>(respLen);
     e.expiresSec = nowSec + kDashGatewayDnsCacheTtlSec;
@@ -712,21 +678,20 @@ static bool dashGatewayPendingAddClient(DashGatewayPendingQuery &q, uint16_t ori
     return true;
 }
 
-static bool dashGatewayAttachDuplicatePending(const String &domain, uint16_t qtype, uint16_t origId, const sockaddr_in &client)
+static bool dashGatewayAttachDuplicatePendingNormalized(const String &domain, uint16_t qtype, uint16_t origId, const sockaddr_in &client)
 {
-    String d = dashGatewayNormalizeDomain(domain);
     DASH_GATEWAY_FOR_PENDING(q)
     {
         if (!q.inUse || q.rulesVersion != gatewayDnsRulesVersion)
             continue;
-        if (q.qtype == qtype && std::strcmp(q.domain, d.c_str()) == 0)
+        if (q.qtype == qtype && std::strcmp(q.domain, domain.c_str()) == 0)
             return dashGatewayPendingAddClient(q, origId, client);
     }
     return false;
 }
 
-static void dashGatewayInitPending(DashGatewayPendingQuery &q, uint16_t origId, uint16_t proxyId, uint16_t qtype,
-                                   const sockaddr_in *client, const String &domain)
+static void dashGatewayInitPendingNormalized(DashGatewayPendingQuery &q, uint16_t origId, uint16_t proxyId, uint16_t qtype,
+                                             const sockaddr_in *client, const String &domain)
 {
     std::memset(&q, 0, sizeof(q));
     q.originalId = origId;
@@ -735,8 +700,7 @@ static void dashGatewayInitPending(DashGatewayPendingQuery &q, uint16_t origId, 
     q.startTime = xTaskGetTickCount();
     q.inUse = true;
     q.rulesVersion = gatewayDnsRulesVersion;
-    String d = dashGatewayNormalizeDomain(domain);
-    std::snprintf(q.domain, sizeof(q.domain), "%s", d.c_str());
+    std::snprintf(q.domain, sizeof(q.domain), "%s", domain.c_str());
     if (client)
     {
         q.clientAddr = *client;
@@ -760,14 +724,14 @@ static void dashGatewayUpdatePendingMax()
         gatewayDnsPendingMax = count;
 }
 
-static bool dashGatewayStorePending(uint16_t origId, uint16_t proxyId, uint16_t qtype,
-                                    const sockaddr_in *client, const String &domain)
+static bool dashGatewayStorePendingNormalized(uint16_t origId, uint16_t proxyId, uint16_t qtype,
+                                              const sockaddr_in *client, const String &domain)
 {
     DASH_GATEWAY_FOR_PENDING(q)
     {
         if (!q.inUse)
         {
-            dashGatewayInitPending(q, origId, proxyId, qtype, client, domain);
+            dashGatewayInitPendingNormalized(q, origId, proxyId, qtype, client, domain);
             dashGatewayUpdatePendingMax();
             return true;
         }
@@ -939,6 +903,9 @@ static void dashGatewayDnsTask(void *)
                 String qname;
                 uint16_t qtype = 0;
                 bool parsed = dashGatewayParseDnsQuestion(rx, n, qname, qtype);
+                String qnameNorm;
+                if (parsed)
+                    qnameNorm = dashGatewayNormalizeDomain(qname);
 
                 // IPv6 forwarding/filtering is intentionally not supported:
                 // answer AAAA locally with no data so clients fall back to A.
@@ -951,7 +918,7 @@ static void dashGatewayDnsTask(void *)
                 }
 
                 // Special domain t.sl -> fake IP 100.100.1.1
-                if (parsed && n >= 16 && (qname == "t.sl" || qname == "t.sl."))
+                if (parsed && n >= 16 && qnameNorm == "t.sl")
                 {
                     if (qtype == kDashGatewayDnsTypeA)
                     {
@@ -964,10 +931,10 @@ static void dashGatewayDnsTask(void *)
                     }
                 }
 
-                bool allowed = !gatewayEnabled || !parsed || dashGatewayDnsAllowed(qname);
+                bool allowed = !gatewayEnabled || !parsed || dashGatewayDnsAllowedNormalized(qnameNorm);
                 if (!allowed)
                 {
-                    dashGatewayTrackBlocked(qname);
+                    dashGatewayTrackBlocked(qnameNorm);
                     size_t len = dashGatewayMakeDnsBlockedReply(rx, n, tx, sizeof(tx));
                     if (len > 0)
                         sendto(gatewayDnsSock, tx, len, 0, reinterpret_cast<sockaddr *>(&client), clientLen);
@@ -979,7 +946,7 @@ static void dashGatewayDnsTask(void *)
                     if (parsed)
                     {
                         uint32_t nowSec = static_cast<uint32_t>(esp_timer_get_time() / 1000000ULL);
-                        size_t cachedLen = dashGatewayDnsCacheLookup(qname, qtype, nowSec, tx, sizeof(tx));
+                        size_t cachedLen = dashGatewayDnsCacheLookupNormalized(qnameNorm, qtype, nowSec, tx, sizeof(tx));
                         if (cachedLen > 0)
                         {
                             tx[0] = origId >> 8; tx[1] = origId & 0xFF;
@@ -987,7 +954,7 @@ static void dashGatewayDnsTask(void *)
                             continue;
                         }
                     }
-                    if (parsed && dashGatewayAttachDuplicatePending(qname, qtype, origId, client))
+                    if (parsed && dashGatewayAttachDuplicatePendingNormalized(qnameNorm, qtype, origId, client))
                         continue;
                     uint16_t proxyId = gatewayNextProxyId++;
                     rx[0] = proxyId >> 8; rx[1] = proxyId & 0xFF;
@@ -998,7 +965,7 @@ static void dashGatewayDnsTask(void *)
                     dst.sin_addr.s_addr = upstream;
                     ssize_t sent = sendto(gatewayUpstreamSock, rx, n, 0, reinterpret_cast<sockaddr *>(&dst), sizeof(dst));
                     if (sent == n)
-                        dashGatewayStorePending(origId, proxyId, qtype, &client, qname);
+                        dashGatewayStorePendingNormalized(origId, proxyId, qtype, &client, qnameNorm);
                     else
                         gatewayDnsUpstreamFails++;
                 }
@@ -1023,7 +990,7 @@ static void dashGatewayDnsTask(void *)
                             break;
                         }
                         dashGatewayTrackLatency(q, xTaskGetTickCount());
-                        dashGatewayDnsCachePut(q.domain, q.qtype, static_cast<uint32_t>(esp_timer_get_time() / 1000000ULL), rx, rn);
+                        dashGatewayDnsCachePutNormalized(q.domain, q.qtype, static_cast<uint32_t>(esp_timer_get_time() / 1000000ULL), rx, rn);
                         for (uint8_t ci = 0; ci < q.clientCount; ci++)
                         {
                             rx[0] = q.clientIds[ci] >> 8; rx[1] = q.clientIds[ci] & 0xFF;
@@ -1404,6 +1371,7 @@ static String dashGatewayStatusJson()
         apChannel = apConfig.ap.channel;
 
     String j = "{\"enabled\":";
+    j.reserve(900);
     j += gatewayEnabled ? "true" : "false";
     j += ",\"nat\":";
     j += (gatewayNaptEnabled && WiFi.status() == WL_CONNECTED) ? "true" : "false";
@@ -1502,6 +1470,7 @@ static void handleGatewayStatus()
 static String dashGatewayDnsSettingsJson(bool ok)
 {
     String j = "{\"ok\":";
+    j.reserve(gatewayDnsBlacklist.length() + gatewayDnsWhitelist.length() + 320);
     j += ok ? "true" : "false";
     j += ",\"enabled\":";
     j += gatewayEnabled ? "true" : "false";
@@ -1694,6 +1663,7 @@ static void handleGatewayBlocked()
     portEXIT_CRITICAL(&gatewayBlockedMux);
 
     String j = "[";
+    j.reserve(2 + static_cast<size_t>(count) * 168);
     for (uint8_t i = 0; i < count; i++)
     {
         if (i) j += ",";

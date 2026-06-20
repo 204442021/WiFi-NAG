@@ -368,6 +368,7 @@ body.wifi-nag #hw3-slew-section,
 body.wifi-nag #firmware-update-card,
 body.wifi-nag #can-debug-card,
 body.wifi-nag .can-debug-panel,
+body.wifi-nag #sys-task-load,
 body.wifi-nag .owner-modal-card{display:none !important}
 .nag-only{display:none !important}
 body.wifi-nag .nag-only.setting-row{display:flex !important}
@@ -519,7 +520,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
     <div class="sys-item"><div class="sys-lbl">Bluetooth LE</div><div class="sys-val" id="sys-ble">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">Wireless</div><div class="sys-val" id="sys-wireless">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">MAC / Firmware</div><div class="sys-val" id="sys-fw">--</div></div>
-    <div class="sys-item sys-full">
+    <div class="sys-item sys-full" id="sys-task-load">
       <div class="sys-lbl">Task Load</div>
       <table class="task-table">
         <thead><tr><th class="task-name">task</th><th class="task-core">core</th><th class="task-cpu">cpu%</th><th class="task-stack">stack</th><th class="task-state">state</th></tr></thead>
@@ -999,17 +1000,6 @@ Version: 3.0.0-beta.5</div>
   </div>
 </div>
 
-<div class="modal-backdrop" id="ota-test-modal" onclick="otaTestBackdrop(event)">
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ota-test-title">
-    <div class="modal-title" id="ota-test-title">OTA Test v2</div>
-    <div class="modal-msg" id="ota-test-msg">Version: 3.0.0-beta.5</div>
-    <div class="modal-actions">
-      <button class="sniff-btn modal-btn-primary" onclick="closeOtaTestNotice()">Close</button>
-    </div>
-  </div>
-</div>
-
-
 <script>
 const HW=['Legacy','HW3','HW4'];
 const SP3=['Chill','Normal','Hurry'];
@@ -1280,8 +1270,6 @@ Object.assign(I18N_ZH,{
   'Raise UI_mppSpeedLimit on CAN 760 byte 6 to a target km/h based on what the gateway is currently sending. Same bucket layout as HW3. Only writes when target is higher than current - never lowers.':'\u6839\u636e\u7f51\u5173\u5f53\u524d\u53d1\u9001\u7684 UI_mppSpeedLimit (CAN 760 byte 6) \u6309\u5206\u6bb5\u8868\u5f97\u5230\u76ee\u6807 km/h\uff0c\u4ec5\u5728\u76ee\u6807\u503c\u9ad8\u4e8e\u5f53\u524d\u503c\u65f6\u5199\u56de\uff0c\u4ece\u4e0d\u964d\u4f4e\u3002\u5206\u6bb5\u5e03\u5c40\u4e0e HW3 \u4e00\u81f4\u3002',
   '80/100/120 km/h buckets. Max target: 120/150/155 km/h.':'80/100/120 km/h \u5206\u6bb5\u3002\u76ee\u6807\u4e0a\u9650\uff1a120/150/155 km/h\u3002',
   'Profiles are available on Legacy, HW3 and HW4.':'Legacy\u3001HW3 \u548c HW4 \u652f\u6301\u914d\u7f6e\u6863\u3002',
-  'OTA Test v2':'OTA \u6d4b\u8bd5 v2',
-  'Version: 3.0.0-beta.5':'\u7248\u672c\uff1a3.0.0-beta.5',
   'AP':'AP',
   'STA':'STA',
   'DNS':'DNS',
@@ -1811,38 +1799,6 @@ function closeOwnerNotice(){
 function ownerNoticeBackdrop(ev){
   if(ev.target===$('owner-modal'))closeOwnerNotice();
 }
-function showOtaTestNotice(){
-  closeOwnerNotice();
-  const modal=$('ota-test-modal');
-  if(!modal)return;
-  modal.style.display='flex';
-  document.body.style.overflow='hidden';
-}
-function closeOtaTestNotice(){
-  const modal=$('ota-test-modal');
-  if(modal)modal.style.display='none';
-  document.body.style.overflow='';
-}
-function otaTestBackdrop(ev){
-  if(ev.target===$('ota-test-modal'))closeOtaTestNotice();
-}
-
-function showOtaTestNotice(){
-  closeOwnerNotice();
-  const modal=$('ota-test-modal');
-  if(!modal)return;
-  modal.style.display='flex';
-  document.body.style.overflow='hidden';
-}
-function closeOtaTestNotice(){
-  const modal=$('ota-test-modal');
-  if(modal)modal.style.display='none';
-  document.body.style.overflow='';
-}
-function otaTestBackdrop(ev){
-  if(ev.target===$('ota-test-modal'))closeOtaTestNotice();
-}
-
 function dashConfirmResolve(ok){
   if(!dashConfirmState)return;
   const resolve=dashConfirmState.resolve;
@@ -2482,10 +2438,11 @@ function startSystemMonitor(){
   if(systemStatusEnabled)return;
   systemStatusEnabled=true;
   const t=$('sys-monitor-tgl');if(t)t.checked=true;
+  const nag=document.body&&document.body.classList.contains('wifi-nag');
   loadSystemStatus();
-  loadTaskStats();
+  if(!nag)loadTaskStats();
   systemStatusTimer=setInterval(loadSystemStatus,1000);
-  taskStatsTimer=setInterval(loadTaskStats,2000);
+  if(!nag)taskStatsTimer=setInterval(loadTaskStats,2000);
 }
 function stopSystemMonitor(){
   systemStatusEnabled=false;
