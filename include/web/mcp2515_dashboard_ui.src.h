@@ -7,7 +7,7 @@
 
 static const char DASH_HTML[] PROGMEM = R"HTML(
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
@@ -699,21 +699,51 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
 
 <script>
 const $=id=>document.getElementById(id);
-let dashLang=localStorage.getItem('dashLang')||((navigator.language||'').toLowerCase().startsWith('zh')?'zh':'en');
+let dashLang=localStorage.getItem('dashLang')||'zh';
 const I18N_ZH={
-  'Light':'浅色','Dark':'深色','Waiting for CAN frames':'等待 CAN 帧','CAN running':'CAN 正常','CAN OK':'CAN 正常','CAN waiting':'等待 CAN','No frames':'无帧',
-  'CAN Bus':'CAN 总线','CAN Frames':'CAN 帧','TX Errors':'发送错误','Uptime':'运行时间','Reboot':'重启','CAN Write':'CAN 写入','CAN Write On':'开启 CAN 写入','CAN Write Off':'关闭 CAN 写入','READ ONLY':'只读模式','CAN WRITE ON':'CAN 写入开启',
-  'Configuration':'配置','Device settings':'设备设置','Nag Mode':'Nag 模式','A_V2 Range':'A_V2 范围','Save':'保存','Saved':'已保存','Saving...':'保存中...','Save failed':'保存失败','Read Only':'只读模式',
-  'CAN write is enabled. Nag echo can transmit.':'CAN 写入已开启，Nag echo 可发送。','Read-only mode. CAN frames are monitored but not written.':'只读模式：只监听 CAN 帧，不写入。',
-  'WiFi Hotspot':'WiFi 热点','WiFi Internet':'WiFi Internet','STA-AP Gateway':'STA-AP 网关','Gateway':'网关','Gateway status unavailable':'网关状态不可用','Upstream DNS':'上游 DNS','Network Performance Mode':'网络性能模式',
-  'Auto':'自动','Custom':'自定义','Save DNS':'保存 DNS','Reset DNS Stats':'清零 DNS 统计','Filter List':'过滤清单','Refresh':'刷新','Clear':'清空','Blacklist':'黑名单','Whitelist':'白名单','Test DNS':'测试 DNS',
-  'System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','Chip':'芯片','CPU':'CPU','CPU Load':'CPU 负载','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Heap RAM':'堆内存','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','warming up':'采样中','unavailable':'不可用','offline':'离线','not enabled':'未启用','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','STA online':'STA 在线','STA offline':'STA 离线','on':'开启','off':'关闭',
-  'Debug Log':'调试日志','Debug logging':'调试日志','Recent debug output':'最近调试输出','Toggle WebUI and firmware debug output':'开启或关闭 WebUI 与固件调试日志输出','Waiting...':'等待中...','Download':'下载',
-  'Firmware Update':'固件更新','Manual OTA':'手动 OTA','Manual firmware upload only. Select a local .bin and flash it to the device.':'仅保留手动固件上传。选择本地 .bin 并刷写到设备。','Tap to select firmware .bin':'点击选择 firmware .bin','Or drag and drop a file here':'或将文件拖到这里','Uploading...':'上传中...','Flash Firmware':'刷写固件','Reset OTA Credentials':'重置 OTA 凭据','OTA Username:':'OTA 用户名：','OTA Password:':'OTA 密码：','Flashing...':'刷写中...','Connection error':'连接错误',
+  'Light':'浅色','Dark':'深色','Help':'帮助','Show':'展开','Hide':'收起','Waiting...':'等待中...','Error':'错误','Download':'下载',
+  'UI Mode':'界面模式','Auto UI':'自动界面','Auto':'自动','Manual':'手动','Car':'车机','Phone':'手机','Detected: Phone':'识别：手机','Detected: Car':'识别：车机','Manual: Phone':'手动：手机','Manual: Car':'手动：车机',
+  'Waiting for CAN frames':'等待 CAN 帧','Dashboard disconnected':'仪表盘已断开','Dashboard reconnecting':'仪表盘正在重连','CAN running':'CAN 正常','CAN OK':'CAN 正常','CAN waiting':'等待 CAN','No frames':'无帧','Offline':'离线',
+  'CAN Bus':'CAN 总线','CAN Frames':'CAN 帧','CAN TX':'CAN 发送','RX':'接收','TX':'发送','TX Errors':'发送错误','Uptime':'运行时间','Reboot':'重启','READ ONLY':'只读模式','CAN WRITE ON':'CAN 写入开启','Read Only':'只读模式',
+  'Frames received per second / total RX':'每秒接收帧数 / 总接收数','CAN Write':'CAN 写入','CAN Write On':'开启 CAN 写入','CAN Write Off':'关闭 CAN 写入','CAN write is enabled. Nag echo can transmit.':'CAN 写入已开启，Nag echo 可发送。','Read-only mode. CAN frames are monitored but not written.':'只读模式：只监听 CAN 帧，不写入。',
+  'Configuration':'配置','Device settings':'设备设置','Device settings for Nag, WiFi, DNS and logging.':'Nag、WiFi、DNS 和日志设置。','Nag / CAN Write':'Nag / CAN 写入','Nag Mode':'Nag 模式','A_V2 Range':'A_V2 范围',
+  'Read-only monitoring when off; Nag 0x370 echo writes when on.':'关闭时仅监听；开启时发送 Nag 0x370 echo。','OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'关闭 = 只读 CAN 监听。开启 = 允许 Nag 880 (0x370) 计数器 +1 echo 写入。','A = fixed +1.80 Nm. A_V2 warms up, then sweeps inside the range.':'A = 固定 +1.80 Nm。A_V2 预热后在范围内扫动。','Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.':'Nm 端点限制在 -1.80 到 +1.80；如果填反会自动交换。','A_V2: warmup + sweep':'A_V2：预热 + 扫动','A: fixed +1.80 Nm echo':'A：固定 +1.80 Nm echo','echo':'echo','skip':'跳过',
+  'Save':'保存','Saved':'已保存','Saving...':'保存中...','Save failed':'保存失败','CAN write save failed':'CAN 写入保存失败','Nag mode save failed':'Nag 模式保存失败','A_V2 range save failed':'A_V2 范围保存失败',
+  'System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','Chip':'芯片','CPU':'CPU','Clock / Bus':'时钟 / 总线','CPU Load':'CPU 负载','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Uptime / Core':'运行时间 / 核心','Heap RAM':'堆内存','Internal RAM':'内部 RAM','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','Flash / App':'Flash / 应用','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','warming up':'采样中','unavailable':'不可用','offline':'离线','not enabled':'未启用','enabled':'已启用','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','STA online':'STA 在线','STA offline':'STA 离线','on':'开启','off':'关闭','unknown':'未知','fixed':'固定',
+  'WiFi Hotspot':'WiFi 热点','Configure the device hotspot name, password and visibility. Saved in NVS.':'配置设备热点名称、密码和可见性，保存到 NVS。','Stored in NVS (non-volatile storage). The SSID and password survive firmware updates and reboots. Only a full factory erase via USB clears them.':'保存在 NVS（非易失存储）中。SSID 和密码在固件更新、重启后仍保留，只有通过 USB 完整恢复出厂才会清除。','Change the WiFi hotspot name and password':'修改 WiFi 热点名称和密码','Hotspot Name':'热点名称','New Password (min 8)':'新密码（至少 8 位）','Hide SSID':'隐藏 SSID','Don\'t broadcast the hotspot name \u2014 clients must enter it manually':'不广播热点名称，客户端需要手动输入','Changes take effect after reboot. Leave password empty to keep current.':'修改将在重启后生效。密码留空则保持当前密码。','Enter hotspot name':'请输入热点名称','Password min 8 chars':'密码至少 8 位','Saved! AP starts on CH1 and auto matches STA after WiFi connects.':'已保存！AP 从 CH1 启动，WiFi 连接后自动匹配 STA 信道。','firmware default':'固件默认值','sync':'同步','ok':'成功',
+  'WiFi Internet':'WiFi 上网','Up to 4 saved networks. The device tries each in turn until one connects.':'最多保存 4 个网络，设备会按顺序尝试直到连接成功。','Not configured':'未配置','Save up to 4 networks (e.g. home + phone hotspot). Device tries each in turn. Stored in NVS \u2014 survives firmware updates.':'最多保存 4 个网络（例如家里 WiFi + 手机热点）。设备会按顺序尝试，配置保存在 NVS 中，固件更新后仍保留。','Add network':'添加网络','WiFi SSID':'WiFi SSID','Scan':'扫描','Scanning...':'扫描中...','Scan failed':'扫描失败','No networks found':'未发现网络','Password':'密码','Save & Connect':'保存并连接','Static IP (optional)':'静态 IP（可选）','Set a fixed IP configuration instead of using DHCP.':'使用固定 IP 配置，而不是 DHCP。','Use static IP':'使用静态 IP','IP (e.g. 192.168.1.100)':'IP（如 192.168.1.100）','Gateway (e.g. 192.168.1.1)':'网关（如 192.168.1.1）','Mask (255.255.255.0)':'掩码（255.255.255.0）','DNS (e.g. 8.8.8.8)':'DNS（如 8.8.8.8）','No networks saved.':'未保存网络。','connected':'已连接','trying':'尝试中','saved':'已保存','[static]':'[静态]','[connected]':'[已连接]','[trying]':'[连接中]','Reconnect':'重新连接','Connect':'连接','Edit':'编辑','Delete':'删除','Save Changes':'保存修改','Leave empty to keep current':'留空则保持当前密码','Delete WiFi':'删除 WiFi','Delete failed':'删除失败','Enter SSID':'请输入 SSID','Connect failed':'连接失败','connect failed':'连接失败','save failed':'保存失败','retry in':'后重试','switch to that WiFi and open this IP':'切换到该 WiFi 后打开此 IP',
+  'STA-AP Gateway':'STA-AP 网关','Routes hotspot clients through the configured WiFi Internet uplink, with DNS filtering.':'通过已配置的 WiFi 上网链路转发热点客户端流量，并进行 DNS 过滤。','Gateway':'网关','Gateway status unavailable':'网关状态不可用','Enable STA-AP NAT routing for hotspot clients when WiFi Internet is connected':'WiFi 上网连接后，为热点客户端启用 STA-AP NAT 路由','Network Performance Mode':'网络性能模式','Reduce WebUI polling while AP+STA+NAPT is forwarding traffic':'AP+STA+NAPT 转发流量时降低 WebUI 轮询频率','ON: status 5s, network diagnostics 30s, heavy lists manual only':'开启：状态 5 秒，网络诊断 30 秒，重列表仅手动刷新','OFF: status 2s, network diagnostics 10s, DNS/filter lists auto refresh':'关闭：状态 2 秒，网络诊断 10 秒，DNS/过滤列表自动刷新','Car UI: status 7s, network diagnostics 45s, heavy lists manual only':'车机界面：状态 7 秒，网络诊断 45 秒，重列表仅手动刷新','Radio':'信道','DNS Slow':'DNS 慢请求','Pending':'待处理','Upstream':'上游','Upstream DNS':'上游 DNS','Custom':'自定义','223.5.5.5 Ali':'223.5.5.5 阿里','119.29.29.29 Tencent':'119.29.29.29 腾讯','Custom DNS, e.g. 8.8.8.8':'自定义 DNS，如 8.8.8.8','Save DNS':'保存 DNS','Reset DNS Stats':'清零 DNS 统计','Auto uses DHCP DNS from the connected WiFi; public DNS can avoid stale slow/fail counters from a bad router DNS.':'自动模式使用已连接 WiFi 的 DHCP DNS；公共 DNS 可避免路由器 DNS 异常导致的慢/失败计数。','Using Ali DNS 223.5.5.5.':'使用阿里 DNS 223.5.5.5。','Using Tencent DNS 119.29.29.29.':'使用腾讯 DNS 119.29.29.29。','Enter a custom upstream DNS IPv4 address.':'输入自定义上游 DNS IPv4 地址。','Conservative Mode':'保守模式','Aggressive Mode':'激进模式','Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.':'保守模式：WiFi 上网 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 语音助手。','Aggressive Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant / app vehicle control.':'激进模式：WiFi 上网 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 语音助手 / App 车辆控制。','Custom DNS profile':'自定义 DNS 方案','Blacklist':'黑名单','Whitelist':'白名单','Blocked domains, one per line':'拦截域名，每行一个','Allowed domains, one per line':'放行域名，每行一个','Filter List':'过滤清单','Refresh':'刷新','Clear':'清空','Test domain':'测试域名','Test DNS':'测试 DNS','Gateway ON':'网关开启','Gateway OFF':'网关关闭','READY':'就绪','WAITING':'等待中','blocked':'已拦截','pending FULL':'待处理已满','DNS cache':'DNS 缓存','compiled':'已编译','not compiled':'未编译','same':'同信道','cross':'跨信道','task':'任务运行','no task':'无任务','bind ok':'绑定正常','bind wait':'等待绑定','last':'最近','avg':'平均','max':'最大','full':'已满','timeout':'超时','fail':'失败','none':'无','custom':'自定义','Gateway not available':'网关不可用','Remote DNS list changed. Finish editing or save to overwrite.':'远端 DNS 列表已变化。请完成编辑或保存以覆盖。','Resetting DNS stats...':'正在清零 DNS 统计...','DNS stats reset':'DNS 统计已清零','Whitelist allows specific subdomain exceptions; blocked root domains cannot be reopened.':'白名单允许特定子域例外；已拦截的根域不能重新放行。','items':'项','No blocked domains recorded':'暂无被拦截域名记录','Already in blacklist':'已在黑名单','Already whitelisted':'已在白名单','Not allowed':'不允许','Add to Whitelist':'加入白名单','DNS filter list unavailable':'DNS 过滤列表不可用','empty domain':'域名为空','would be blocked':'将被拦截','would be allowed':'将被放行','gateway disabled':'网关未启用','DNS test failed':'DNS 测试失败','cannot add domain':'无法添加域名','Cleared':'已清空','matched whitelist':'命中白名单','matched blacklist':'命中黑名单','not in blacklist':'不在黑名单','domain is blocked root':'该域名是被拦截根域','whitelist full (max 200)':'白名单已满（最多 200）',
+  'Debug Log':'调试日志','Debug logging':'调试日志','Recent debug output':'最近调试输出','Shows recent WebUI and firmware log lines.':'显示最近的 WebUI 和固件日志。','Turns WebUI debug log output on or off.':'开启或关闭 WebUI 调试日志输出。','Toggle WebUI and firmware debug output':'开启或关闭 WebUI 与固件调试日志输出',
+  'Firmware Update':'固件更新','Manual OTA':'手动 OTA','Manual firmware upload only. Select a local .bin and flash it to the device.':'仅保留手动固件上传。选择本地 .bin 并刷写到设备。','Tap to select firmware .bin':'点击选择 firmware .bin','Or drag and drop a file here':'或将文件拖到这里','Uploading...':'上传中...','Flash Firmware':'刷写固件','Reset OTA Credentials':'重置 OTA 凭据','OTA Credentials Reset':'OTA 凭据已重置','OTA Username:':'OTA 用户名：','OTA Password:':'OTA 密码：','Flashing...':'刷写中...','Done! Device is rebooting...':'完成！设备正在重启...','Upload failed:':'上传失败：','Connection error':'连接错误','Use the generated PlatformIO firmware.bin for this board.':'请使用为这块板生成的 PlatformIO firmware.bin。','Current build path:':'当前构建路径：',
   'Confirm':'确认','Continue':'继续','Cancel':'取消','Reboot device?':'重启设备？','CAN bus writes affect vehicle behavior. Remove device immediately if unexpected behavior occurs. Not affiliated with any vehicle manufacturer.':'CAN 写入会影响车辆行为。如出现异常请立即拔除设备。与任何车厂无关联。'
-};const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
+};
+Object.assign(I18N_ZH,{'Ali':'阿里','Tencent':'腾讯','fetch error':'获取失败','network':'网络错误','scan failed':'扫描失败'});
+const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
 Object.assign(I18N_EN,{});
-const I18N_RX=[];
+const I18N_RX=[
+  [/^Connection to (.+) lost\. Reload after reconnecting\.$/,'与 $1 的连接已断开。重连后请刷新页面。'],
+  [/^Connection to (.+) lost\. Switch to your normal WiFi and open (.+)$/,'与 $1 的连接已断开。请切回常用 WiFi 并打开 $2'],
+  [/^Connected: (.+) \u2022 (.+) \u2022 switch to that WiFi and open this IP$/,'已连接：$1 \u2022 $2 \u2022 切换到该 WiFi 后打开此 IP'],
+  [/^Connected: (.+) \u2022 (.+)$/,'已连接：$1 \u2022 $2'],
+  [/^Connecting to (.+)\.\.\.$/,'正在连接 $1...'],
+  [/^Connecting to (.+)$/,'正在连接 $1'],
+  [/^(.+) saved \u2022 retry in ([0-9]+)s(.*)$/,'已保存 $1 个 \u2022 $2s 后重试$3'],
+  [/^(.+) saved(.*)$/,'已保存 $1 个$2'],
+  [/^Max ([0-9]+) networks$/,'最多保存 $1 个网络'],
+  [/^Delete network "(.+)"\?$/,'删除网络“$1”？'],
+  [/^AP CH(.+) \u2022 auto match STA(.*)$/,'AP 信道$1 \u2022 自动匹配 STA$2'],
+  [/^([0-9]+) clients?$/,'$1 个客户端'],
+  [/^Whitelist ([0-9]+)\/([0-9]+) \u2022 Blacklist ([0-9]+)\/([0-9]+)$/,'白名单 $1/$2 \u2022 黑名单 $3/$4'],
+  [/^Gateway (ON|OFF) \u2022 NAT (READY|WAITING) \u2022 AP clients ([0-9]+) \u2022 blocked ([0-9]+)(.*)$/,'网关$1 \u2022 NAT $2 \u2022 AP 客户端 $3 \u2022 已拦截 $4$5'],
+  [/^(.+) free \/ (.+) total \u2022 used ([0-9]+)%$/,'$1 可用 / 总计 $2 \u2022 已用 $3%'],
+  [/^(.+) used \/ (.+) \u2022 ([0-9]+)%$/,'$1 已用 / $2 \u2022 $3%'],
+  [/^(.+) tasks$/,'$1 个任务'],
+  [/^(.+) cores \u2022 (.+) MHz now$/,'$1 核 \u2022 当前 $2 MHz'],
+  [/^(.+) cores \u2022 (.+) \u2022 max (.+) MHz$/,'$1 核 \u2022 $2 \u2022 最高 $3 MHz'],
+  [/^running on core (.+)$/,'运行于核心 $1'],
+  [/^Uploading\.\.\. ([0-9]+)%$/,'上传中... $1%'],
+  [/^Upload failed: (.+)$/,'上传失败：$1']
+];
 function trText(value){
   let s=String(value);
   if(dashLang!=='zh')return I18N_EN[s]||s;
@@ -723,6 +753,10 @@ function trText(value){
 }
 const setText=(id,value)=>{const el=$(id);if(el)el.textContent=trText(value);};
 const setClass=(id,value)=>{const el=$(id);if(el)el.className=value;};
+function clientCountText(n){
+  n=Number(n)||0;
+  return dashLang==='zh'?(n+' 个客户端'):(n+' client'+(n===1?'':'s'));
+}
 function injectionStatusLabel(armed){
   return armed?(dashLang==='zh'?'\u5199\u5165\u5f00\u542f':'CAN WRITE ON'):(dashLang==='zh'?'\u53ea\u8bfb\u6a21\u5f0f':'READ ONLY');
 }
@@ -777,7 +811,7 @@ function setCollapsedPanel(el,collapsed,persist){
   if(!el)return;
   el.classList.toggle('collapsed',!!collapsed);
   const btn=el.querySelector('.card-min-btn,.subsec-btn');
-  if(btn)btn.textContent=collapsed?'Show':'Hide';
+  if(btn)btn.textContent=trText(collapsed?'Show':'Hide');
   if(persist&&el.dataset.collapseKey)localStorage.setItem(el.dataset.collapseKey,collapsed?'1':'0');
 }
 function expandCarEssentials(){
@@ -793,8 +827,8 @@ function updateUiModeUi(){
     btn.classList.toggle('active',active);
     btn.setAttribute('aria-pressed',active?'true':'false');
   });
-  const label=uiModeEffective==='car'?'Detected: Car':'Detected: Phone';
-  const el=$('ui-mode-detected');if(el){el.textContent=(uiModeSetting==='auto'?label:('Manual: '+(uiModeEffective==='car'?'Car':'Phone')));applyDashboardI18n(el);}
+  const label=trText(uiModeEffective==='car'?'Detected: Car':'Detected: Phone');
+  const el=$('ui-mode-detected');if(el){el.textContent=(uiModeSetting==='auto'?label:(trText('Manual')+': '+trText(uiModeEffective==='car'?'Car':'Phone')));}
   const side=$('car-side-mode');if(side){side.textContent=trText(uiModeSetting==='auto'?'Auto':'Manual')+' / '+trText(uiModeEffective==='car'?'Car':'Phone');}
 }
 function applyWifiNagMode(){
@@ -839,10 +873,10 @@ function stopDashboardPolling(){
   dashboardPollTimers=[];
   if(systemStatusTimer){clearInterval(systemStatusTimer);systemStatusTimer=null;}
   $('dot').className='sdot dot-off';
-  $('hdr-desc').textContent='Dashboard disconnected';
+  $('hdr-desc').textContent=trText('Dashboard disconnected');
   let msg='Connection to '+location.hostname+' lost. Reload after reconnecting.';
   if(dashboardStaIp&&dashboardStaIp!==location.hostname)msg='Connection to '+location.hostname+' lost. Switch to your normal WiFi and open http://'+dashboardStaIp;
-  $('wifi-status').textContent=msg;
+  $('wifi-status').textContent=trText(msg);
   $('wifi-status').style.color='var(--err)';
 }
 
@@ -902,7 +936,7 @@ function noteDashboardPoll(ok){
   dashboardStatusOk=false;
   dashboardPollFailures++;
   $('dot').className='sdot dot-off';
-  $('hdr-desc').textContent='Dashboard reconnecting';
+  $('hdr-desc').textContent=trText('Dashboard reconnecting');
 }
 
 async function fetchPollJson(url,timeoutMs,trackConnection){
@@ -953,7 +987,7 @@ function initCardMinimizers(){
       const collapsed=!card.classList.contains('collapsed');
       card.classList.toggle('collapsed',collapsed);
       localStorage.setItem(key,collapsed?'1':'0');
-      btn.textContent=collapsed?'Show':'Hide';
+      btn.textContent=trText(collapsed?'Show':'Hide');
     };
     hdr.appendChild(btn);
     const stored=localStorage.getItem(key);
@@ -961,7 +995,7 @@ function initCardMinimizers(){
     const carDefaultOpen=isCarUiActive()&&(titleText.startsWith('configuration')||titleText.startsWith('system status'));
     const collapsed=stored===null?!carDefaultOpen:stored==='1';
     card.classList.toggle('collapsed',collapsed);
-    btn.textContent=collapsed?'Show':'Hide';
+    btn.textContent=trText(collapsed?'Show':'Hide');
   });
 }
 function initSubsectionMinimizers(){
@@ -979,14 +1013,14 @@ function initSubsectionMinimizers(){
       const collapsed=!sec.classList.contains('collapsed');
       sec.classList.toggle('collapsed',collapsed);
       localStorage.setItem(key,collapsed?'1':'0');
-      btn.textContent=collapsed?'Show':'Hide';
+      btn.textContent=trText(collapsed?'Show':'Hide');
     };
     hdr.appendChild(btn);
     const stored=localStorage.getItem(key);
     const carDefaultOpen=isCarUiActive()&&['config-hardware','config-wifi-internet','config-gateway'].includes(explicitKey);
     const collapsed=stored===null?!carDefaultOpen:stored==='1';
     sec.classList.toggle('collapsed',collapsed);
-    btn.textContent=collapsed?'Show':'Hide';
+    btn.textContent=trText(collapsed?'Show':'Hide');
   });
 }
 
@@ -1031,10 +1065,10 @@ function dashConfirm(message,title,okText,cancelText){
   if(dashConfirmState)dashConfirmResolve(false);
   return new Promise(resolve=>{
     dashConfirmState={resolve};
-    $('confirm-title').textContent=title||'Confirm';
-    $('confirm-msg').textContent=message||'';
-    $('confirm-ok').textContent=okText||'Continue';
-    $('confirm-cancel').textContent=cancelText||'Cancel';
+    $('confirm-title').textContent=trText(title||'Confirm');
+    $('confirm-msg').textContent=trText(message||'');
+    $('confirm-ok').textContent=trText(okText||'Continue');
+    $('confirm-cancel').textContent=trText(cancelText||'Cancel');
     $('confirm-modal').style.display='flex';
     document.body.style.overflow='hidden';
     setTimeout(()=>{$('confirm-ok').focus();},0);
@@ -1101,6 +1135,7 @@ function applyDashboardI18n(root){
   updateLanguageButton();
 }
 function updateLanguageButton(){
+  document.documentElement.setAttribute('lang',dashLang==='zh'?'zh-CN':'en');
   const b=$('lang-btn');if(b)b.textContent=dashLang==='zh'?'English':'\u4e2d\u6587';
 }
 function toggleLanguage(){
@@ -1157,7 +1192,7 @@ function updateFsdControl(d){
   const enabled=!!d.ci;
   state.can=enabled;
   const writeTgl=$('can-write-tgl');if(writeTgl)writeTgl.checked=enabled;
-  const nagMeta=$('nag-echo-meta');if(nagMeta&&typeof d.nagEcho!=='undefined')nagMeta.textContent='echo: '+d.nagEcho;
+  const nagMeta=$('nag-echo-meta');if(nagMeta&&typeof d.nagEcho!=='undefined')nagMeta.textContent=trText('echo')+': '+d.nagEcho;
   updateNagControl(d);
 }
 
@@ -1171,7 +1206,7 @@ async function saveCanWrite(){
     updateInjectButtons(state.can);
     poll();
   }catch(e){
-    addLog('CAN write save failed','le');
+    addLog(trText('CAN write save failed'),'le');
   }
 }
 
@@ -1188,7 +1223,7 @@ function updateNagControl(d){
   const last=Number(d.nagLastTorqueNm||0);
   const liveMeta=$('nag-live-meta');if(liveMeta)liveMeta.textContent=(dashLang==='zh'?'\u5b9e\u65f6: ':'live: ')+live.toFixed(2)+' Nm';
   const writeMeta=$('nag-write-meta');if(writeMeta)writeMeta.textContent=(dashLang==='zh'?'\u5199\u5165: ':'write: ')+last.toFixed(2)+' Nm';
-  const av2=$('nag-av2-meta');if(av2)av2.textContent='skip: '+(d.nagOwnEchoSkip||0);
+  const av2=$('nag-av2-meta');if(av2)av2.textContent=trText('skip')+': '+(d.nagOwnEchoSkip||0);
 }
 
 async function setNagMode(mode){
@@ -1199,7 +1234,7 @@ async function setNagMode(mode){
     const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'nagMode='+mode});
     if(!r.ok)throw new Error('HTTP '+r.status);
     poll();
-  }catch(e){addLog('Nag mode save failed','le');}
+  }catch(e){addLog(trText('Nag mode save failed'),'le');}
 }
 
 async function saveNagAv2(){
@@ -1217,7 +1252,7 @@ async function saveNagAv2(){
     if(!r.ok)throw new Error('HTTP '+r.status);
     state.nagAv2Min=min;state.nagAv2Max=max;
     poll();
-  }catch(e){addLog('A_V2 range save failed','le');}
+  }catch(e){addLog(trText('A_V2 range save failed'),'le');}
 }
 
 async function pushLogging(){
@@ -1391,8 +1426,8 @@ function resetOtaCredentials(){
   otaPass='';
   const btn=$('ota-reset-btn');
   if(btn){
-    btn.textContent='OTA Credentials Reset';
-    setTimeout(()=>{btn.textContent='Reset OTA Credentials';},1500);
+    btn.textContent=trText('OTA Credentials Reset');
+    setTimeout(()=>{btn.textContent=trText('Reset OTA Credentials');},1500);
   }
 }
 
@@ -1406,30 +1441,30 @@ async function uploadFirmware(){
   const status=$('ota-status');
   prog.style.display='block';
   $('ota-upload-btn').disabled=true;
-  $('ota-upload-btn').textContent='Flashing...';
+  $('ota-upload-btn').textContent=trText('Flashing...');
 
   const xhr=new XMLHttpRequest();
   xhr.upload.onprogress=e=>{
     if(e.lengthComputable){
       const pct=Math.round(e.loaded/e.total*100);
       setFillElement(fill,pct);
-      status.textContent='Uploading... '+pct+'%';
+      status.textContent=trText('Uploading... '+pct+'%');
     }
   };
   xhr.onload=()=>{
     if(xhr.status===200){
-      status.textContent='Done! Device is rebooting...';
+      status.textContent=trText('Done! Device is rebooting...');
       setFillElement(fill,100);
       setTimeout(()=>window.location.reload(),5000);
     } else {
-      status.textContent='Upload failed: '+xhr.status;
+      status.textContent=trText('Upload failed: '+xhr.status);
       status.style.color='var(--err)';
     }
     $('ota-upload-btn').disabled=false;
-    $('ota-upload-btn').textContent='Flash Firmware';
+    $('ota-upload-btn').textContent=trText('Flash Firmware');
   };
   xhr.onerror=()=>{
-    status.textContent='Connection error';
+    status.textContent=trText('Connection error');
     status.style.color='var(--err)';
     $('ota-upload-btn').disabled=false;
   };
@@ -1504,28 +1539,28 @@ async function pollLog(){
 // AP Hotspot management
 async function saveAP(){
   const ssid=$('ap-ssid').value,pass=$('ap-pass').value,hidden=$('ap-hidden').checked?'1':'0';
-  if(!ssid){$('ap-status').textContent='Enter hotspot name';$('ap-status').style.color='var(--err)';return;}
-  if(pass&&pass.length<8){$('ap-status').textContent='Password min 8 chars';$('ap-status').style.color='var(--err)';return;}
+  if(!ssid){$('ap-status').textContent=trText('Enter hotspot name');$('ap-status').style.color='var(--err)';return;}
+  if(pass&&pass.length<8){$('ap-status').textContent=trText('Password min 8 chars');$('ap-status').style.color='var(--err)';return;}
   try{const r=await fetch('/ap_config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'ssid='+encodeURIComponent(ssid)+'&pass='+encodeURIComponent(pass)+'&hidden='+hidden});
     const d=await r.json();
-    if(d.ok){$('ap-status').textContent=d.msg||'Saved! AP starts on CH1 and auto matches STA after WiFi connects.';$('ap-status').style.color='var(--ok)';$('ap-pass').value='';}
-    else{$('ap-status').textContent=d.error||'Error';$('ap-status').style.color='var(--err)';}
-  }catch(e){$('ap-status').textContent='Error';$('ap-status').style.color='var(--err)';}
+    if(d.ok){$('ap-status').textContent=trText(d.msg||'Saved! AP starts on CH1 and auto matches STA after WiFi connects.');$('ap-status').style.color='var(--ok)';$('ap-pass').value='';}
+    else{$('ap-status').textContent=trText(d.error||'Error');$('ap-status').style.color='var(--err)';}
+  }catch(e){$('ap-status').textContent=trText('Error');$('ap-status').style.color='var(--err)';}
 }
 async function loadApStatus(){
   return runPoll('ap_status',async()=>{
     if(!dashboardStatusOk)return;
     try{const d=await fetchPollJson('/ap_status',2000);
     if(d.ssid)$('ap-ssid').value=d.ssid;
-    $('ap-clients').textContent=d.clients+' client'+(d.clients!==1?'s':'');
+    $('ap-clients').textContent=clientCountText(d.clients);
     if(typeof d.hidden!=='undefined')$('ap-hidden').checked=!!d.hidden;
     if($('ap-status')){
-      const sync=d.last_channel_sync_ms?(' \u2022 sync '+(d.last_channel_sync_ok?'ok':'fail')+' CH'+(d.last_channel_sync_target||'?')):'';
-      $('ap-status').textContent='AP CH'+(d.channel||'?')+' \u2022 auto match STA'+sync;
+      const sync=d.last_channel_sync_ms?(' \u2022 '+trText('sync')+' '+trText(d.last_channel_sync_ok?'ok':'fail')+' CH'+(d.last_channel_sync_target||'?')):'';
+      $('ap-status').textContent=trText('AP CH'+(d.channel||'?')+' \u2022 auto match STA'+sync);
       $('ap-status').style.color='var(--tx3)';
     }
-    if(d.stored){$('ap-stored').textContent='saved';$('ap-stored').style.color='var(--ok)';}
-    else{$('ap-stored').textContent='firmware default';$('ap-stored').style.color='var(--tx3)';}
+    if(d.stored){$('ap-stored').textContent=trText('saved');$('ap-stored').style.color='var(--ok)';}
+    else{$('ap-stored').textContent=trText('firmware default');$('ap-stored').style.color='var(--tx3)';}
     }catch(e){}
   });
 }
@@ -1554,15 +1589,15 @@ function wifiAuthLabel(a){
   return 'AUTH'+(Number.isFinite(n)?n:'?');
 }
 async function scanWifi(){
-  $('scan-btn').textContent='Scanning...';$('scan-btn').disabled=true;
+  $('scan-btn').textContent=trText('Scanning...');$('scan-btn').disabled=true;
   try{
     const r=await fetch('/wifi_scan?force=1');const d=await r.json();
     if(!r.ok)throw new Error(d.error||'scan failed');
     const el=$('wifi-nets');
-    if(!d.networks.length){el.innerHTML='<div style="padding:8px;font-size:11px;color:var(--tx3);text-align:center">No networks found</div>';el.style.display='block';}
+    if(!d.networks.length){el.innerHTML='<div style="padding:8px;font-size:11px;color:var(--tx3);text-align:center">'+trText('No networks found')+'</div>';el.style.display='block';}
     else{el.innerHTML=d.networks.map(n=>'<div data-wifi-ssid="'+escapeHtml(n.ssid)+'" style="padding:6px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd);font-size:12px" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'\'"><span>'+(n.enc?'\uD83D\uDD12 ':'')+escapeHtml(n.ssid)+'</span><span style="color:var(--tx3);font-size:10px">'+rssiIcon(n.rssi)+' '+n.rssi+'dBm CH'+n.ch+' '+wifiAuthLabel(n.auth)+'</span></div>').join('');el.querySelectorAll('[data-wifi-ssid]').forEach(row=>row.onclick=()=>pickWifi(row.dataset.wifiSsid||''));el.style.display='block';}
-  }catch(e){$('wifi-status').textContent='Scan failed';$('wifi-status').style.color='var(--err)';}
-  $('scan-btn').textContent='Scan';$('scan-btn').disabled=false;
+  }catch(e){$('wifi-status').textContent=trText('Scan failed');$('wifi-status').style.color='var(--err)';}
+  $('scan-btn').textContent=trText('Scan');$('scan-btn').disabled=false;
 }
 function pickWifi(ssid){
   $('wifi-ssid').value=ssid;$('wifi-nets').style.display='none';$('wifi-pass').focus();
@@ -1580,15 +1615,15 @@ function renderWifiSlots(){
   const tryingIdx=(!wifiStatusCache.connected&&wifiStatusCache.connecting)?active:-1;
   cnt.textContent='('+nets.length+'/'+max+')';
   if(!nets.length){
-    list.innerHTML='<div style="font-size:11px;color:var(--tx3);padding:6px 0">No networks saved.</div>';
+    list.innerHTML='<div style="font-size:11px;color:var(--tx3);padding:6px 0">'+trText('No networks saved.')+'</div>';
   }else{
     list.innerHTML=nets.map(n=>{
       const isConnected=connectedSsid&&n.ssid===connectedSsid;
       const isTrying=n.idx===tryingIdx;
       const dotColor=isConnected?'var(--ok)':(isTrying?'var(--warn)':'var(--tx3)');
-      const dot='<span title="'+(isConnected?'connected':(isTrying?'trying':'saved'))+'" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+dotColor+';margin-right:6px"></span>';
-      const tag=n.static?'<span style="font-size:10px;color:var(--tx3);margin-left:6px">[static]</span>':'';
-      const state=isConnected?'<span style="font-size:10px;color:var(--ok);margin-left:6px">[connected]</span>':(isTrying?'<span style="font-size:10px;color:var(--warn);margin-left:6px">[trying]</span>':'');
+      const dot='<span title="'+trText(isConnected?'connected':(isTrying?'trying':'saved'))+'" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+dotColor+';margin-right:6px"></span>';
+      const tag=n.static?'<span style="font-size:10px;color:var(--tx3);margin-left:6px">'+trText('[static]')+'</span>':'';
+      const state=isConnected?'<span style="font-size:10px;color:var(--ok);margin-left:6px">'+trText('[connected]')+'</span>':(isTrying?'<span style="font-size:10px;color:var(--warn);margin-left:6px">'+trText('[trying]')+'</span>':'');
       const connectLabel=isConnected?'Reconnect':'Connect';
       return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12px">'+
         '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+dot+escapeHtml(n.ssid)+tag+state+'</div>'+
@@ -1646,7 +1681,7 @@ async function connectWifiSlot(idx){
   const n=(wifiSlotCache.networks||[]).find(x=>x.idx===idx);
   if(!n)return;
   try{
-    $('wifi-status').textContent=trText('Connecting to ')+n.ssid+'...';
+    $('wifi-status').textContent=trText('Connecting to '+n.ssid+'...');
     $('wifi-status').style.color='var(--acc)';
     const r=await fetch('/wifi_connect',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'idx='+idx});
     const d=await r.json().catch(()=>({}));
@@ -1658,7 +1693,7 @@ async function connectWifiSlot(idx){
     setTimeout(loadWifiStatus,2500);
     setTimeout(loadWifiStatus,6500);
   }catch(e){
-    $('wifi-status').textContent=e.message||'Connect failed';
+    $('wifi-status').textContent=trText(e.message||'Connect failed');
     $('wifi-status').style.color='var(--err)';
   }
 }
@@ -1695,15 +1730,15 @@ async function deleteWifiSlot(idx){
     await fetch('/wifi_delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'idx='+idx});
     if(parseInt($('wifi-edit-idx').value,10)===idx)clearWifiForm();
     loadWifiNetworks();loadWifiStatus();
-  }catch(e){$('wifi-status').textContent='Delete failed';$('wifi-status').style.color='var(--err)';}
+  }catch(e){$('wifi-status').textContent=trText('Delete failed');$('wifi-status').style.color='var(--err)';}
 }
 async function saveWifi(){
   const ssid=$('wifi-ssid').value,pass=$('wifi-pass').value;
-  if(!ssid){$('wifi-status').textContent='Enter SSID';$('wifi-status').style.color='var(--err)';return;}
+  if(!ssid){$('wifi-status').textContent=trText('Enter SSID');$('wifi-status').style.color='var(--err)';return;}
   const editIdx=parseInt($('wifi-edit-idx').value,10);
   const isEdit=editIdx>=0;
   if(!isEdit&&(wifiSlotCache.count||0)>=(wifiSlotCache.max||4)){
-    $('wifi-status').textContent='Max '+(wifiSlotCache.max||4)+' networks';$('wifi-status').style.color='var(--err)';return;
+    $('wifi-status').textContent=trText('Max '+(wifiSlotCache.max||4)+' networks');$('wifi-status').style.color='var(--err)';return;
   }
   let effectivePass=pass;
   if(isEdit&&!pass){
@@ -1718,13 +1753,13 @@ async function saveWifi(){
     const r=await fetch('/wifi_config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
     const d=await r.json();
     if(!d.ok)throw new Error(d.error||'save failed');
-    $('wifi-status').textContent='Connecting to '+ssid+'...';$('wifi-status').style.color='var(--acc)';
+    $('wifi-status').textContent=trText('Connecting to '+ssid+'...');$('wifi-status').style.color='var(--acc)';
     clearWifiForm();
     loadWifiNetworks();
     setTimeout(loadWifiStatus,500);
     setTimeout(loadWifiStatus,2500);
     setTimeout(loadWifiStatus,5500);
-  }catch(e){$('wifi-status').textContent=e.message||'Error';$('wifi-status').style.color='var(--err)';}
+  }catch(e){$('wifi-status').textContent=trText(e.message||'Error');$('wifi-status').style.color='var(--err)';}
 }
 // 鈹€鈹€ STA-AP Gateway / DNS 鈹€鈹€
 let gatewayDnsSaving=false;
@@ -1853,7 +1888,7 @@ function applyGatewayDnsState(d,opts){
   var ce=$('gw-list-counts');
   if(ce){
     var bc=d.black_count||0,bm=d.black_max||100,wc=d.white_count||0,wm=d.white_max||200;
-    ce.textContent='Whitelist '+wc+'/'+wm+' \u2022 Blacklist '+bc+'/'+bm;
+    ce.textContent=trText('Whitelist '+wc+'/'+wm+' \u2022 Blacklist '+bc+'/'+bm);
     ce.style.color=(wc>=wm||bc>=bm)?'var(--err)':'var(--tx3)';
   }
   if(!opts.cached)writeGatewayDnsCache(d);
@@ -1909,31 +1944,31 @@ async function loadGatewayStatus(){
       const d=await fetchPollJson('/gateway_status',2000);
       if(!$('gw-status'))return;
       const clients=d.ap_clients||0;
-      var statusText=(d.enabled?'Gateway ON':'Gateway OFF')+' \u2022 NAT '+(d.nat?'READY':'WAITING')+' \u2022 AP clients '+clients+' \u2022 blocked '+(d.blocked||0);
-      if((d.dns_pending_full||0)>0)statusText+=' \u2022 pending FULL '+d.dns_pending_full;
-      if(d.dns_resp_cache)statusText+=' \u2022 DNS cache '+(d.dns_resp_hits||0)+'/'+((d.dns_resp_hits||0)+(d.dns_resp_misses||0));
+      var statusText=trText(d.enabled?'Gateway ON':'Gateway OFF')+' \u2022 NAT '+trText(d.nat?'READY':'WAITING')+' \u2022 '+trText('AP Clients')+' '+clients+' \u2022 '+trText('blocked')+' '+(d.blocked||0);
+      if((d.dns_pending_full||0)>0)statusText+=' \u2022 '+trText('pending FULL')+' '+d.dns_pending_full;
+      if(d.dns_resp_cache)statusText+=' \u2022 '+trText('DNS cache')+' '+(d.dns_resp_hits||0)+'/'+((d.dns_resp_hits||0)+(d.dns_resp_misses||0));
       $('gw-status').textContent=statusText;
       $('gw-status').style.color=!d.enabled?'var(--tx3)':((d.dns_pending_full||0)>0?'var(--err)':(d.nat?'var(--ok)':'var(--warn)'));
       const apCh=d.ap_channel?('CH'+d.ap_channel):'CH?';
       const staCh=d.sta_channel?('CH'+d.sta_channel):'CH?';
       const staRssi=(d.sta_rssi===null||d.sta_rssi===undefined)?'RSSI ?':('RSSI '+d.sta_rssi+' dBm');
-      setGatewayDiag('gw-diag-ap',(d.ap_ip||'0.0.0.0')+' \u2022 '+apCh+' \u2022 '+clients+' client'+(clients===1?'':'s'),clients?'var(--ok)':'var(--tx)');
-      setGatewayDiag('gw-diag-sta',d.sta_connected?((d.sta_ip||'0.0.0.0')+' \u2022 '+staRssi+' \u2022 '+staCh):'offline',''+(d.sta_connected?'var(--ok)':'var(--tx3)'));
-      setGatewayDiag('gw-diag-nat',(d.napt_compiled?'compiled':'not compiled')+' / '+(d.nat?'READY':'WAITING'),d.nat?'var(--ok)':(d.enabled?'var(--warn)':'var(--tx3)'));
-      setGatewayDiag('gw-diag-radio',apCh+' / STA '+staCh+' \u2022 '+(d.same_channel?'same':'cross'),d.same_channel?'var(--ok)':(d.sta_connected?'var(--warn)':'var(--tx3)'));
-      setGatewayDiag('gw-diag-dns',(d.dns_task_active?'task':'no task')+' / '+(d.dns_bind_ok?'bind ok':'bind wait')+' / fd '+(d.dns_sock===undefined?'--':d.dns_sock),d.dns_task_active&&d.dns_bind_ok?'var(--ok)':'var(--warn)');
-      setGatewayDiag('gw-diag-slow','last '+(d.dns_latency_last_ms||0)+' ms \u2022 avg '+(d.dns_latency_avg_ms||0)+' ms \u2022 >500/'+(d.dns_slow_500ms||0)+' >1s/'+(d.dns_slow_1000ms||0)+' >2s/'+(d.dns_slow_2000ms||0),gatewayDnsSlowColor(d));
-      setGatewayDiag('gw-diag-pending',(d.dns_pending||0)+'/'+(d.dns_pending_capacity||64)+' \u2022 max '+(d.dns_pending_max||0)+' \u2022 full '+(d.dns_pending_full||0)+' \u2022 timeout '+(d.dns_timeouts||0),((d.dns_pending_full||0)>0||(d.dns_timeouts||0)>0)?'var(--err)':'var(--ok)');
+      setGatewayDiag('gw-diag-ap',(d.ap_ip||'0.0.0.0')+' \u2022 '+apCh+' \u2022 '+clientCountText(clients),clients?'var(--ok)':'var(--tx)');
+      setGatewayDiag('gw-diag-sta',d.sta_connected?((d.sta_ip||'0.0.0.0')+' \u2022 '+staRssi+' \u2022 '+staCh):trText('offline'),''+(d.sta_connected?'var(--ok)':'var(--tx3)'));
+      setGatewayDiag('gw-diag-nat',trText(d.napt_compiled?'compiled':'not compiled')+' / '+trText(d.nat?'READY':'WAITING'),d.nat?'var(--ok)':(d.enabled?'var(--warn)':'var(--tx3)'));
+      setGatewayDiag('gw-diag-radio',apCh+' / STA '+staCh+' \u2022 '+trText(d.same_channel?'same':'cross'),d.same_channel?'var(--ok)':(d.sta_connected?'var(--warn)':'var(--tx3)'));
+      setGatewayDiag('gw-diag-dns',trText(d.dns_task_active?'task':'no task')+' / '+trText(d.dns_bind_ok?'bind ok':'bind wait')+' / fd '+(d.dns_sock===undefined?'--':d.dns_sock),d.dns_task_active&&d.dns_bind_ok?'var(--ok)':'var(--warn)');
+      setGatewayDiag('gw-diag-slow',trText('last')+' '+(d.dns_latency_last_ms||0)+' ms \u2022 '+trText('avg')+' '+(d.dns_latency_avg_ms||0)+' ms \u2022 >500/'+(d.dns_slow_500ms||0)+' >1s/'+(d.dns_slow_1000ms||0)+' >2s/'+(d.dns_slow_2000ms||0),gatewayDnsSlowColor(d));
+      setGatewayDiag('gw-diag-pending',(d.dns_pending||0)+'/'+(d.dns_pending_capacity||64)+' \u2022 '+trText('max')+' '+(d.dns_pending_max||0)+' \u2022 '+trText('full')+' '+(d.dns_pending_full||0)+' \u2022 '+trText('timeout')+' '+(d.dns_timeouts||0),((d.dns_pending_full||0)>0||(d.dns_timeouts||0)>0)?'var(--err)':'var(--ok)');
       const upModeName=String(d.upstream_dns_mode_name||'auto').toLowerCase();
       const upMode=gatewayUpstreamModeLabel(upModeName);
-      var upText=(d.upstream_dns||'none')+' \u2022 '+upMode;
-      if(upModeName==='auto')upText+=' \u2022 DHCP '+(d.upstream_dns_dhcp||'none');
-      else if(upModeName==='custom')upText+=' \u2022 custom '+(d.upstream_dns_custom||'none');
-      upText+=' \u2022 fail '+(d.dns_upstream_fails||0);
+      var upText=trText(d.upstream_dns||'none')+' \u2022 '+upMode;
+      if(upModeName==='auto')upText+=' \u2022 DHCP '+trText(d.upstream_dns_dhcp||'none');
+      else if(upModeName==='custom')upText+=' \u2022 '+trText('custom')+' '+trText(d.upstream_dns_custom||'none');
+      upText+=' \u2022 '+trText('fail')+' '+(d.dns_upstream_fails||0);
       setGatewayDiag('gw-diag-upstream',upText,(d.dns_upstream_fails||0)>0?'var(--warn)':'var(--tx)');
-      setGatewayDiag('gw-diag-clients',clients+' client'+(clients===1?'':'s'),clients?'var(--ok)':'var(--tx3)');
+      setGatewayDiag('gw-diag-clients',clientCountText(clients),clients?'var(--ok)':'var(--tx3)');
     }catch(e){
-      if($('gw-status')){$('gw-status').textContent='Gateway not available';$('gw-status').style.color='var(--tx3)';}
+      if($('gw-status')){$('gw-status').textContent=trText('Gateway not available');$('gw-status').style.color='var(--tx3)';}
       ['gw-diag-ap','gw-diag-sta','gw-diag-nat','gw-diag-radio','gw-diag-dns','gw-diag-slow','gw-diag-pending','gw-diag-upstream','gw-diag-clients'].forEach(id=>setGatewayDiag(id,'--','var(--tx3)'));
     }
   });
@@ -1960,14 +1995,14 @@ async function resetGatewayDnsStats(){
     if(msg){msg.textContent='DNS stats reset';msg.style.color='var(--ok)';applyDashboardI18n(msg);}
     loadGatewayStatus();
   }catch(e){
-    if(msg){msg.textContent=e&&e.message?e.message:'Error';msg.style.color='var(--err)';}
+    if(msg){msg.textContent=trText(e&&e.message?e.message:'Error');msg.style.color='var(--err)';}
   }
 }
 async function saveGatewayDns(){
   const msg=$('gw-msg');
   try{
     gatewayDnsSaving=true;
-    if(msg){msg.textContent='Saving...';msg.style.color='var(--tx3)';}
+    if(msg){msg.textContent=trText('Saving...');msg.style.color='var(--tx3)';}
     const upstreamMode=$('gw-upstream-mode')?$('gw-upstream-mode').value:'0';
     const upstreamCustom=$('gw-upstream-custom')?$('gw-upstream-custom').value:'';
     const body='enabled='+($('gw-enabled').checked?1:0)+'&blacklist='+encodeURIComponent($('gw-blacklist').value)+'&whitelist='+encodeURIComponent($('gw-whitelist').value)+'&upstream_mode='+encodeURIComponent(upstreamMode)+'&upstream_custom='+encodeURIComponent(upstreamCustom);
@@ -1975,9 +2010,9 @@ async function saveGatewayDns(){
     const d=await r.json().catch(()=>({}));
     if(!r.ok||d.ok===false)throw new Error(d.error||'save failed');
     applyGatewayDnsState(d,{saved:true});
-    if(msg){msg.textContent='Saved';msg.style.color='var(--ok)';}
+    if(msg){msg.textContent=trText('Saved');msg.style.color='var(--ok)';}
     loadGatewayStatus();setTimeout(loadGatewayBlocked,250);
-  }catch(e){if(msg){msg.textContent=e.message||'Error';msg.style.color='var(--err)';}}
+  }catch(e){if(msg){msg.textContent=trText(e.message||'Error');msg.style.color='var(--err)';}}
   finally{gatewayDnsSaving=false;}
 }
 function openGwBlockedModal(){loadGatewayBlocked();}
