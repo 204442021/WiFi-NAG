@@ -454,7 +454,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       <div class="setting-row nag-only" id="nag-mode-row">
         <div class="setting-info">
           <div class="setting-name">Nag Mode</div>
-          <div class="setting-desc" id="nag-mode-meta">A = fixed +1.80 Nm. A_V2 warms up, then sweeps inside the range.</div>
+          <div class="setting-desc" id="nag-mode-meta">A = fixed +1.80 Nm. A_V2 random-sweeps inside the range every 2000 ms.</div>
         </div>
         <div class="hw-seg nag-mode-control" id="nag-mode-seg">
           <button class="hw-btn active" data-v="0" onclick="setNagMode(0)">A</button>
@@ -707,7 +707,7 @@ const I18N_ZH={
   'CAN Bus':'CAN 总线','CAN Frames':'CAN 帧','CAN TX':'CAN 发送','RX':'接收','TX':'发送','TX Errors':'发送错误','Uptime':'运行时间','Reboot':'重启','READ ONLY':'只读模式','CAN WRITE ON':'CAN 写入开启','Read Only':'只读模式',
   'Frames received per second / total RX':'每秒接收帧数 / 总接收数','CAN Write':'CAN 写入','CAN Write On':'开启 CAN 写入','CAN Write Off':'关闭 CAN 写入','CAN write is enabled. Nag echo can transmit.':'CAN 写入已开启，Nag echo 可发送。','Read-only mode. CAN frames are monitored but not written.':'只读模式：只监听 CAN 帧，不写入。',
   'Configuration':'配置','Device settings':'设备设置','Device settings for Nag, WiFi, DNS and logging.':'Nag、WiFi、DNS 和日志设置。','Nag / CAN Write':'Nag / CAN 写入','Nag Mode':'Nag 模式','A_V2 Range':'A_V2 范围',
-  'Read-only monitoring when off; Nag 0x370 echo writes when on.':'关闭时仅监听；开启时发送 Nag 0x370 echo。','OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'关闭 = 只读 CAN 监听。开启 = 允许 Nag 880 (0x370) 计数器 +1 echo 写入。','A = fixed +1.80 Nm. A_V2 warms up, then sweeps inside the range.':'A = 固定 +1.80 Nm。A_V2 预热后在范围内扫动。','Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.':'Nm 端点限制在 -1.80 到 +1.80；如果填反会自动交换。','A_V2: warmup + sweep':'A_V2：预热 + 扫动','A: fixed +1.80 Nm echo':'A：固定 +1.80 Nm echo','echo':'echo','skip':'跳过',
+  'Read-only monitoring when off; Nag 0x370 echo writes when on.':'关闭时仅监听；开启时发送 Nag 0x370 echo。','OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'关闭 = 只读 CAN 监听。开启 = 允许 Nag 880 (0x370) 计数器 +1 echo 写入。','A = fixed +1.80 Nm. A_V2 random-sweeps inside the range every 2000 ms.':'A = 固定 +1.80 Nm。A_V2 每 2000 ms 在范围内伪随机扫动。','Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.':'Nm 端点限制在 -1.80 到 +1.80；如果填反会自动交换。','A_V2: random sweep':'A_V2：随机扫动','A: fixed +1.80 Nm echo':'A：固定 +1.80 Nm echo','echo':'echo','skip':'跳过',
   'Save':'保存','Saved':'已保存','Saving...':'保存中...','Save failed':'保存失败','CAN write save failed':'CAN 写入保存失败','Nag mode save failed':'Nag 模式保存失败','A_V2 range save failed':'A_V2 范围保存失败',
   'System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','Chip':'芯片','CPU':'CPU','Clock / Bus':'时钟 / 总线','CPU Load':'CPU 负载','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Uptime / Core':'运行时间 / 核心','Heap RAM':'堆内存','Internal RAM':'内部 RAM','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','Flash / App':'Flash / 应用','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','warming up':'采样中','unavailable':'不可用','offline':'离线','not enabled':'未启用','enabled':'已启用','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','STA online':'STA 在线','STA offline':'STA 离线','on':'开启','off':'关闭','unknown':'未知','fixed':'固定',
   'WiFi Hotspot':'WiFi 热点','Configure the device hotspot name, password and visibility. Saved in NVS.':'配置设备热点名称、密码和可见性，保存到 NVS。','Stored in NVS (non-volatile storage). The SSID and password survive firmware updates and reboots. Only a full factory erase via USB clears them.':'保存在 NVS（非易失存储）中。SSID 和密码在固件更新、重启后仍保留，只有通过 USB 完整恢复出厂才会清除。','Change the WiFi hotspot name and password':'修改 WiFi 热点名称和密码','Hotspot Name':'热点名称','New Password (min 8)':'新密码（至少 8 位）','Hide SSID':'隐藏 SSID','Don\'t broadcast the hotspot name \u2014 clients must enter it manually':'不广播热点名称，客户端需要手动输入','Changes take effect after reboot. Leave password empty to keep current.':'修改将在重启后生效。密码留空则保持当前密码。','Enter hotspot name':'请输入热点名称','Password min 8 chars':'密码至少 8 位','Saved! AP starts on CH1 and auto matches STA after WiFi connects.':'已保存！AP 从 CH1 启动，WiFi 连接后自动匹配 STA 信道。','firmware default':'固件默认值','sync':'同步','ok':'成功',
@@ -1218,7 +1218,7 @@ function updateNagControl(d){
   const seg=$('nag-mode-seg');if(seg)updSeg(seg,mode,'hw-btn');
   const minInp=$('nag-av2-min');if(minInp&&document.activeElement!==minInp)minInp.value=state.nagAv2Min.toFixed(2);
   const maxInp=$('nag-av2-max');if(maxInp&&document.activeElement!==maxInp)maxInp.value=state.nagAv2Max.toFixed(2);
-  const meta=$('nag-mode-meta');if(meta)meta.textContent=trText(mode===4?'A_V2: warmup + sweep':'A: fixed +1.80 Nm echo');
+  const meta=$('nag-mode-meta');if(meta)meta.textContent=trText(mode===4?'A_V2: random sweep':'A: fixed +1.80 Nm echo');
   const live=Number(d.nagLiveTorqueNm||0);
   const last=Number(d.nagLastTorqueNm||0);
   const liveMeta=$('nag-live-meta');if(liveMeta)liveMeta.textContent=(dashLang==='zh'?'\u5b9e\u65f6: ':'live: ')+live.toFixed(2)+' Nm';

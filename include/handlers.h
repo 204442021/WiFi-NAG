@@ -50,9 +50,8 @@ struct CarManagerBase
  * NagHandler - Autosteer nag suppression (counter+1 echo method)
  *
  * - Listens for CAN 880 (0x370) = EPAS3P_sysStatus
- * - When handsOnLevel indicates a nag condition, copies the real frame,
- *   writes a small torsionBarTorque echo, increments the low-nibble counter,
- *   and recalculates checksum byte 7.
+ * - Copies the real frame, writes a small torsionBarTorque echo, increments
+ *   the low-nibble counter, and recalculates checksum byte 7.
  * - Echo transmission is gated by nagKillerRuntime, which the WebUI ties to
  *   the CAN Write switch for WIFI-NAG builds.
  */
@@ -73,7 +72,6 @@ struct NagHandler : public CarManagerBase
     Shared<int16_t> lastObservedCentiNm{0};
     Shared<int16_t> lastInjectedCentiNm{0};
 
-    static constexpr uint32_t kAv2WarmupMs = 10000;
     static constexpr uint32_t kAv2SweepPeriodMs = 2000;
     static constexpr int16_t kTorqueMinCentiNm = -180;
     static constexpr int16_t kTorqueMaxCentiNm = 180;
@@ -82,6 +80,7 @@ struct NagHandler : public CarManagerBase
     bool hasLastInjected = false;
     uint16_t lastInjectedRaw = 0;
     uint8_t lastInjectedCounter = 0;
+    uint8_t lastInjectedByte4 = 0;
 #ifdef NATIVE_BUILD
     bool testClockEnabled = false;
     uint32_t testNowMs = 0;
@@ -200,19 +199,38 @@ struct NagHandler : public CarManagerBase
     int16_t lastInjectedCenti() const { return (int16_t)lastInjectedCentiNm; }
     float lastInjectedNm() const { return centiNmToNm(lastInjectedCenti()); }
 
-    int16_t triangleSweepCentiNm(uint32_t elapsedMs) const
+    static uint32_t av2RandomWord(uint32_t period)
+    {
+        uint32_t x = period + 0x9E3779B9u;
+        x ^= x >> 16;
+        x *= 0x7FEB352Du;
+        x ^= x >> 15;
+        x *= 0x846CA68Bu;
+        x ^= x >> 16;
+        return x;
+    }
+
+    int16_t av2RandomEndpointCentiNm(uint32_t period) const
     {
         const int16_t minNm = av2MinCenti();
         const int16_t maxNm = av2MaxCenti();
-        const int16_t span = static_cast<int16_t>(maxNm - minNm);
+        const uint16_t span = static_cast<uint16_t>(maxNm - minNm);
         if (span == 0)
             return minNm;
 
-        constexpr uint32_t halfMs = kAv2SweepPeriodMs / 2;
+        return static_cast<int16_t>(minNm + static_cast<int16_t>(av2RandomWord(period) % (static_cast<uint32_t>(span) + 1)));
+    }
+
+    int16_t randomSweepCentiNm(uint32_t elapsedMs) const
+    {
         const uint32_t phase = elapsedMs % kAv2SweepPeriodMs;
-        if (phase < halfMs)
-            return static_cast<int16_t>(minNm + (static_cast<int32_t>(span) * static_cast<int32_t>(phase)) / static_cast<int32_t>(halfMs));
-        return static_cast<int16_t>(maxNm - (static_cast<int32_t>(span) * static_cast<int32_t>(phase - halfMs)) / static_cast<int32_t>(halfMs));
+        const uint32_t period = elapsedMs / kAv2SweepPeriodMs;
+        const int16_t start = av2RandomEndpointCentiNm(period);
+        const int16_t end = av2RandomEndpointCentiNm(period + 1);
+        const int32_t delta = static_cast<int32_t>(end) - static_cast<int32_t>(start);
+        return clampTorqueCentiNm(static_cast<int16_t>(static_cast<int32_t>(start) +
+                                                       (delta * static_cast<int32_t>(phase)) /
+                                                           static_cast<int32_t>(kAv2SweepPeriodMs)));
     }
 
     int16_t targetTorqueCentiNm() const
@@ -220,17 +238,16 @@ struct NagHandler : public CarManagerBase
         if ((uint8_t)nagMode != MODE_A_V2)
             return kTorqueMaxCentiNm;
 
-        const uint32_t elapsed = nowMs() - modeStartMs;
-        if (elapsed < kAv2WarmupMs)
-            return kTorqueMaxCentiNm;
-        return triangleSweepCentiNm(elapsed - kAv2WarmupMs);
+        return randomSweepCentiNm(nowMs() - modeStartMs);
     }
 
-    bool isOwnEcho(const CanFrame &frame, uint8_t handsOn) const
+    bool isOwnEcho(const CanFrame &frame) const
     {
-        if (!hasLastInjected || handsOn != 1)
+        if (!hasLastInjected)
             return false;
-        return readTorqueRaw(frame) == lastInjectedRaw && (frame.data[6] & 0x0F) == lastInjectedCounter;
+        return readTorqueRaw(frame) == lastInjectedRaw &&
+               (frame.data[6] & 0x0F) == lastInjectedCounter &&
+               frame.data[4] == lastInjectedByte4;
     }
 
     void handleMessage(CanFrame &frame, CanDriver &driver) override
@@ -241,22 +258,16 @@ struct NagHandler : public CarManagerBase
         if (frame.id != 880 || frame.dlc < 8)
             return;
 
-        uint8_t handsOn = (frame.data[4] >> 6) & 0x03;
         lastObservedCentiNm = rawToCentiNm(readTorqueRaw(frame));
 
         if (!nagKillerActive || !nagKillerRuntime)
             return;
 
-        if (isOwnEcho(frame, handsOn))
+        if (isOwnEcho(frame))
         {
             nagOwnEchoSkipCount++;
             return;
         }
-
-        const uint8_t mode = (uint8_t)nagMode;
-        const bool shouldEcho = (mode == MODE_A_V2) ? (handsOn <= 1) : (handsOn == 0);
-        if (!shouldEcho)
-            return;
 
         CanFrame echo = frame;
         echo.id = 880;
@@ -265,8 +276,6 @@ struct NagHandler : public CarManagerBase
         const int16_t torqueCentiNm = targetTorqueCentiNm();
         const uint16_t torqueRaw = centiNmToRaw(torqueCentiNm);
         writeTorqueRaw(echo, torqueRaw);
-
-        echo.data[4] = static_cast<uint8_t>((frame.data[4] & 0x3F) | 0x40);
 
         uint8_t cnt = (frame.data[6] & 0x0F);
         cnt = (cnt + 1) & 0x0F;
@@ -280,6 +289,7 @@ struct NagHandler : public CarManagerBase
         lastInjectedCentiNm = torqueCentiNm;
         lastInjectedRaw = torqueRaw;
         lastInjectedCounter = cnt;
+        lastInjectedByte4 = echo.data[4];
         hasLastInjected = true;
         driver.send(echo);
 

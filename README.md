@@ -27,8 +27,8 @@ It is not a Legacy/HW3/HW4 FSD activation firmware. MCP2515, SAME51, plugin runt
 - Listens only to CAN ID `880 / 0x370`.
 - `CAN Write OFF`: read-only CAN monitoring.
 - `CAN Write ON`: allows Nag echo writes.
-- Mode `A`: fixed `+1.80 Nm` echo when `handsOnLevel == 0`.
-- Mode `A_V2`: warmup at `+1.80 Nm`, then sweeps inside the configured Nm range.
+- Mode `A`: fixed `+1.80 Nm` echo on every real `0x370` frame while CAN Write is ON.
+- Mode `A_V2`: pseudo-random sweep inside the configured Nm range with a `2000 ms` period.
 - Updates low-nibble counter and checksum byte.
 - Skips its own echo frames.
 
