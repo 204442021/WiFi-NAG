@@ -192,6 +192,13 @@ body.wifi-nag .stat-grid>.btn-reboot{align-items:center;justify-content:center;t
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .modal-btn-primary{background:var(--accBg);border-color:var(--accBd);color:var(--acc)}
 .modal-btn-primary:hover{background:var(--acc);color:#fff}
+.safety-modal-card{width:min(100%,460px)}
+.safety-body{margin-top:10px;max-height:68vh;overflow:auto;font-size:12px;color:var(--tx2);line-height:1.7}
+.safety-body p{margin:0 0 10px}
+.safety-body p:last-child{margin-bottom:0}
+.safety-strong{display:block;margin:8px 0;color:var(--err);font-size:2em;font-weight:900;line-height:1.35;word-break:break-word}
+.safety-actions{justify-content:center}
+.safety-actions .sniff-btn{min-width:140px}
 .dns-modal-card{width:min(100%,640px)}
 .dns-modal-list{margin-top:10px;max-height:60vh;overflow:auto;border:1px solid var(--bd);border-radius:9px;padding:8px;background:var(--bg)}
 .dns-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 8px;border-bottom:1px solid var(--bd)}
@@ -473,7 +480,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
           </div>
         </div>
         <div class="nag-range-grid">
-          <input class="sniff-input" id="nag-av2-min" type="number" min="-1.8" max="1.8" step="0.01" value="-1.80" onchange="saveNagAv2()">
+          <input class="sniff-input" id="nag-av2-min" type="number" min="-1.8" max="1.8" step="0.01" value="1.50" onchange="saveNagAv2()">
           <input class="sniff-input" id="nag-av2-max" type="number" min="-1.8" max="1.8" step="0.01" value="1.80" onchange="saveNagAv2()">
           <button class="sniff-btn" onclick="saveNagAv2()">Save</button>
         </div>
@@ -686,6 +693,22 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
 </div>
 <div class="warn-bar">CAN bus writes affect vehicle behavior. Remove device immediately if unexpected behavior occurs. Not affiliated with any vehicle manufacturer.</div>
 
+<div class="modal-backdrop" id="safety-modal">
+  <div class="modal-card safety-modal-card" role="dialog" aria-modal="true" aria-labelledby="safety-title">
+    <div class="modal-title" id="safety-title">安全提示与使用声明</div>
+    <div class="safety-body">
+      <p>本固件仅供开源学习、研究与测试使用。</p>
+      <p><span class="safety-strong">禁止任何形式的售卖、转售或商业化分发。</span></p>
+      <p>本固件涉及 CAN 通讯、FSD/AP 相关信号测试、免打扰等功能。相关功能可能带来法律、合规及行车安全风险。使用前请确认你已充分理解功能作用、适用场景和潜在后果，并自行承担全部责任。</p>
+      <p><span class="safety-strong">驾驶过程中，请始终保持清醒并专注驾驶，目视前方，双手随时准备接管方向盘。任何辅助驾驶功能都不能替代驾驶员对车辆和道路环境的持续观察与控制。</span></p>
+      <p>点击确认即表示你已阅读并理解以上提示。</p>
+    </div>
+    <div class="modal-actions safety-actions">
+      <button class="sniff-btn modal-btn-primary" id="safety-ok" onclick="acceptSafetyNotice()">确认</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="confirm-modal" onclick="dashConfirmBackdrop(event)">
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
     <div class="modal-title" id="confirm-title">Confirm</div>
@@ -760,7 +783,7 @@ function clientCountText(n){
 function injectionStatusLabel(armed){
   return armed?(dashLang==='zh'?'\u5199\u5165\u5f00\u542f':'CAN WRITE ON'):(dashLang==='zh'?'\u53ea\u8bfb\u6a21\u5f0f':'READ ONLY');
 }
-let state={can:true,nagMode:0,nagAv2Min:-1.8,nagAv2Max:1.8};
+let state={can:true,nagMode:0,nagAv2Min:1.5,nagAv2Max:1.8};
 let otaFile=null;
 let otaUser=localStorage.getItem('otaU')||'',otaPass=localStorage.getItem('otaP')||'';
 let logSince=0;
@@ -1145,6 +1168,18 @@ function toggleLanguage(){
   const t=document.documentElement.getAttribute('data-theme')||'dark';
   $('theme-btn').innerHTML=t==='dark'?'&#9788; '+trText('Light'):'&#9790; '+trText('Dark');
 }
+function showSafetyNotice(){
+  const m=$('safety-modal');
+  if(!m)return;
+  m.style.display='flex';
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{const b=$('safety-ok');if(b)b.focus();},0);
+}
+function acceptSafetyNotice(){
+  const m=$('safety-modal');
+  if(m)m.style.display='none';
+  if(!dashConfirmState)document.body.style.overflow='';
+}
 (function(){
   const mode=localStorage.getItem('themeMode')||'auto';
   const t=mode==='manual'?(localStorage.getItem('theme')||autoThemeByTime()):autoThemeByTime();
@@ -1155,6 +1190,7 @@ function toggleLanguage(){
     setInterval(refreshAutoTheme,60000);
     updateLanguageButton();
     applyDashboardI18n(document.body);
+    showSafetyNotice();
     const obs=new MutationObserver(muts=>{
       if(dashLang!=='zh')return;
       muts.forEach(m=>{
@@ -1214,7 +1250,7 @@ function updateNagControl(d){
   const mode=Number(d.nagMode===undefined?state.nagMode:d.nagMode)||0;
   const min=Number(d.nagAv2MinNm===undefined?state.nagAv2Min:d.nagAv2MinNm);
   const max=Number(d.nagAv2MaxNm===undefined?state.nagAv2Max:d.nagAv2MaxNm);
-  state.nagMode=mode;state.nagAv2Min=isNaN(min)?-1.8:min;state.nagAv2Max=isNaN(max)?1.8:max;
+  state.nagMode=mode;state.nagAv2Min=isNaN(min)?1.5:min;state.nagAv2Max=isNaN(max)?1.8:max;
   const seg=$('nag-mode-seg');if(seg)updSeg(seg,mode,'hw-btn');
   const minInp=$('nag-av2-min');if(minInp&&document.activeElement!==minInp)minInp.value=state.nagAv2Min.toFixed(2);
   const maxInp=$('nag-av2-max');if(maxInp&&document.activeElement!==maxInp)maxInp.value=state.nagAv2Max.toFixed(2);

@@ -534,7 +534,7 @@ static void dashLoadPrefs()
         prefs.putBool("nag_en", true);
     if (NagHandler *nag = dashNagActiveHandler())
     {
-        int16_t minNm = dashNagParseNmCenti(prefs.getString("nag_av2_min", "-1.80"), -180);
+        int16_t minNm = dashNagParseNmCenti(prefs.getString("nag_av2_min", "1.50"), 150);
         int16_t maxNm = dashNagParseNmCenti(prefs.getString("nag_av2_max", "1.80"), 180);
         nag->setAv2RangeCentiNm(minNm, maxNm);
         nag->setMode(prefs.getUChar("nag_mode", NagHandler::MODE_A));

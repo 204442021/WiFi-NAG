@@ -67,7 +67,7 @@ struct NagHandler : public CarManagerBase
     Shared<uint32_t> nagEchoCount{0};
     Shared<uint32_t> nagOwnEchoSkipCount{0};
     Shared<uint8_t> nagMode{MODE_A};
-    Shared<int16_t> av2MinCentiNm{-180};
+    Shared<int16_t> av2MinCentiNm{150};
     Shared<int16_t> av2MaxCentiNm{180};
     Shared<int16_t> lastObservedCentiNm{0};
     Shared<int16_t> lastInjectedCentiNm{0};
@@ -276,6 +276,8 @@ struct NagHandler : public CarManagerBase
         const int16_t torqueCentiNm = targetTorqueCentiNm();
         const uint16_t torqueRaw = centiNmToRaw(torqueCentiNm);
         writeTorqueRaw(echo, torqueRaw);
+
+        echo.data[4] = static_cast<uint8_t>((frame.data[4] & 0x3F) | 0x40);
 
         uint8_t cnt = (frame.data[6] & 0x0F);
         cnt = (cnt + 1) & 0x0F;
