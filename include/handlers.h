@@ -65,6 +65,7 @@ struct NagHandler : public CarManagerBase
 
     Shared<bool> nagKillerActive{true};
     Shared<uint32_t> nagEchoCount{0};
+    Shared<uint32_t> nagTxDropCount{0};
     Shared<uint32_t> nagOwnEchoSkipCount{0};
     Shared<uint8_t> nagMode{MODE_A};
     Shared<int16_t> av2MinCentiNm{150};
@@ -77,6 +78,7 @@ struct NagHandler : public CarManagerBase
     static constexpr int16_t kTorqueMaxCentiNm = 180;
 
     uint32_t modeStartMs = 0;
+    uint32_t aModeActiveEndsMs = 0; // 0 = A-mode display window inactive
     bool hasLastInjected = false;
     uint16_t lastInjectedRaw = 0;
     uint8_t lastInjectedCounter = 0;
@@ -173,6 +175,29 @@ struct NagHandler : public CarManagerBase
     void restartModeTimer()
     {
         modeStartMs = nowMs();
+    }
+
+    // Display-only A-mode activation window. Forces MODE_A and starts a
+    // time-bounded window used by the WebUI torque page. It never alters the
+    // CAN echo gating, timing, encoding, checksum, counter, or echo-skip
+    // behavior in handleMessage().
+    void triggerAModeWindow(uint32_t windowMs)
+    {
+        setMode(MODE_A);
+        aModeActiveEndsMs = nowMs() + windowMs;
+    }
+
+    bool aModeActive() const
+    {
+        return aModeActiveEndsMs != 0 &&
+               static_cast<int32_t>(aModeActiveEndsMs - nowMs()) > 0;
+    }
+
+    uint32_t aModeRemainingMs() const
+    {
+        if (!aModeActive())
+            return 0;
+        return aModeActiveEndsMs - nowMs();
     }
 
     void setAv2RangeNm(float minNm, float maxNm)
@@ -286,6 +311,12 @@ struct NagHandler : public CarManagerBase
         uint16_t sum = echo.data[0] + echo.data[1] + echo.data[2] + echo.data[3] + echo.data[4] + echo.data[5] + echo.data[6];
         echo.data[7] = static_cast<uint8_t>((sum + 0x73) & 0xFF);
 
+        if (!driver.send(echo))
+        {
+            nagTxDropCount++;
+            return;
+        }
+
         framesSent++;
         nagEchoCount++;
         lastInjectedCentiNm = torqueCentiNm;
@@ -293,7 +324,6 @@ struct NagHandler : public CarManagerBase
         lastInjectedCounter = cnt;
         lastInjectedByte4 = echo.data[4];
         hasLastInjected = true;
-        driver.send(echo);
 
         if (enablePrint && (nagEchoCount % 500 == 1))
         {

@@ -167,6 +167,13 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .nag-range-grid .sniff-btn{white-space:nowrap}
 .nag-torque-status{display:inline-flex;flex-wrap:wrap;gap:5px;margin-top:5px}
 .nag-status-pill{display:inline-flex;padding:2px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg2);color:var(--tx2);line-height:1.4}
+.can-diag-row{align-items:stretch}
+.can-diag-row .setting-info{width:100%}
+.can-diag-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:9px}
+.can-diag-item{min-width:0;padding:7px 8px;border:1px solid var(--bd);border-radius:7px;background:var(--bg2)}
+.can-diag-label{font-size:10px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.can-diag-value{margin-top:2px;font-size:12px;font-weight:700;color:var(--tx2);font-family:monospace;word-break:break-word}
+.can-diag-actions{display:flex;justify-content:flex-end;margin-top:8px}
 .gateway-profile-btn.active,.gateway-upstream-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
 /* Buttons */
 .btn-row{display:flex;gap:8px;margin-top:14px}
@@ -307,10 +314,12 @@ body.wifi-nag #config-hardware-section>.subsec-head .subsec-btn{display:none !im
 body.wifi-nag #can-write-row{padding-top:14px}
 body.wifi-nag #can-write-row .setting-name,
 body.wifi-nag #nag-mode-row .setting-name,
-body.wifi-nag #nag-av2-row .setting-name{font-weight:700}
+body.wifi-nag #nag-av2-row .setting-name,
+body.wifi-nag #can-diag-row .setting-name{font-weight:700}
 body.wifi-nag #can-write-row .setting-desc,
 body.wifi-nag #nag-mode-row .setting-desc,
-body.wifi-nag #nag-av2-row .setting-desc{line-height:1.55}
+body.wifi-nag #nag-av2-row .setting-desc,
+body.wifi-nag #can-diag-row .setting-desc{line-height:1.55}
 body.wifi-nag #nag-echo-meta{display:inline-flex;margin-top:4px;padding:2px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg2);color:var(--tx2)}
 body.wifi-nag #nag-mode-seg .hw-btn.active{color:var(--gold);border-color:var(--goldBd);background:var(--goldBg)}
 body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
@@ -326,13 +335,15 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
   .setting-row{gap:10px}
   body.wifi-nag #can-write-row,
   body.wifi-nag #nag-mode-row,
-  body.wifi-nag #nag-av2-row{flex-direction:column;align-items:stretch}
+  body.wifi-nag #nag-av2-row,
+  body.wifi-nag #can-diag-row{flex-direction:column;align-items:stretch}
   body.wifi-nag #can-write-row .tgl{align-self:flex-end;margin-left:0;margin-top:-4px}
   .nag-mode-control{width:100% !important;flex:0 0 auto !important}
   .nag-mode-control .hw-btn{min-height:40px;font-size:13px}
   .nag-range-grid{width:100%;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
   .nag-range-grid .sniff-btn{grid-column:1 / -1;min-height:40px}
   .nag-range-grid .sniff-input{min-height:40px;font-size:14px}
+  .can-diag-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 </style>
 </head>
@@ -485,6 +496,68 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
           <button class="sniff-btn" onclick="saveNagAv2()">Save</button>
         </div>
       </div>
+      <div class="setting-row nag-only" id="nag-amode-row">
+        <div class="setting-info">
+          <div class="setting-name">A Mode Live (BLE Trigger)</div>
+          <div class="setting-desc">BLE FSD TEST_ACTIVE forces Nag Mode A for 10 s (only when CAN Write is ON). Live torque data below.
+            <span class="nag-torque-status">
+              <span class="nag-status-pill" id="nag-amode-state">A mode: --</span>
+              <span class="nag-status-pill" id="nag-amode-live">实时: --</span>
+              <span class="nag-status-pill" id="nag-amode-write">写入: --</span>
+              <span class="nag-status-pill" id="nag-amode-src">source: --</span>
+              <span class="nag-status-pill" id="nag-amode-echo">echo: --</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="setting-row nag-only can-diag-row" id="can-diag-row">
+        <div class="setting-info">
+          <div class="setting-name">CAN Diagnostics</div>
+          <div class="setting-desc">Read-only TWAI health counters. Only one echo may wait for TX; newer echoes are dropped while it is pending. BUS-OFF or excessive errors automatically lock CAN writing.</div>
+          <div class="can-diag-grid">
+            <div class="can-diag-item"><div class="can-diag-label">TWAI State</div><div class="can-diag-value" id="can-diag-state">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">TEC / REC</div><div class="can-diag-value" id="can-diag-errors">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">TXQ / RXQ</div><div class="can-diag-value" id="can-diag-queues">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">Queue Reject / Stale Drop</div><div class="can-diag-value" id="can-diag-reject">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">TX Failed / Bus Error</div><div class="can-diag-value" id="can-diag-txbus">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">Arbitration Total / s</div><div class="can-diag-value" id="can-diag-arb">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">RX Miss / Overrun</div><div class="can-diag-value" id="can-diag-rxloss">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">BUS-OFF / Recovered</div><div class="can-diag-value" id="can-diag-busoff">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">Warning / Passive</div><div class="can-diag-value" id="can-diag-warning">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">Safety Protection</div><div class="can-diag-value" id="can-diag-safety">--</div></div>
+          </div>
+          <div class="can-diag-actions"><button class="sniff-btn" id="can-diag-reset" onclick="resetCanDiagnostics()">Reset Diagnostics</button></div>
+        </div>
+      </div>
+      <div class="setting-row ble-rx-row" id="ble-rx-row">
+        <div class="setting-info">
+          <div class="setting-name">BLE FSD Diagnostic Receiver</div>
+          <div class="setting-desc">Receives and validates the LILYGO FSD_ACTIVE protocol, then opens a visible diagnostic-only timer. It does not send or modify CAN frames.</div>
+          <div class="can-diag-grid">
+            <div class="can-diag-item"><div class="can-diag-label">Link / RSSI</div><div class="can-diag-value" id="ble-rx-link">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">Connected Device</div><div class="can-diag-value" id="ble-rx-device">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">GATT / Last Packet</div><div class="can-diag-value" id="ble-rx-session">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">State / Left</div><div class="can-diag-value" id="ble-rx-state">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">Last Sequence</div><div class="can-diag-value" id="ble-rx-seq">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">CRC / Repeat</div><div class="can-diag-value" id="ble-rx-errors">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">Windows / Timeout</div><div class="can-diag-value" id="ble-rx-windows">--</div></div>
+            <div class="can-diag-item"><div class="can-diag-label">Last Reject</div><div class="can-diag-value" id="ble-rx-reject">--</div></div>
+          </div>
+        </div>
+        <label class="tgl"><input type="checkbox" id="ble-rx-enabled" onchange="saveBleFsdConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+      </div>
+      <div class="ble-rx-form" style="display:grid;grid-template-columns:minmax(0,1fr) 74px 94px auto;gap:6px;margin-top:9px">
+        <input class="sniff-input" id="ble-rx-mac" placeholder="LILYGO MAC (AA:BB:CC:DD:EE:FF)">
+        <input class="sniff-input" id="ble-rx-rssi" type="number" min="-100" max="-20" value="-90" title="RSSI threshold dBm">
+        <input class="sniff-input" id="ble-rx-window" type="number" min="1000" max="60000" step="1000" value="10000" title="Diagnostic window ms">
+        <button class="sniff-btn" onclick="saveBleFsdConfig()">Save BLE</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:8px">
+        <button class="sniff-btn" id="ble-rx-scan-btn" onclick="scanBleFsd()">Scan LILYGO (10s)</button>
+        <span class="setting-desc" id="ble-rx-scan-status" style="margin:0"></span>
+      </div>
+      <div id="ble-rx-scan-results" style="display:none;margin-top:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2);overflow:hidden"></div>
+      <div class="setting-desc" id="ble-rx-reason" style="margin-top:7px">BLE receiver disabled.</div>
     </div>
   </div>
 
@@ -729,9 +802,10 @@ const I18N_ZH={
   'Waiting for CAN frames':'等待 CAN 帧','Dashboard disconnected':'仪表盘已断开','Dashboard reconnecting':'仪表盘正在重连','CAN running':'CAN 正常','CAN OK':'CAN 正常','CAN waiting':'等待 CAN','No frames':'无帧','Offline':'离线',
   'CAN Bus':'CAN 总线','CAN Frames':'CAN 帧','CAN TX':'CAN 发送','RX':'接收','TX':'发送','TX Errors':'发送错误','Uptime':'运行时间','Reboot':'重启','READ ONLY':'只读模式','CAN WRITE ON':'CAN 写入开启','Read Only':'只读模式',
   'Frames received per second / total RX':'每秒接收帧数 / 总接收数','CAN Write':'CAN 写入','CAN Write On':'开启 CAN 写入','CAN Write Off':'关闭 CAN 写入','CAN write is enabled. Nag echo can transmit.':'CAN 写入已开启，Nag echo 可发送。','Read-only mode. CAN frames are monitored but not written.':'只读模式：只监听 CAN 帧，不写入。',
-  'Configuration':'配置','Device settings':'设备设置','Device settings for Nag, WiFi, DNS and logging.':'Nag、WiFi、DNS 和日志设置。','Nag / CAN Write':'Nag / CAN 写入','Nag Mode':'Nag 模式','A_V2 Range':'A_V2 范围',
-  'Read-only monitoring when off; Nag 0x370 echo writes when on.':'关闭时仅监听；开启时发送 Nag 0x370 echo。','OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'关闭 = 只读 CAN 监听。开启 = 允许 Nag 880 (0x370) 计数器 +1 echo 写入。','A = fixed +1.80 Nm. A_V2 random-sweeps inside the range every 2000 ms.':'A = 固定 +1.80 Nm。A_V2 每 2000 ms 在范围内伪随机扫动。','Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.':'Nm 端点限制在 -1.80 到 +1.80；如果填反会自动交换。','A_V2: random sweep':'A_V2：随机扫动','A: fixed +1.80 Nm echo':'A：固定 +1.80 Nm echo','echo':'echo','skip':'跳过',
-  'Save':'保存','Saved':'已保存','Saving...':'保存中...','Save failed':'保存失败','CAN write save failed':'CAN 写入保存失败','Nag mode save failed':'Nag 模式保存失败','A_V2 range save failed':'A_V2 范围保存失败',
+  'Configuration':'配置','Device settings':'设备设置','Device settings for Nag, WiFi, DNS and logging.':'Nag、WiFi、DNS 和日志设置。','Nag / CAN Write':'Nag / CAN 写入','Nag Mode':'Nag 模式','A_V2 Range':'A_V2 范围','CAN Diagnostics':'CAN 诊断',
+  'Read-only monitoring when off; Nag 0x370 echo writes when on.':'关闭时仅监听；开启时发送 Nag 0x370 echo。','OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'关闭 = 只读 CAN 监听。开启 = 允许 Nag 880 (0x370) 计数器 +1 echo 写入。','A = fixed +1.80 Nm. A_V2 random-sweeps inside the range every 2000 ms.':'A = 固定 +1.80 Nm。A_V2 每 2000 ms 在范围内伪随机扫动。','Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.':'Nm 端点限制在 -1.80 到 +1.80；如果填反会自动交换。','A_V2: random sweep':'A_V2：随机扫动','A: fixed +1.80 Nm echo':'A：固定 +1.80 Nm echo','echo':'echo','skip':'跳过','drop':'丢弃',
+  'Read-only TWAI health counters. Only one echo may wait for TX; newer echoes are dropped while it is pending. BUS-OFF or excessive errors automatically lock CAN writing.':'只读 TWAI 健康诊断。发送区只允许一个 echo 等待；未完成时新的过期 echo 会被丢弃。出现 BUS-OFF 或错误过多时自动锁止 CAN 写入。','TWAI State':'TWAI 状态','Queue Reject / Stale Drop':'入队失败 / 过期丢弃','TX Failed / Bus Error':'发送失败 / 总线错误','Arbitration Total / s':'仲裁竞争累计 / 秒','RX Miss / Overrun':'接收丢失 / FIFO 溢出','BUS-OFF / Recovered':'BUS-OFF / 恢复','Warning / Passive':'错误警告 / 被动','Safety Protection':'安全保护','Reset Diagnostics':'清零诊断','RUNNING':'运行中','STOPPED':'已停止','RECOVERING':'恢复中','UNAVAILABLE':'不可用','READY':'就绪','LOCKED':'已锁止','BUS_OFF':'BUS-OFF','TEC_LIMIT':'TEC 超限','REC_LIMIT':'REC 超限','BUS_ERROR_BURST':'总线错误激增','TX_FAILURE_BURST':'发送失败激增',
+  'Save':'保存','Saved':'已保存','Saving...':'保存中...','Save failed':'保存失败','CAN write save failed':'CAN 写入保存失败','CAN write blocked by safety protection':'CAN 写入被安全保护阻止','Nag mode save failed':'Nag 模式保存失败','A_V2 range save failed':'A_V2 范围保存失败','CAN diagnostics reset failed':'CAN 诊断清零失败',
   'System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','Chip':'芯片','CPU':'CPU','Clock / Bus':'时钟 / 总线','CPU Load':'CPU 负载','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Uptime / Core':'运行时间 / 核心','Heap RAM':'堆内存','Internal RAM':'内部 RAM','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','Flash / App':'Flash / 应用','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','warming up':'采样中','unavailable':'不可用','offline':'离线','not enabled':'未启用','enabled':'已启用','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','STA online':'STA 在线','STA offline':'STA 离线','on':'开启','off':'关闭','unknown':'未知','fixed':'固定',
   'WiFi Hotspot':'WiFi 热点','Configure the device hotspot name, password and visibility. Saved in NVS.':'配置设备热点名称、密码和可见性，保存到 NVS。','Stored in NVS (non-volatile storage). The SSID and password survive firmware updates and reboots. Only a full factory erase via USB clears them.':'保存在 NVS（非易失存储）中。SSID 和密码在固件更新、重启后仍保留，只有通过 USB 完整恢复出厂才会清除。','Change the WiFi hotspot name and password':'修改 WiFi 热点名称和密码','Hotspot Name':'热点名称','New Password (min 8)':'新密码（至少 8 位）','Hide SSID':'隐藏 SSID','Don\'t broadcast the hotspot name \u2014 clients must enter it manually':'不广播热点名称，客户端需要手动输入','Changes take effect after reboot. Leave password empty to keep current.':'修改将在重启后生效。密码留空则保持当前密码。','Enter hotspot name':'请输入热点名称','Password min 8 chars':'密码至少 8 位','Saved! AP starts on CH1 and auto matches STA after WiFi connects.':'已保存！AP 从 CH1 启动，WiFi 连接后自动匹配 STA 信道。','firmware default':'固件默认值','sync':'同步','ok':'成功',
   'WiFi Internet':'WiFi 上网','Up to 4 saved networks. The device tries each in turn until one connects.':'最多保存 4 个网络，设备会按顺序尝试直到连接成功。','Not configured':'未配置','Save up to 4 networks (e.g. home + phone hotspot). Device tries each in turn. Stored in NVS \u2014 survives firmware updates.':'最多保存 4 个网络（例如家里 WiFi + 手机热点）。设备会按顺序尝试，配置保存在 NVS 中，固件更新后仍保留。','Add network':'添加网络','WiFi SSID':'WiFi SSID','Scan':'扫描','Scanning...':'扫描中...','Scan failed':'扫描失败','No networks found':'未发现网络','Password':'密码','Save & Connect':'保存并连接','Static IP (optional)':'静态 IP（可选）','Set a fixed IP configuration instead of using DHCP.':'使用固定 IP 配置，而不是 DHCP。','Use static IP':'使用静态 IP','IP (e.g. 192.168.1.100)':'IP（如 192.168.1.100）','Gateway (e.g. 192.168.1.1)':'网关（如 192.168.1.1）','Mask (255.255.255.0)':'掩码（255.255.255.0）','DNS (e.g. 8.8.8.8)':'DNS（如 8.8.8.8）','No networks saved.':'未保存网络。','connected':'已连接','trying':'尝试中','saved':'已保存','[static]':'[静态]','[connected]':'[已连接]','[trying]':'[连接中]','Reconnect':'重新连接','Connect':'连接','Edit':'编辑','Delete':'删除','Save Changes':'保存修改','Leave empty to keep current':'留空则保持当前密码','Delete WiFi':'删除 WiFi','Delete failed':'删除失败','Enter SSID':'请输入 SSID','Connect failed':'连接失败','connect failed':'连接失败','save failed':'保存失败','retry in':'后重试','switch to that WiFi and open this IP':'切换到该 WiFi 后打开此 IP',
@@ -1230,19 +1304,133 @@ function updateFsdControl(d){
   const writeTgl=$('can-write-tgl');if(writeTgl)writeTgl.checked=enabled;
   const nagMeta=$('nag-echo-meta');if(nagMeta&&typeof d.nagEcho!=='undefined')nagMeta.textContent=trText('echo')+': '+d.nagEcho;
   updateNagControl(d);
+  updateCanDiagnostics(d);
+  updateBleFsd(d,false);
+}
+
+function bleFsdValue(d,name,fallback){
+  return d[name]!==undefined?d[name]:fallback;
+}
+function updateBleFsd(d,includeConfig){
+  const enabled=!!bleFsdValue(d,'enabled',d.bleRxEnabled);
+  const connected=!!bleFsdValue(d,'connected',d.bleRxConnected);
+  const scanning=!!bleFsdValue(d,'scanning',false);
+  const state=String(bleFsdValue(d,'state',d.bleRxState)||'DISABLED');
+  const remaining=Number(bleFsdValue(d,'remainingMs',d.bleRxRemainingMs)||0);
+  const rssi=Number(bleFsdValue(d,'rssi',d.bleRxRssi)||0);
+  const peerMac=String(bleFsdValue(d,'peerMac',d.bleRxPeerMac)||'');
+  const peerName=String(bleFsdValue(d,'peerName',d.bleRxPeerName)||'');
+  const subscribed=!!bleFsdValue(d,'subscribed',d.bleRxSubscribed);
+  const lastPacket=Number(bleFsdValue(d,'lastPacketAtMs',0)||0);
+  const seq=Number(bleFsdValue(d,'lastSequence',d.bleRxLastSeq)||0);
+  const reject=String(bleFsdValue(d,'lastReject',d.bleRxReject)||'none');
+  const reason=String(bleFsdValue(d,'reason',d.bleRxReason)||'--');
+  const windows=Number(bleFsdValue(d,'windows',d.bleRxWindows)||0);
+  const crc=Number(bleFsdValue(d,'crcErrors',d.bleRxCrcErrors)||0);
+  const dup=Number(bleFsdValue(d,'duplicates',d.bleRxDuplicates)||0);
+  const timeout=Number(bleFsdValue(d,'timeouts',d.bleRxTimeouts)||0);
+  const t=$('ble-rx-enabled');if(t)t.checked=enabled;
+  if(includeConfig){
+    const mac=$('ble-rx-mac'),r=$('ble-rx-rssi'),w=$('ble-rx-window');
+    if(mac&&document.activeElement!==mac)mac.value=d.mac||'';
+    if(r&&document.activeElement!==r)r.value=Number(d.rssiThreshold===undefined?-90:d.rssiThreshold);
+    if(w&&document.activeElement!==w)w.value=Number(d.testWindowMs===undefined?10000:d.testWindowMs);
+  }
+  const link=connected?'CONNECTED':(scanning?'SCANNING':(enabled?'WAITING':'OFF'));
+  setCanDiag('ble-rx-link',link+(rssi?(' / '+rssi+' dBm'):''),connected?'ok':enabled?'warn':'dim');
+  const deviceText=peerMac?((peerName||'Unnamed')+' / '+peerMac):(connected?'Connecting device…':'--');
+  setCanDiag('ble-rx-device',deviceText,connected?'ok':peerMac?'warn':'dim');
+  setCanDiag('ble-rx-session',(subscribed?'SUBSCRIBED':'NOT SUBSCRIBED')+' / '+(lastPacket?'RX':'NO RX'),
+             connected&&subscribed?'ok':connected?'warn':'dim');
+  setCanDiag('ble-rx-state',state+(state==='TEST_ACTIVE'?(' / '+Math.ceil(remaining/1000)+'s'):''),
+             state==='TEST_ACTIVE'?'ok':state==='AWAIT_CLEAR'?'warn':'dim');
+  setCanDiag('ble-rx-seq',seq||'--',seq?'ok':'dim');
+  setCanDiag('ble-rx-errors',crc+' / '+dup,(crc||dup)?'warn':'ok');
+  setCanDiag('ble-rx-windows',windows+' / '+timeout,timeout?'warn':'ok');
+  setCanDiag('ble-rx-reject',reject,reject==='none'?'ok':'warn');
+  const reasonEl=$('ble-rx-reason');if(reasonEl){
+    reasonEl.textContent='Receiver: '+reason+' — diagnostic-only; no BLE-to-CAN control link.';
+    reasonEl.style.color=state==='TEST_ACTIVE'?'var(--ok)':reject!=='none'?'var(--warn)':'var(--tx3)';
+  }
+}
+async function loadBleFsdConfig(){
+  return runPoll('ble_fsd',async()=>{
+    try{const d=await fetchPollJson('/ble_fsd',2000);updateBleFsd(d,true);}catch(e){}
+  });
+}
+async function saveBleFsdConfig(){
+  const enabled=$('ble-rx-enabled')&&$('ble-rx-enabled').checked?1:0;
+  const mac=$('ble-rx-mac')?$('ble-rx-mac').value.trim():'';
+  const rssi=$('ble-rx-rssi')?$('ble-rx-rssi').value:'-90';
+  const windowMs=$('ble-rx-window')?$('ble-rx-window').value:'10000';
+  try{
+    const body='enabled='+enabled+'&mac='+encodeURIComponent(mac)+'&rssi='+encodeURIComponent(rssi)+'&window='+encodeURIComponent(windowMs);
+    const r=await fetch('/ble_fsd',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
+    const d=await r.json();
+    if(!r.ok||d.ok===false)throw new Error(d.error||'save failed');
+    updateBleFsd(d,true);
+  }catch(e){
+    const reason=$('ble-rx-reason');if(reason){reason.textContent='BLE save failed: '+(e.message||'error');reason.style.color='var(--err)';}
+  }
+}
+let bleFsdScanTimer=null;
+function renderBleFsdScan(d){
+  const list=$('ble-rx-scan-results'),status=$('ble-rx-scan-status'),btn=$('ble-rx-scan-btn');
+  if(status){status.textContent=d.scanning?'Scanning nearby BLE devices...':((d.devices||[]).length+' device(s) found');status.style.color=d.scanning?'var(--acc)':'var(--tx3)';}
+  if(btn)btn.disabled=!!d.scanning;
+  if(!list)return;
+  const devices=d.devices||[];
+  if(!devices.length){list.style.display=d.scanning?'block':'none';list.innerHTML=d.scanning?'<div style="padding:10px;color:var(--tx3);font-size:11px">Scanning…</div>':'';return;}
+  list.style.display='block';
+  list.innerHTML=devices.map(x=>{
+    const mac=escapeHtml(x.mac||'');
+    const name=escapeHtml(x.name||'Unnamed BLE device');
+    const service=x.fsdService?'<span style="color:var(--ok)">FSD service</span>':'<span style="color:var(--tx3)">other service</span>';
+    return '<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--bd)">'+
+      '<div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+name+'</div>'+
+      '<div style="font:11px monospace;color:var(--tx3)">'+mac+' • '+(x.rssi||0)+' dBm • '+service+'</div></div>'+
+      '<button class="sniff-btn" data-ble-mac="'+mac+'" onclick="useBleFsdDevice(this.dataset.bleMac)">Use</button></div>';
+  }).join('');
+}
+async function pollBleFsdScan(){
+  try{
+    const d=await fetchPollJson('/ble_fsd_scan',2000);
+    renderBleFsdScan(d);
+    if(!d.scanning&&bleFsdScanTimer){clearInterval(bleFsdScanTimer);bleFsdScanTimer=null;}
+  }catch(e){}
+}
+async function scanBleFsd(){
+  if(bleFsdScanTimer){clearInterval(bleFsdScanTimer);bleFsdScanTimer=null;}
+  try{
+    const d=await fetchPollJson('/ble_fsd_scan?start=1',2000);
+    renderBleFsdScan(d);
+    bleFsdScanTimer=setInterval(pollBleFsdScan,900);
+  }catch(e){
+    const status=$('ble-rx-scan-status');if(status){status.textContent='BLE scan failed';status.style.color='var(--err)';}
+  }
+}
+function useBleFsdDevice(mac){
+  const input=$('ble-rx-mac');if(input)input.value=mac||'';
+  const enabled=$('ble-rx-enabled');if(enabled)enabled.checked=true;
+  saveBleFsdConfig();
 }
 
 async function saveCanWrite(){
   const t=$('can-write-tgl');
   if(!t)return;
+  const requested=!!t.checked;
   try{
-    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'can='+(t.checked?'1':'0')});
+    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'can='+(requested?'1':'0')});
     if(!r.ok)throw new Error('HTTP '+r.status);
-    state.can=!!t.checked;
+    const d=await r.json();
+    state.can=typeof d.can==='boolean'?d.can:requested;
+    t.checked=state.can;
     updateInjectButtons(state.can);
+    if(requested&&!state.can)addLog(trText('CAN write blocked by safety protection'),'le');
     poll();
   }catch(e){
     addLog(trText('CAN write save failed'),'le');
+    poll();
   }
 }
 
@@ -1259,7 +1447,75 @@ function updateNagControl(d){
   const last=Number(d.nagLastTorqueNm||0);
   const liveMeta=$('nag-live-meta');if(liveMeta)liveMeta.textContent=(dashLang==='zh'?'\u5b9e\u65f6: ':'live: ')+live.toFixed(2)+' Nm';
   const writeMeta=$('nag-write-meta');if(writeMeta)writeMeta.textContent=(dashLang==='zh'?'\u5199\u5165: ':'write: ')+last.toFixed(2)+' Nm';
-  const av2=$('nag-av2-meta');if(av2)av2.textContent=trText('skip')+': '+(d.nagOwnEchoSkip||0);
+  const av2=$('nag-av2-meta');if(av2)av2.textContent=trText('skip')+': '+(d.nagOwnEchoSkip||0)+' \u00b7 '+trText('drop')+': '+(d.nagTxDrop||0);
+  const amActive=!!d.nagAModeActive;
+  const amLeft=Math.ceil((Number(d.nagAModeRemainingMs)||0)/1000);
+  const amState=$('nag-amode-state');
+  if(amState){amState.textContent=(dashLang==='zh'?'A\u6a21\u5f0f: ':'A mode: ')+(amActive?(dashLang==='zh'?'\u6fc0\u6d3b '+amLeft+'s':'active '+amLeft+'s'):(dashLang==='zh'?'\u672a\u6fc0\u6d3b':'idle'));amState.classList.toggle('on',amActive);}
+  const amLive=$('nag-amode-live');if(amLive)amLive.textContent=(dashLang==='zh'?'\u5b9e\u65f6: ':'live: ')+live.toFixed(2)+' Nm';
+  const amWrite=$('nag-amode-write');if(amWrite)amWrite.textContent=(dashLang==='zh'?'\u5199\u5165: ':'write: ')+last.toFixed(2)+' Nm';
+  const amSrc=$('nag-amode-src');if(amSrc){const src=String(d.bleRxPeerName||d.bleRxPeerMac||d.bleRxState||'--');amSrc.textContent=(dashLang==='zh'?'\u6765\u6e90: ':'source: ')+src;}
+  const amEcho=$('nag-amode-echo');if(amEcho)amEcho.textContent=(dashLang==='zh'?'\u56de\u58f0: ':'echo: ')+(d.nagEcho||0)+' \u00b7 '+(dashLang==='zh'?'\u7a97\u53e3: ':'win: ')+(d.bleRxWindows||0);
+}
+
+function setCanDiag(id,text,level){
+  setText(id,text);
+  setClass(id,'can-diag-value '+(level==='err'?'v-err':level==='warn'?'v-warn':level==='ok'?'v-ok':'v-dim'));
+}
+
+function canDiagCounterLevel(value,error){
+  value=Number(value)||0;
+  return value>0?(error?'err':'warn'):'dim';
+}
+
+function updateCanDiagnostics(d){
+  const available=!!d.twaiAvailable;
+  const stateName=String(d.twaiState||'UNAVAILABLE');
+  const stateLevel=stateName==='RUNNING'?'ok':stateName==='BUS-OFF'?'err':stateName==='RECOVERING'||stateName==='STOPPED'?'warn':'dim';
+  setCanDiag('can-diag-state',trText(stateName),stateLevel);
+
+  const tec=Number(d.twaiTec)||0,rec=Number(d.twaiRec)||0;
+  const errMax=Math.max(tec,rec);
+  setCanDiag('can-diag-errors',available?(tec+' / '+rec):'--',errMax>=96?'err':errMax>0?'warn':'ok');
+
+  const txq=Number(d.twaiTxQueue)||0,rxq=Number(d.twaiRxQueue)||0;
+  setCanDiag('can-diag-queues',available?(txq+' / '+rxq):'--',(txq>0||rxq>32)?'warn':available?'ok':'dim');
+
+  const reject=Number(d.txerr)||0,stale=Number(d.twaiStaleDrop)||0;
+  setCanDiag('can-diag-reject',reject+' / '+stale,canDiagCounterLevel(reject+stale,false));
+
+  const txFailed=Number(d.twaiTxFailed)||0,busError=Number(d.twaiBusError)||0;
+  setCanDiag('can-diag-txbus',txFailed+' / '+busError,canDiagCounterLevel(txFailed+busError,true));
+
+  const arb=Number(d.twaiArbLost)||0,arbRate=Number(d.twaiArbRate)||0;
+  setCanDiag('can-diag-arb',arb+' / '+arbRate.toFixed(1),arbRate>200?'warn':available?'ok':'dim');
+
+  const missed=Number(d.twaiRxMissed)||0,overrun=Number(d.twaiRxOverrun)||0;
+  setCanDiag('can-diag-rxloss',missed+' / '+overrun,canDiagCounterLevel(missed+overrun,true));
+
+  const busOff=Number(d.twaiBusOff)||0,recovered=Number(d.twaiRecovered)||0;
+  setCanDiag('can-diag-busoff',busOff+' / '+recovered,canDiagCounterLevel(busOff,true));
+
+  const warning=Number(d.twaiErrWarn)||0,passive=Number(d.twaiErrPassive)||0;
+  setCanDiag('can-diag-warning',warning+' / '+passive,canDiagCounterLevel(warning+passive,true));
+
+  const safetyTripped=!!d.twaiSafetyTripped;
+  const safetyReason=String(d.twaiSafetyReason||'NONE');
+  const safetyTrips=Number(d.twaiSafetyTrips)||0;
+  setCanDiag('can-diag-safety',
+    safetyTripped?(trText('LOCKED')+' \u00b7 '+trText(safetyReason)):(trText('READY')+' \u00b7 '+safetyTrips),
+    safetyTripped?'err':'ok');
+}
+
+async function resetCanDiagnostics(){
+  const btn=$('can-diag-reset');
+  if(btn)btn.disabled=true;
+  try{
+    const r=await fetch('/can_diag_reset',{method:'POST'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    poll();
+  }catch(e){addLog(trText('CAN diagnostics reset failed'),'le');}
+  finally{if(btn)btn.disabled=false;}
 }
 
 async function setNagMode(mode){
@@ -1308,7 +1564,7 @@ async function emergencyStop(){
   }catch(e){}
   poll();
 }
-async function resumeInj(){try{state.can=true;updateInjectButtons(true);await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'can=1'});}catch(e){}poll();}
+async function resumeInj(){try{const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'can=1'});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();state.can=!!d.can;updateInjectButtons(state.can);if(!state.can)addLog(trText('CAN write blocked by safety protection'),'le');}catch(e){addLog(trText('CAN write save failed'),'le');}poll();}
 async function toggleCanWriteTopButton(){if(state.can)await emergencyStop();else await resumeInj();}
 async function reboot(){if(!await dashConfirm('Reboot device?','Reboot','Reboot'))return;try{await fetch('/reboot',{method:'POST'});}catch(e){}}
 
@@ -1540,7 +1796,7 @@ async function poll(){
       const eprn=$('tgl-eprn');if(eprn&&typeof d.eprn!=='undefined')eprn.checked=d.eprn;
       if(!dashboardInitialLoaded){
         dashboardInitialLoaded=true;
-        loadWifiNetworks();loadWifiStatus();loadApStatus();loadGatewayDns();loadGatewayStatus();if(!isCarUiActive())loadGatewayBlocked();
+        loadWifiNetworks();loadWifiStatus();loadApStatus();loadBleFsdConfig();loadGatewayDns();loadGatewayStatus();if(!isCarUiActive())loadGatewayBlocked();
       }
     }catch(e){}
   });

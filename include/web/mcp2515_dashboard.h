@@ -37,6 +37,7 @@
 #endif
 #include "handlers.h"
 #include "can_helpers.h"
+#include "ble_fsd_receiver.h"
 #include <ArduinoJson.h>
 #include "web/mcp2515_dashboard_ui.h"
 
@@ -90,6 +91,7 @@ static Preferences prefs;
 
 static CarManagerBase *dashHandler = nullptr;
 static CanDriver *dashDriver = nullptr;
+static BleFsdReceiverConfig bleFsdConfig{};
 
 static unsigned long rxCount = 0;
 static unsigned long txCount = 0;
@@ -97,6 +99,11 @@ static unsigned long txErrCount = 0;
 static unsigned long lastFrameMs = 0;
 static unsigned long startMs = 0;
 static bool canOnline = false;
+static unsigned long canDiagLastSampleMs = 0;
+static uint32_t canDiagLastArbLost = 0;
+static float canDiagArbLostRate = 0.0f;
+static Shared<bool> canSafetyTripPending{false};
+static Shared<uint8_t> canSafetyTripPendingReason{(uint8_t)CanSafetyReason::None};
 
 static unsigned long fpsFrames = 0;
 static unsigned long fpsLastMs = 0;
@@ -162,6 +169,8 @@ static unsigned long staRetryAt = 0;
 static uint8_t staConsecutiveFailures = 0; // diagnostics only; retry interval is fixed
 static constexpr unsigned long kDashStaBootDelayMs = 1000;
 static constexpr unsigned long kDashStaSavedPollMs = 5000;
+static constexpr uint8_t kDashStaBackoffFailureThreshold = 3;
+static constexpr unsigned long kDashStaBackoffPollMs = 10000;
 static constexpr unsigned long kDashStaConnectTimeoutMs = 10000;
 // kDashStaRetryMs kept for backward compat with older references.
 static constexpr unsigned long kDashStaRetryMs = kDashStaSavedPollMs;
@@ -192,6 +201,13 @@ static void dashRotateAndConnect();
 static void dashApplyRuntimeState();
 static void dashClearRetiredOptionPrefs();
 static void dashLog(const String &s);
+
+static unsigned long dashStaRetryDelayMs()
+{
+    return staConsecutiveFailures >= kDashStaBackoffFailureThreshold
+               ? kDashStaBackoffPollMs
+               : kDashStaSavedPollMs;
+}
 
 #define LOG_CAP 80
 struct LogEntry
@@ -287,6 +303,50 @@ static bool dashInjectionActive()
     return canActive;
 }
 
+static const char *dashCanDriverStateName(CanDriverState state)
+{
+    switch (state)
+    {
+    case CanDriverState::Stopped:
+        return "STOPPED";
+    case CanDriverState::Running:
+        return "RUNNING";
+    case CanDriverState::BusOff:
+        return "BUS-OFF";
+    case CanDriverState::Recovering:
+        return "RECOVERING";
+    default:
+        return "UNAVAILABLE";
+    }
+}
+
+static const char *dashCanSafetyReasonName(CanSafetyReason reason)
+{
+    switch (reason)
+    {
+    case CanSafetyReason::BusOff:
+        return "BUS_OFF";
+    case CanSafetyReason::TxErrorCounter:
+        return "TEC_LIMIT";
+    case CanSafetyReason::RxErrorCounter:
+        return "REC_LIMIT";
+    case CanSafetyReason::BusErrorBurst:
+        return "BUS_ERROR_BURST";
+    case CanSafetyReason::TxFailureBurst:
+        return "TX_FAILURE_BURST";
+    default:
+        return "NONE";
+    }
+}
+
+static void mcpDashOnCanSafetyTrip(CanSafetyReason reason)
+{
+    // Called from the high-priority CAN task: only update atomics here.
+    nagKillerRuntime = false;
+    canSafetyTripPendingReason = (uint8_t)reason;
+    canSafetyTripPending = true;
+}
+
 #if defined(NAG_KILLER)
 static uint32_t dashNagEchoCount()
 {
@@ -351,6 +411,8 @@ static String dashNagStatusJson(bool includeOk)
     j += dashNagNmString(nag->lastInjectedCenti());
     j += ",\"echo\":";
     j += String(dashNagEchoCount());
+    j += ",\"txDrop\":";
+    j += String((uint32_t)nag->nagTxDropCount);
     j += ",\"ownEchoSkip\":";
     j += String((uint32_t)nag->nagOwnEchoSkipCount);
     j += "}";
@@ -408,11 +470,21 @@ static void dashSavePrefs()
     prefs.putBool("sp_auto", true);
     prefs.putUChar("sp_sel", 1);
     prefs.putBool("eprn", dashHandler ? (bool)dashHandler->enablePrint : false);
+    prefs.putBool("ble_rx", bleFsdConfig.enabled);
+    prefs.putString("ble_mac", bleFsdConfig.peerMac);
+    prefs.putChar("ble_rssi", bleFsdConfig.rssiThreshold);
+    prefs.putString("ble_win", String(bleFsdConfig.testWindowMs));
     prefs.end();
 }
 
-static void dashSetCanActive(bool active, const char *reason = nullptr)
+static bool dashSetCanActive(bool active, const char *reason = nullptr)
 {
+    if (active && dashDriver && !dashDriver->clearSafetyLatch())
+    {
+        active = false;
+        dashLog("[CAN] Safety latch remains active; CAN write enable rejected");
+    }
+
     bool changed = canActive != active;
     canActive = active;
     dashApplyRuntimeState();
@@ -424,6 +496,18 @@ static void dashSetCanActive(bool active, const char *reason = nullptr)
             msg += String(" via ") + reason;
         dashLog(msg);
     }
+    return canActive;
+}
+
+static void dashProcessCanSafetyTrip()
+{
+    if (!(bool)canSafetyTripPending)
+        return;
+
+    CanSafetyReason reason = (CanSafetyReason)(uint8_t)canSafetyTripPendingReason;
+    canSafetyTripPending = false;
+    dashLog("[CAN] Safety lock: " + String(dashCanSafetyReasonName(reason)));
+    dashSetCanActive(false, dashCanSafetyReasonName(reason));
 }
 
 [[maybe_unused]] static void dashToggleCanActive(const char *reason = nullptr)
@@ -547,6 +631,12 @@ static void dashLoadPrefs()
     if (prefs.getUChar("sp_sel", 1) != 1)
         prefs.putUChar("sp_sel", 1);
     bool ep = prefs.getBool("eprn", false);
+    bleFsdConfig.enabled = prefs.getBool("ble_rx", false);
+    String bleMac = prefs.getString("ble_mac", "");
+    strlcpy(bleFsdConfig.peerMac, bleMac.c_str(), sizeof(bleFsdConfig.peerMac));
+    bleFsdConfig.rssiThreshold = std::clamp<int>(prefs.getChar("ble_rssi", -90), -100, -20);
+    bleFsdConfig.testWindowMs = std::clamp<unsigned long>(
+        strtoul(prefs.getString("ble_win", "10000").c_str(), nullptr, 10), 1000UL, 60000UL);
 
     dashApplyRuntimeState();
     if (dashHandler)
@@ -763,6 +853,7 @@ static void handleRoot()
 
 static void handleStatus()
 {
+    dashProcessCanSafetyTrip();
     if (canOnline && millis() - lastFrameMs > 10000)
     {
         canOnline = false;
@@ -777,9 +868,50 @@ static void handleStatus()
     }
 
     bool ep = dashHandler ? (bool)dashHandler->enablePrint : false;
+    CanDriverDiagnostics canDiag = {};
+    bool canDiagAvailable = dashDriver && dashDriver->getDiagnostics(canDiag);
+    const bool canHealthy = canDiagAvailable &&
+                            canDiag.state == CanDriverState::Running &&
+                            !canDiag.safetyTripped &&
+                            canDiag.txErrorCounter < 96 &&
+                            canDiag.rxErrorCounter < 96;
+    bleFsdReceiverTick(canHealthy);
+    const BleFsdReceiverStatus bleStatus = bleFsdReceiverGetStatus();
+#if defined(NAG_KILLER)
+    // Bridge BLE TEST_ACTIVE (a diagnostic edge) to a display-only 10s A-mode
+    // window on the Nag handler. Only fires on the rising edge and only when
+    // CAN Write is ON (nagKillerEnabled && canActive). It never writes CAN by
+    // itself; it just forces MODE_A and drives the torque-page display.
+    static BleFsdReceiverState dashBlePrevState = BleFsdReceiverState::Disabled;
+    if (bleStatus.state == BleFsdReceiverState::TestActive &&
+        dashBlePrevState != BleFsdReceiverState::TestActive &&
+        nagKillerEnabled && canActive)
+    {
+        if (NagHandler *nag = dashNagActiveHandler())
+            nag->triggerAModeWindow(10000);
+    }
+    dashBlePrevState = bleStatus.state;
+#endif
+    if (canDiagAvailable &&
+        (canDiagLastSampleMs == 0 || now - canDiagLastSampleMs >= 500))
+    {
+        if (canDiagLastSampleMs != 0 &&
+            canDiag.arbLostCount >= canDiagLastArbLost)
+        {
+            canDiagArbLostRate =
+                (canDiag.arbLostCount - canDiagLastArbLost) * 1000.0f /
+                max(1UL, now - canDiagLastSampleMs);
+        }
+        else
+        {
+            canDiagArbLostRate = 0.0f;
+        }
+        canDiagLastArbLost = canDiag.arbLostCount;
+        canDiagLastSampleMs = now;
+    }
 
     String j = "{\"product\":\"wifi-nag\"";
-    j.reserve(900);
+    j.reserve(1500);
     j += ",\"wifiNag\":true";
 #if defined(NAG_KILLER)
     j += ",\"nagKiller\":";
@@ -802,6 +934,12 @@ static void handleStatus()
         j += dashNagNmString(nag->lastInjectedCenti());
         j += ",\"nagOwnEchoSkip\":";
         j += String((uint32_t)nag->nagOwnEchoSkipCount);
+        j += ",\"nagTxDrop\":";
+        j += String((uint32_t)nag->nagTxDropCount);
+        j += ",\"nagAModeActive\":";
+        j += nag->aModeActive() ? "true" : "false";
+        j += ",\"nagAModeRemainingMs\":";
+        j += String((uint32_t)nag->aModeRemainingMs());
     }
 #endif
     j += ",\"hw\":";
@@ -820,6 +958,80 @@ static void handleStatus()
     j += txCount;
     j += ",\"txerr\":";
     j += txErrCount;
+    j += ",\"twaiAvailable\":";
+    j += canDiagAvailable ? "true" : "false";
+    j += ",\"twaiState\":\"";
+    j += dashCanDriverStateName(canDiag.state);
+    j += "\",\"twaiTec\":";
+    j += canDiag.txErrorCounter;
+    j += ",\"twaiRec\":";
+    j += canDiag.rxErrorCounter;
+    j += ",\"twaiTxQueue\":";
+    j += canDiag.msgsToTx;
+    j += ",\"twaiRxQueue\":";
+    j += canDiag.msgsToRx;
+    j += ",\"twaiTxFailed\":";
+    j += canDiag.txFailedCount;
+    j += ",\"twaiBusError\":";
+    j += canDiag.busErrorCount;
+    j += ",\"twaiArbLost\":";
+    j += canDiag.arbLostCount;
+    j += ",\"twaiArbRate\":";
+    j += String(canDiagArbLostRate, 1);
+    j += ",\"twaiRxMissed\":";
+    j += canDiag.rxMissedCount;
+    j += ",\"twaiRxOverrun\":";
+    j += canDiag.rxOverrunCount;
+    j += ",\"twaiBusOff\":";
+    j += canDiag.busOffCount;
+    j += ",\"twaiRecovered\":";
+    j += canDiag.recoveryCount;
+    j += ",\"twaiErrWarn\":";
+    j += canDiag.errorWarningCount;
+    j += ",\"twaiErrPassive\":";
+    j += canDiag.errorPassiveCount;
+    j += ",\"twaiStaleDrop\":";
+    j += canDiag.staleDropCount;
+    j += ",\"twaiSafetyTripped\":";
+    j += canDiag.safetyTripped ? "true" : "false";
+    j += ",\"twaiSafetyReason\":\"";
+    j += dashCanSafetyReasonName(canDiag.safetyReason);
+    j += "\",\"twaiSafetyTrips\":";
+    j += canDiag.safetyTripCount;
+    j += ",\"bleRxEnabled\":";
+    j += bleFsdConfig.enabled ? "true" : "false";
+    j += ",\"bleRxConnected\":";
+    j += bleStatus.connected ? "true" : "false";
+    j += ",\"bleRxState\":\"";
+    j += bleFsdReceiverStateName(bleStatus.state);
+    j += "\",\"bleRxRemainingMs\":";
+    j += bleStatus.testRemainingMs;
+    j += ",\"bleRxLastSeq\":";
+    j += bleStatus.lastSequence;
+    j += ",\"bleRxRssi\":";
+    j += bleStatus.rssi;
+    j += ",\"bleRxPeerMac\":\"";
+    j += bleStatus.peerMac;
+    j += "\",\"bleRxPeerName\":\"";
+    j += jsonEscape(String(bleStatus.peerName));
+    j += "\",\"bleRxSubscribed\":";
+    j += bleStatus.subscribed ? "true" : "false";
+    j += ",\"bleRxConnectedAtMs\":";
+    j += bleStatus.connectedAtMs;
+    j += ",\"bleRxLastDisconnectAtMs\":";
+    j += bleStatus.lastDisconnectAtMs;
+    j += ",\"bleRxReject\":\"";
+    j += bleFsdRejectReasonName(bleStatus.lastReject);
+    j += "\",\"bleRxReason\":\"";
+    j += bleStatus.lastReason;
+    j += "\",\"bleRxWindows\":";
+    j += bleStatus.testWindows;
+    j += ",\"bleRxCrcErrors\":";
+    j += bleStatus.crcErrors;
+    j += ",\"bleRxDuplicates\":";
+    j += bleStatus.duplicateCount;
+    j += ",\"bleRxTimeouts\":";
+    j += bleStatus.timeoutCount;
     j += ",\"fps\":";
     {
         unsigned long fpsX10 = static_cast<unsigned long>(fps * 10.0f + 0.5f);
@@ -833,16 +1045,162 @@ static void handleStatus()
     server.send(200, "application/json", j);
 }
 
+static bool dashBleFsdMacValid(const String &value)
+{
+    unsigned int octets[6] = {};
+    return value.length() == 17 &&
+           sscanf(value.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x",
+                  &octets[0], &octets[1], &octets[2], &octets[3], &octets[4], &octets[5]) == 6 &&
+           octets[0] <= 0xFF && octets[1] <= 0xFF && octets[2] <= 0xFF &&
+           octets[3] <= 0xFF && octets[4] <= 0xFF && octets[5] <= 0xFF;
+}
+
+static String dashBleFsdStatusJson(bool includeConfig)
+{
+    const BleFsdReceiverStatus s = bleFsdReceiverGetStatus();
+    String j = "{\"ok\":true,\"enabled\":";
+    j += bleFsdConfig.enabled ? "true" : "false";
+    if (includeConfig)
+    {
+        j += ",\"mac\":\"";
+        j += bleFsdConfig.peerMac;
+        j += "\",\"rssiThreshold\":";
+        j += bleFsdConfig.rssiThreshold;
+        j += ",\"testWindowMs\":";
+        j += bleFsdConfig.testWindowMs;
+    }
+    j += ",\"initialized\":";
+    j += s.initialized ? "true" : "false";
+    j += ",\"scanning\":";
+    j += s.scanning ? "true" : "false";
+    j += ",\"connected\":";
+    j += s.connected ? "true" : "false";
+    j += ",\"subscribed\":";
+    j += s.subscribed ? "true" : "false";
+    j += ",\"rssi\":";
+    j += s.rssi;
+    j += ",\"peerMac\":\"";
+    j += s.peerMac;
+    j += "\",\"peerName\":\"";
+    j += jsonEscape(String(s.peerName));
+    j += "\",\"peerAddressType\":";
+    j += s.peerAddressType;
+    j += ",\"connectedAtMs\":";
+    j += s.connectedAtMs;
+    j += ",\"lastDisconnectAtMs\":";
+    j += s.lastDisconnectAtMs;
+    j += ",\"state\":\"";
+    j += bleFsdReceiverStateName(s.state);
+    j += "\",\"remainingMs\":";
+    j += s.testRemainingMs;
+    j += ",\"lastSequence\":";
+    j += s.lastSequence;
+    j += ",\"lastPacketAtMs\":";
+    j += s.lastPacketAtMs;
+    j += ",\"lastReject\":\"";
+    j += bleFsdRejectReasonName(s.lastReject);
+    j += "\",\"reason\":\"";
+    j += s.lastReason;
+    j += "\",\"crcErrors\":";
+    j += s.crcErrors;
+    j += ",\"timeouts\":";
+    j += s.timeoutCount;
+    j += ",\"duplicates\":";
+    j += s.duplicateCount;
+    j += ",\"rejected\":";
+    j += s.rejectedCount;
+    j += ",\"windows\":";
+    j += s.testWindows;
+    j += "}";
+    return j;
+}
+
+static void handleBleFsdStatus()
+{
+    server.send(200, "application/json", dashBleFsdStatusJson(true));
+}
+
+static String dashBleFsdScanJson(bool started)
+{
+    const BleFsdReceiverStatus status = bleFsdReceiverGetStatus();
+    BleFsdScanEntry entries[10] = {};
+    const size_t count = bleFsdReceiverGetScanResults(entries, 10);
+
+    String j = "{\"ok\":true,\"started\":";
+    j += started ? "true" : "false";
+    j += ",\"scanning\":";
+    j += status.scanning ? "true" : "false";
+    j += ",\"reason\":\"";
+    j += status.lastReason;
+    j += "\",\"devices\":[";
+    for (size_t i = 0; i < count; ++i)
+    {
+        if (i)
+            j += ",";
+        j += "{\"mac\":\"";
+        j += entries[i].mac;
+        j += "\",\"name\":\"";
+        j += jsonEscape(String(entries[i].name));
+        j += "\",\"rssi\":";
+        j += entries[i].rssi;
+        j += ",\"fsdService\":";
+        j += entries[i].fsdServiceAdvertised ? "true" : "false";
+        j += ",\"connectable\":";
+        j += entries[i].connectable ? "true" : "false";
+        j += "}";
+    }
+    j += "]}";
+    return j;
+}
+
+static void handleBleFsdScan()
+{
+    const bool started = server.hasArg("start") && server.arg("start") == "1" &&
+                         bleFsdReceiverStartDiscovery(10000);
+    server.send(200, "application/json", dashBleFsdScanJson(started));
+}
+
+static void handleBleFsdConfig()
+{
+    BleFsdReceiverConfig candidate = bleFsdConfig;
+    if (server.hasArg("enabled"))
+        candidate.enabled = server.arg("enabled") == "1";
+    if (server.hasArg("mac"))
+    {
+        const String mac = server.arg("mac");
+        if (mac.length() > 0 && !dashBleFsdMacValid(mac))
+        {
+            server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid BLE MAC\"}");
+            return;
+        }
+        strlcpy(candidate.peerMac, mac.c_str(), sizeof(candidate.peerMac));
+    }
+    if (candidate.enabled && !dashBleFsdMacValid(String(candidate.peerMac)))
+    {
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"BLE MAC required\"}");
+        return;
+    }
+    if (server.hasArg("rssi"))
+        candidate.rssiThreshold = std::clamp<int>(server.arg("rssi").toInt(), -100, -20);
+    if (server.hasArg("window"))
+        candidate.testWindowMs = std::clamp<unsigned long>(
+            strtoul(server.arg("window").c_str(), nullptr, 10), 1000UL, 60000UL);
+
+    bleFsdConfig = candidate;
+    bleFsdReceiverConfigure(bleFsdConfig);
+    dashSavePrefs();
+    dashLog("[CFG] BLE RX " + String(bleFsdConfig.enabled ? "ON" : "OFF") +
+            " diagnostic-only; CAN TX remains independent");
+    server.send(200, "application/json", dashBleFsdStatusJson(true));
+}
+
 static void handleConfig()
 {
+    bool requestedCan = canActive;
     if (server.hasArg("can") || server.hasArg("force"))
     {
-        bool requestedTx = server.hasArg("can") ? (server.arg("can") == "1") : (server.arg("force") == "1");
-        if (requestedTx != canActive)
-        {
-            canActive = requestedTx;
-            dashLog("[CFG] Nag/CAN TX " + String(requestedTx ? "ON" : "OFF"));
-        }
+        requestedCan = server.hasArg("can") ? (server.arg("can") == "1") : (server.arg("force") == "1");
+        dashSetCanActive(requestedCan, "WebUI");
     }
 #if defined(NAG_KILLER)
     nagKillerEnabled = true;
@@ -850,7 +1208,12 @@ static void handleConfig()
 #endif
     dashApplyRuntimeState();
     dashSavePrefs();
-    server.send(200, "application/json", "{\"ok\":true,\"product\":\"wifi-nag\"}");
+    String response = "{\"ok\":true,\"product\":\"wifi-nag\",\"can\":";
+    response += canActive ? "true" : "false";
+    response += ",\"requestedCan\":";
+    response += requestedCan ? "true" : "false";
+    response += "}";
+    server.send(200, "application/json", response);
 }
 #if defined(NAG_KILLER) && defined(PRODUCT_WIFI_NAG)
 static void handleNagApiConfig()
@@ -925,6 +1288,18 @@ static void handleDisable()
 {
     dashSetCanActive(false, "dashboard");
     server.send(200, "text/plain", "Injection stopped.");
+}
+
+static void handleCanDiagnosticsReset()
+{
+    bool ok = dashDriver && dashDriver->resetDiagnostics();
+    txErrCount = 0;
+    canDiagLastSampleMs = 0;
+    canDiagLastArbLost = 0;
+    canDiagArbLostRate = 0.0f;
+    dashLog("[CAN] Diagnostics counters reset");
+    server.send(ok ? 200 : 503, "application/json",
+                ok ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"CAN diagnostics unavailable\"}");
 }
 
 static void handleReboot()
@@ -1250,10 +1625,11 @@ static void dashCheckWifi()
         dashGatewayOnStaDisconnected(WiFi.apNetif());
         if (staConsecutiveFailures < 255)
             staConsecutiveFailures++;
-        staRetryAt = now + kDashStaSavedPollMs;
+        unsigned long retryMs = dashStaRetryDelayMs();
+        staRetryAt = now + retryMs;
         dashLog("[WIFI] STA connect timed out; status=" + String(dashWifiStatusName(wifiStatus)) +
                 " reason=" + String(reasonName) + "(" + String(reason) + ")" +
-                " retry saved networks in " + String(kDashStaSavedPollMs / 1000) +
+                " retry saved networks in " + String(retryMs / 1000) +
                 "s, AP+STA stays up (fail#" + String(staConsecutiveFailures) + ")");
         connected = false;
     }
@@ -1283,12 +1659,13 @@ static void dashCheckWifi()
         {
             if (staConsecutiveFailures < 255)
                 staConsecutiveFailures++;
+            unsigned long retryMs = dashStaRetryDelayMs();
             dashLog("[WIFI] Disconnected from " + String(staSSID) +
-                    "; retry saved networks in " + String(kDashStaSavedPollMs / 1000) + "s (fail#" +
+                    "; retry saved networks in " + String(retryMs / 1000) + "s (fail#" +
                     String(staConsecutiveFailures) + ")");
             dashGatewayOnStaDisconnected(WiFi.apNetif());
             staConnectAttemptActive = false;
-            staRetryAt = now + kDashStaSavedPollMs;
+            staRetryAt = now + retryMs;
         }
     }
 
@@ -2000,6 +2377,8 @@ static void dashSerialPrintSystemStatus()
 static void dashSerialPrintCanStatus()
 {
     unsigned long fpsX10 = static_cast<unsigned long>(fps * 10.0f + 0.5f);
+    CanDriverDiagnostics canDiag = {};
+    bool canDiagAvailable = dashDriver && dashDriver->getDiagnostics(canDiag);
     Serial.println();
     Serial.println("[can_status]");
     Serial.printf("can=%s can_write=%s nag_tx_active=%s hw=%u\n",
@@ -2009,6 +2388,23 @@ static void dashSerialPrintCanStatus()
                   (unsigned)hwMode);
     Serial.printf("rx=%lu tx=%lu txerr=%lu fps=%lu.%lu\n",
                   rxCount, txCount, txErrCount, fpsX10 / 10, fpsX10 % 10);
+    Serial.printf("twai=%s tec=%lu rec=%lu txq=%lu rxq=%lu\n",
+                  canDiagAvailable ? dashCanDriverStateName(canDiag.state) : "UNAVAILABLE",
+                  (unsigned long)canDiag.txErrorCounter,
+                  (unsigned long)canDiag.rxErrorCounter,
+                  (unsigned long)canDiag.msgsToTx,
+                  (unsigned long)canDiag.msgsToRx);
+    Serial.printf("tx_failed=%lu bus_error=%lu arb_lost=%lu rx_missed=%lu rx_overrun=%lu\n",
+                  (unsigned long)canDiag.txFailedCount,
+                  (unsigned long)canDiag.busErrorCount,
+                  (unsigned long)canDiag.arbLostCount,
+                  (unsigned long)canDiag.rxMissedCount,
+                  (unsigned long)canDiag.rxOverrunCount);
+    Serial.printf("bus_off=%lu recovered=%lu err_warn=%lu err_passive=%lu\n",
+                  (unsigned long)canDiag.busOffCount,
+                  (unsigned long)canDiag.recoveryCount,
+                  (unsigned long)canDiag.errorWarningCount,
+                  (unsigned long)canDiag.errorPassiveCount);
     Serial.println();
 }
 
@@ -2155,6 +2551,7 @@ static void webTask(void *)
 {
     for (;;)
     {
+        dashProcessCanSafetyTrip();
         ArduinoOTA.handle();
         server.handleClient();
         dashCheckWifi();
@@ -2167,7 +2564,10 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     dashHandler = handler;
     dashDriver = driver;
     if (dashDriver)
+    {
         dashDriver->onSendFrame = mcpDashOnTxFrame;
+        dashDriver->onSafetyTrip = mcpDashOnCanSafetyTrip;
+    }
     startMs = millis();
     fpsLastMs = millis();
 
@@ -2175,6 +2575,7 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
         dashLog("[WARN] SPIFFS mount failed");
 
     dashLoadPrefs();
+    bleFsdReceiverStart(bleFsdConfig);
     dashGatewayLoad();
     // Always boot in AP+STA mode so the STA interface is ready immediately.
     // This prevents connection failures to saved networks caused by late mode switching.
@@ -2205,6 +2606,9 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
 
     server.on("/", HTTP_GET, handleRoot);
     server.on("/status", HTTP_GET, handleStatus);
+    server.on("/ble_fsd", HTTP_GET, handleBleFsdStatus);
+    server.on("/ble_fsd", HTTP_POST, handleBleFsdConfig);
+    server.on("/ble_fsd_scan", HTTP_GET, handleBleFsdScan);
     server.on("/config", HTTP_POST, handleConfig);
 #if defined(NAG_KILLER)
     server.on("/api/config", HTTP_GET, handleNagApiConfig);
@@ -2214,6 +2618,7 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
 #endif
     server.on("/logging", HTTP_POST, handleLoggingConfig);
     server.on("/disable", HTTP_POST, handleDisable);
+    server.on("/can_diag_reset", HTTP_POST, handleCanDiagnosticsReset);
     server.on("/log", HTTP_GET, handleLog);
     server.on("/reboot", HTTP_POST, handleReboot);
     server.on("/update", HTTP_POST, handleOtaResult, handleOtaUpload);

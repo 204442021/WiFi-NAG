@@ -8,6 +8,9 @@ UI_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.h"
 DASH_FILE = ROOT / "include" / "web" / "mcp2515_dashboard.h"
 GATEWAY_FILE = ROOT / "include" / "web" / "dash_gateway.h"
 RUNTIME_FILE = ROOT / "src" / "espidf_runtime.cpp"
+CAN_DRIVER_FILE = ROOT / "include" / "drivers" / "can_driver.h"
+TWAI_DRIVER_FILE = ROOT / "include" / "drivers" / "twai_driver.h"
+PLATFORMIO_FILE = ROOT / "platformio.ini"
 
 
 class WifiNagRegressionTests(unittest.TestCase):
@@ -17,6 +20,9 @@ class WifiNagRegressionTests(unittest.TestCase):
         cls.dash = DASH_FILE.read_text(encoding="utf-8")
         cls.gateway = GATEWAY_FILE.read_text(encoding="utf-8")
         cls.runtime = RUNTIME_FILE.read_text(encoding="utf-8")
+        cls.can_driver = CAN_DRIVER_FILE.read_text(encoding="utf-8")
+        cls.twai_driver = TWAI_DRIVER_FILE.read_text(encoding="utf-8")
+        cls.platformio = PLATFORMIO_FILE.read_text(encoding="utf-8")
 
     def assertHasUiId(self, element_id: str) -> None:
         pattern = rf'\bid=(?:"{re.escape(element_id)}"|{re.escape(element_id)}\b)'
@@ -113,6 +119,80 @@ class WifiNagRegressionTests(unittest.TestCase):
     def test_espidf_wifi_logging_is_not_info_verbose(self) -> None:
         self.assertIn('esp_log_level_set("wifi", ESP_LOG_WARN);', self.runtime)
         self.assertIn('esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);', self.runtime)
+
+    def test_sta_retry_backoff_keeps_apsta_but_reduces_reconnect_churn(self) -> None:
+        self.assertIn("kDashStaBackoffFailureThreshold = 3", self.dash)
+        self.assertIn("kDashStaBackoffPollMs = 10000", self.dash)
+        self.assertIn("dashStaRetryDelayMs()", self.dash)
+        self.assertIn("AP+STA stays up", self.dash)
+        self.assertIn("retryMs / 1000", self.dash)
+        self.assertIn("dashStartAccessPoint(true)", self.dash)
+
+    def test_twai_diagnostics_are_exposed_below_torque_controls(self) -> None:
+        required_ids = [
+            "can-diag-row",
+            "can-diag-state",
+            "can-diag-errors",
+            "can-diag-queues",
+            "can-diag-reject",
+            "can-diag-txbus",
+            "can-diag-arb",
+            "can-diag-rxloss",
+            "can-diag-busoff",
+            "can-diag-warning",
+            "can-diag-safety",
+            "can-diag-reset",
+        ]
+        for element_id in required_ids:
+            with self.subTest(element_id=element_id):
+                self.assertHasUiId(element_id)
+
+        self.assertIn("CanDriverDiagnostics", self.can_driver)
+        self.assertIn("getDiagnostics", self.can_driver)
+        for token in [
+            "TWAI_ALERT_BUS_OFF",
+            "TWAI_ALERT_BUS_ERROR",
+            "TWAI_ALERT_ARB_LOST",
+            "tx_error_counter",
+            "rx_error_counter",
+            "tx_failed_count",
+            "rx_missed_count",
+            "rx_overrun_count",
+            "bus_error_count",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.twai_driver)
+
+        for json_field in [
+            "twaiState",
+            "twaiTec",
+            "twaiRec",
+            "twaiTxFailed",
+            "twaiBusError",
+            "twaiArbLost",
+            "twaiBusOff",
+            "twaiRecovered",
+            "twaiStaleDrop",
+            "twaiSafetyTripped",
+            "twaiSafetyReason",
+            "twaiArbRate",
+        ]:
+            with self.subTest(json_field=json_field):
+                self.assertIn(json_field, self.dash)
+
+        self.assertIn('server.on("/can_diag_reset"', self.dash)
+        self.assertIn("-DTWAI_TX_QUEUE_LEN=1", self.platformio)
+        self.assertIn("status.msgs_to_tx > 0", self.twai_driver)
+        self.assertIn("staleDropCount_++", self.twai_driver)
+        self.assertIn("twai_transmit(&msg, 0)", self.twai_driver)
+        self.assertIn("kErrorCounterTripThreshold = 96", self.twai_driver)
+        self.assertIn("kBusErrorBurstLimit = 10", self.twai_driver)
+        self.assertIn("onSafetyTrip", self.can_driver)
+        self.assertIn("bool needsRestart = safetyTripped_", self.twai_driver)
+        self.assertIn("stopAndUninstallLocked();", self.twai_driver)
+        self.assertIn("driverOK_ = installAndStartLocked();", self.twai_driver)
+        self.assertIn('\\"requestedCan\\":', self.dash)
+        self.assertIn("typeof d.can==='boolean'", self.ui)
 
 
 if __name__ == "__main__":

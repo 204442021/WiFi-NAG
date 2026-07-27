@@ -10,6 +10,7 @@ public:
     static constexpr bool kSupportsISR = false;
 
     std::vector<CanFrame> sent;
+    bool sendResult = true;
 
     bool init() override { return true; }
     void setFilters(const uint32_t * /*ids*/, uint8_t /*count*/) override {}
@@ -22,14 +23,16 @@ public:
 
     bool send(const CanFrame &frame) override
     {
-        sent.push_back(frame);
+        if (sendResult)
+            sent.push_back(frame);
         if (onSendFrame)
-            onSendFrame(frame, true);
-        return true;
+            onSendFrame(frame, sendResult);
+        return sendResult;
     }
 
     void reset()
     {
         sent.clear();
+        sendResult = true;
     }
 };

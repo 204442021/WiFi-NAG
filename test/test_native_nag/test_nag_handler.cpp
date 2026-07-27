@@ -439,6 +439,20 @@ void test_nag_multiple_frames_count_correctly()
     TEST_ASSERT_EQUAL(10, mock.sent.size());
 }
 
+void test_nag_failed_send_is_counted_without_arming_own_echo()
+{
+    mock.sendResult = false;
+    CanFrame f = makeEpasFrame(0, 0.33, 0x0C);
+    handler.handleMessage(f, mock);
+
+    TEST_ASSERT_EQUAL(0, mock.sent.size());
+    TEST_ASSERT_EQUAL_UINT32(0, handler.framesSent);
+    TEST_ASSERT_EQUAL_UINT32(0, handler.nagEchoCount);
+    TEST_ASSERT_EQUAL_UINT32(1, handler.nagTxDropCount);
+    TEST_ASSERT_FALSE(handler.hasLastInjected);
+    TEST_ASSERT_EQUAL_INT16(0, handler.lastInjectedCenti());
+}
+
 // ============================================================
 // Edge case: mixed handsOn sequence
 // ============================================================
@@ -477,6 +491,27 @@ void test_nag_output_dlc_is_8()
     CanFrame f = makeEpasFrame(0, 0.33, 0x0C);
     handler.handleMessage(f, mock);
     TEST_ASSERT_EQUAL_UINT8(8, mock.sent[0].dlc);
+}
+
+void test_nag_a_mode_window_forces_mode_a_and_expires()
+{
+    handler.setTestNowMs(1000);
+    handler.setMode(NagHandler::MODE_A_V2);
+    TEST_ASSERT_EQUAL_UINT8(NagHandler::MODE_A_V2, (uint8_t)handler.nagMode);
+    TEST_ASSERT_FALSE(handler.aModeActive());
+
+    handler.triggerAModeWindow(10000);
+    TEST_ASSERT_EQUAL_UINT8(NagHandler::MODE_A, (uint8_t)handler.nagMode);
+    TEST_ASSERT_TRUE(handler.aModeActive());
+    TEST_ASSERT_EQUAL_UINT32(10000, handler.aModeRemainingMs());
+
+    handler.setTestNowMs(6000);
+    TEST_ASSERT_TRUE(handler.aModeActive());
+    TEST_ASSERT_EQUAL_UINT32(5000, handler.aModeRemainingMs());
+
+    handler.setTestNowMs(11000);
+    TEST_ASSERT_FALSE(handler.aModeActive());
+    TEST_ASSERT_EQUAL_UINT32(0, handler.aModeRemainingMs());
 }
 
 int main()
@@ -532,6 +567,7 @@ int main()
     RUN_TEST(test_nag_increments_frames_sent);
     RUN_TEST(test_nag_increments_echo_count);
     RUN_TEST(test_nag_multiple_frames_count_correctly);
+    RUN_TEST(test_nag_failed_send_is_counted_without_arming_own_echo);
 
     // Edge cases
     RUN_TEST(test_nag_echoes_all_handson_levels_in_mixed_sequence);
@@ -539,6 +575,9 @@ int main()
     // Output frame
     RUN_TEST(test_nag_output_id_is_880);
     RUN_TEST(test_nag_output_dlc_is_8);
+
+    // BLE-triggered A-mode display window
+    RUN_TEST(test_nag_a_mode_window_forces_mode_a_and_expires);
 
     return UNITY_END();
 }
