@@ -3,6 +3,7 @@
 #ifdef ESP_PLATFORM
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdarg>
 #include <cstdio>
@@ -18,6 +19,7 @@
 
 #include <driver/gpio.h>
 #include <esp_app_desc.h>
+#include <esp_app_format.h>
 #include <esp_event.h>
 #include <esp_http_server.h>
 #include <esp_log.h>
@@ -461,11 +463,27 @@ public:
     bool isFinished() const { return finished_; }
 
 private:
+    static constexpr size_t kImagePrefixSize =
+        sizeof(esp_image_header_t) +
+        sizeof(esp_image_segment_header_t) +
+        sizeof(esp_app_desc_t);
+
     void setError(const char *message);
+    bool prepareTargetPartition(size_t imageSize);
+    bool validateImagePrefix() const;
+    bool verifyWrittenImage();
+    void abortHandle();
 
     const esp_partition_t *partition_ = nullptr;
+    const esp_partition_t *runningPartition_ = nullptr;
+    const esp_partition_t *bootPartitionBefore_ = nullptr;
     esp_ota_handle_t handle_ = 0;
+    std::array<uint8_t, kImagePrefixSize> imagePrefix_ = {};
+    size_t imagePrefixBytes_ = 0;
+    size_t bytesReceived_ = 0;
+    size_t bytesWritten_ = 0;
     bool running_ = false;
+    bool handleActive_ = false;
     bool finished_ = false;
     bool error_ = false;
     std::string errorText_;

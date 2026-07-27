@@ -965,7 +965,6 @@ static void handleOtaUpload()
     if (upload.status == UPLOAD_FILE_START)
     {
         dashLog("[OTA] Receiving: " + String(upload.filename.c_str()));
-        esp_task_wdt_deinit();
         if (!Update.begin(UPDATE_SIZE_UNKNOWN))
             dashLog("[OTA] Begin failed: " + String(Update.errorString()));
     }

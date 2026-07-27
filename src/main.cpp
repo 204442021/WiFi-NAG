@@ -22,6 +22,67 @@
 #endif
 
 #if defined(ESP_PLATFORM)
+static constexpr uint32_t APP_OTA_HEALTH_WINDOW_MS = 15000UL;
+static bool appOtaHealthObserving = false;
+static bool appOtaHealthDecided = false;
+static uint32_t appOtaHealthDeadlineMs = 0;
+
+static void appStartOtaHealthObservation()
+{
+    if (appOtaHealthDecided || appOtaHealthObserving)
+        return;
+
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    esp_ota_img_states_t state = ESP_OTA_IMG_UNDEFINED;
+    if (!running ||
+        esp_ota_get_state_partition(running, &state) != ESP_OK ||
+        (state != ESP_OTA_IMG_NEW &&
+         state != ESP_OTA_IMG_PENDING_VERIFY))
+    {
+        appOtaHealthDecided = true;
+        return;
+    }
+
+    appOtaHealthObserving = true;
+    appOtaHealthDeadlineMs = millis() + APP_OTA_HEALTH_WINDOW_MS;
+    Serial.println("[OTA] Pending image health observation started");
+}
+
+static void appServiceOtaHealthObservation()
+{
+    if (!appOtaHealthObserving ||
+        static_cast<int32_t>(millis() - appOtaHealthDeadlineMs) < 0)
+        return;
+
+    appOtaHealthObserving = false;
+    appOtaHealthDecided = true;
+    CanDriverDiagnostics diagnostics = {};
+    const bool canHealthy =
+        appDriver &&
+        appDriver->getDiagnostics(diagnostics) &&
+        diagnostics.available &&
+        diagnostics.state == CanDriverState::Running &&
+        !diagnostics.safetyTripped;
+    if (!canHealthy)
+    {
+        Serial.println("[OTA] Pending image failed health observation; rollback");
+        (void)esp_ota_mark_app_invalid_rollback_and_reboot();
+        ESP.restart();
+        return;
+    }
+
+    const esp_err_t result = esp_ota_mark_app_valid_cancel_rollback();
+    if (result != ESP_OK)
+    {
+        Serial.printf("[OTA] Mark valid failed=%s; rollback\n",
+                      esp_err_to_name(result));
+        (void)esp_ota_mark_app_invalid_rollback_and_reboot();
+        ESP.restart();
+        return;
+    }
+    Serial.println("[OTA] Pending image marked valid");
+}
+
 static bool appTwaiGpioReserved(gpio_num_t pin)
 {
     int p = static_cast<int>(pin);
@@ -131,8 +192,10 @@ extern "C" void app_main(void)
 
     app_main_setup();
     bool canTaskStarted = app_start_can_task();
+    appStartOtaHealthObservation();
     while (true)
     {
+        appServiceOtaHealthObservation();
         if (!canTaskStarted)
         {
             if (!app_main_loop())
@@ -149,10 +212,16 @@ extern "C" void app_main(void)
 void setup()
 {
     app_main_setup();
+#if defined(ESP_PLATFORM)
+    appStartOtaHealthObservation();
+#endif
 }
 
 void loop()
 {
+#if defined(ESP_PLATFORM)
+    appServiceOtaHealthObservation();
+#endif
     app_main_loop();
 }
 #endif

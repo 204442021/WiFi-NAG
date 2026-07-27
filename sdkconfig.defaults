@@ -41,3 +41,18 @@ CONFIG_SPIRAM_USE_MALLOC=y
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
 CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
 CONFIG_SPIRAM_MEMTEST=y
+
+# The PlatformIO environment flashes this exact dual-slot table. Keep the
+# ESP-IDF Kconfig view aligned with the generated partitions.bin so OTA,
+# bootloader diagnostics, and runtime code agree on the layout.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_16mb_ota_4096k_nvs64_boot.csv"
+# CONFIG_PARTITION_TABLE_SINGLE_APP is not set
+# CONFIG_PARTITION_TABLE_TWO_OTA is not set
+# CONFIG_PARTITION_TABLE_TWO_OTA_LARGE is not set
+
+# A newly selected OTA image must pass the application's boot health window
+# before it is marked valid; otherwise the rollback-aware bootloader restores
+# the previous slot on reboot.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK is not set

@@ -755,56 +755,111 @@ void UpdateClass::setError(const char *message)
     errorText_ = message ? message : "OTA error";
 }
 
-bool UpdateClass::begin(size_t)
+bool UpdateClass::begin(size_t imageSize)
 {
     abort();
-    partition_ = esp_ota_get_next_update_partition(nullptr);
-    if (!partition_)
-    {
-        setError("No OTA partition");
-        return false;
-    }
-    esp_err_t err = esp_ota_begin(partition_, OTA_SIZE_UNKNOWN, &handle_);
-    if (err != ESP_OK)
-    {
-        setError(esp_err_to_name(err));
-        return false;
-    }
     running_ = true;
     finished_ = false;
     error_ = false;
     errorText_.clear();
-    return true;
+    imagePrefixBytes_ = 0;
+    bytesReceived_ = 0;
+    bytesWritten_ = 0;
+    imagePrefix_.fill(0);
+    return prepareTargetPartition(imageSize);
 }
 
 size_t UpdateClass::write(const uint8_t *buf, size_t len)
 {
-    if (!running_)
+    if (!running_ || error_ || !buf || len == 0)
         return 0;
-    esp_err_t err = esp_ota_write(handle_, buf, len);
-    if (err != ESP_OK)
+
+    if (!partition_ || bytesReceived_ > partition_->size ||
+        len > partition_->size - bytesReceived_)
     {
-        setError(esp_err_to_name(err));
+        setError("Image exceeds OTA slot");
         return 0;
     }
+
+    size_t consumed = 0;
+    if (imagePrefixBytes_ < imagePrefix_.size())
+    {
+        const size_t take = std::min(
+            len, imagePrefix_.size() - imagePrefixBytes_);
+        std::memcpy(imagePrefix_.data() + imagePrefixBytes_, buf, take);
+        imagePrefixBytes_ += take;
+        consumed += take;
+
+        if (imagePrefixBytes_ == imagePrefix_.size())
+        {
+            if (!validateImagePrefix())
+            {
+                setError("Invalid ESP32-S3 image");
+                return 0;
+            }
+            const esp_err_t beginResult = esp_ota_begin(
+                partition_, OTA_WITH_SEQUENTIAL_WRITES, &handle_);
+            if (beginResult != ESP_OK)
+            {
+                setError(esp_err_to_name(beginResult));
+                return 0;
+            }
+            handleActive_ = true;
+            const esp_err_t prefixWrite = esp_ota_write(
+                handle_, imagePrefix_.data(), imagePrefix_.size());
+            if (prefixWrite != ESP_OK)
+            {
+                setError(esp_err_to_name(prefixWrite));
+                return 0;
+            }
+            bytesWritten_ += imagePrefix_.size();
+        }
+    }
+
+    if (consumed < len && handleActive_)
+    {
+        const esp_err_t writeResult =
+            esp_ota_write(handle_, buf + consumed, len - consumed);
+        if (writeResult != ESP_OK)
+        {
+            setError(esp_err_to_name(writeResult));
+            return 0;
+        }
+        bytesWritten_ += len - consumed;
+    }
+    bytesReceived_ += len;
     return len;
 }
 
 bool UpdateClass::end(bool)
 {
-    if (!running_)
+    if (!running_ || error_ || !handleActive_ ||
+        imagePrefixBytes_ != imagePrefix_.size() ||
+        bytesReceived_ == 0 || bytesReceived_ != bytesWritten_)
         return false;
     esp_err_t err = esp_ota_end(handle_);
+    handle_ = 0;
+    handleActive_ = false;
     running_ = false;
     if (err != ESP_OK)
     {
         setError(esp_err_to_name(err));
         return false;
     }
+    if (!verifyWrittenImage())
+        return false;
     err = esp_ota_set_boot_partition(partition_);
-    if (err != ESP_OK)
+    const esp_partition_t *selected = esp_ota_get_boot_partition();
+    if (err != ESP_OK || selected != partition_)
     {
-        setError(esp_err_to_name(err));
+        const esp_err_t restore =
+            bootPartitionBefore_ ? esp_ota_set_boot_partition(bootPartitionBefore_)
+                                 : ESP_FAIL;
+        if (restore != ESP_OK ||
+            esp_ota_get_boot_partition() != bootPartitionBefore_)
+            setError("Boot partition restore failed");
+        else
+            setError("Boot partition selection failed");
         return false;
     }
     finished_ = true;
@@ -813,12 +868,130 @@ bool UpdateClass::end(bool)
 
 void UpdateClass::abort()
 {
-    if (running_)
-        esp_ota_abort(handle_);
+    abortHandle();
     running_ = false;
     finished_ = false;
-    handle_ = 0;
     partition_ = nullptr;
+    runningPartition_ = nullptr;
+    bootPartitionBefore_ = nullptr;
+    imagePrefixBytes_ = 0;
+    bytesReceived_ = 0;
+    bytesWritten_ = 0;
+    imagePrefix_.fill(0);
+}
+
+void UpdateClass::abortHandle()
+{
+    if (handleActive_)
+        (void)esp_ota_abort(handle_);
+    handle_ = 0;
+    handleActive_ = false;
+}
+
+bool UpdateClass::prepareTargetPartition(size_t imageSize)
+{
+    runningPartition_ = esp_ota_get_running_partition();
+    if (!runningPartition_ ||
+        runningPartition_->type != ESP_PARTITION_TYPE_APP)
+    {
+        setError("No running app partition");
+        running_ = false;
+        return false;
+    }
+
+    const esp_partition_t *boot = esp_ota_get_boot_partition();
+    if (boot != runningPartition_)
+    {
+        const esp_err_t align =
+            esp_ota_set_boot_partition(runningPartition_);
+        if (align != ESP_OK ||
+            esp_ota_get_boot_partition() != runningPartition_)
+        {
+            setError("Boot partition repair failed");
+            running_ = false;
+            return false;
+        }
+    }
+    bootPartitionBefore_ = runningPartition_;
+
+    partition_ =
+        esp_ota_get_next_update_partition(runningPartition_);
+    if (!partition_ || partition_ == runningPartition_ ||
+        partition_->type != ESP_PARTITION_TYPE_APP ||
+        partition_->subtype < ESP_PARTITION_SUBTYPE_APP_OTA_MIN ||
+        partition_->subtype >= ESP_PARTITION_SUBTYPE_APP_OTA_MAX ||
+        partition_->size == 0)
+    {
+        setError("No valid inactive OTA partition");
+        running_ = false;
+        return false;
+    }
+    if (imageSize != UPDATE_SIZE_UNKNOWN &&
+        imageSize > partition_->size)
+    {
+        setError("Image exceeds OTA slot");
+        running_ = false;
+        return false;
+    }
+    return true;
+}
+
+bool UpdateClass::validateImagePrefix() const
+{
+    if (imagePrefixBytes_ != imagePrefix_.size())
+        return false;
+    esp_image_header_t imageHeader = {};
+    std::memcpy(&imageHeader, imagePrefix_.data(), sizeof(imageHeader));
+    if (imageHeader.magic != ESP_IMAGE_HEADER_MAGIC ||
+        imageHeader.chip_id != ESP_CHIP_ID_ESP32S3 ||
+        imageHeader.segment_count == 0 ||
+        imageHeader.segment_count > ESP_IMAGE_MAX_SEGMENTS)
+        return false;
+
+    esp_image_segment_header_t segmentHeader = {};
+    std::memcpy(
+        &segmentHeader,
+        imagePrefix_.data() + sizeof(imageHeader),
+        sizeof(segmentHeader));
+    if (segmentHeader.data_len < sizeof(esp_app_desc_t))
+        return false;
+
+    esp_app_desc_t description = {};
+    std::memcpy(
+        &description,
+        imagePrefix_.data() + sizeof(imageHeader) +
+            sizeof(segmentHeader),
+        sizeof(description));
+    return description.magic_word == ESP_APP_DESC_MAGIC_WORD;
+}
+
+bool UpdateClass::verifyWrittenImage()
+{
+    if (!partition_ || bytesReceived_ != bytesWritten_ ||
+        bytesWritten_ > partition_->size)
+    {
+        setError("OTA image size mismatch");
+        return false;
+    }
+    esp_image_header_t imageHeader = {};
+    if (esp_partition_read(
+            partition_, 0, &imageHeader, sizeof(imageHeader)) != ESP_OK ||
+        imageHeader.magic != ESP_IMAGE_HEADER_MAGIC ||
+        imageHeader.chip_id != ESP_CHIP_ID_ESP32S3 ||
+        imageHeader.segment_count == 0 ||
+        imageHeader.segment_count > ESP_IMAGE_MAX_SEGMENTS)
+    {
+        setError("OTA image header invalid");
+        return false;
+    }
+    esp_app_desc_t description = {};
+    if (esp_ota_get_partition_description(partition_, &description) != ESP_OK ||
+        description.magic_word != ESP_APP_DESC_MAGIC_WORD)
+    {
+        setError("OTA image descriptor invalid");
+        return false;
+    }
+    return true;
 }
 
 void WebServer::on(const char *uriValue, http_method methodValue, Handler handler)
