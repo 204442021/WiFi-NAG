@@ -90,6 +90,11 @@ static bool app_main_loop()
 #define APP_CAN_TASK_CORE 0
 #endif
 
+static void appCanShutdownHandler()
+{
+    appPrepareCanForRestart();
+}
+
 static void app_can_task(void *)
 {
     appCanTaskDedicated = true;
@@ -128,6 +133,7 @@ extern "C" void app_main(void)
         nvsErr = nvs_flash_init();
     }
     ESP_ERROR_CHECK(nvsErr);
+    ESP_ERROR_CHECK(esp_register_shutdown_handler(appCanShutdownHandler));
 
     app_main_setup();
     bool canTaskStarted = app_start_can_task();
