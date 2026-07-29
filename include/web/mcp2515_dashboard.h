@@ -14,12 +14,14 @@
 #include <esp_task_wdt.h>
 #ifdef ESP_PLATFORM
 #include <driver/temperature_sensor.h>
+#include <esp_app_desc.h>
 #include <esp_chip_info.h>
 #include <esp_flash.h>
 #include <esp_heap_caps.h>
 #include <esp_image_format.h>
 #include <esp_mac.h>
 #include <esp_ota_ops.h>
+#include <esp_partition.h>
 #include <esp_pm.h>
 #include <esp_sleep.h>
 #include <esp_spiffs.h>
@@ -42,6 +44,10 @@
 
 #if !defined(PRODUCT_WIFI_NAG)
 #error "This firmware is maintained as WIFI-NAG only."
+#endif
+
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION "unknown"
 #endif
 
 #ifndef DASH_SSID
@@ -97,6 +103,7 @@ static unsigned long txErrCount = 0;
 static unsigned long lastFrameMs = 0;
 static unsigned long startMs = 0;
 static bool canOnline = false;
+static String lastOtaUploadTime = "";
 
 static unsigned long fpsFrames = 0;
 static unsigned long fpsLastMs = 0;
@@ -281,6 +288,61 @@ static String jsonEscape(const String &s)
     }
     return out;
 }
+
+static bool dashValidOtaTime(const String &value)
+{
+    if (value.length() != 19)
+        return false;
+    for (unsigned int i = 0; i < value.length(); i++)
+    {
+        const char c = value.charAt(i);
+        const bool separator = i == 4 || i == 7 || i == 10 || i == 13 || i == 16;
+        if (separator)
+        {
+            const char expected = i == 4 || i == 7 ? '-' : (i == 10 ? ' ' : ':');
+            if (c != expected)
+                return false;
+        }
+        else if (c < '0' || c > '9')
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool dashPersistOtaTime(const String &otaTime)
+{
+    if (!dashValidOtaTime(otaTime))
+        return false;
+    if (!prefs.begin(PREFS_NS, false))
+        return false;
+    prefs.putString("ota_time", otaTime);
+    prefs.end();
+    lastOtaUploadTime = otaTime;
+    return true;
+}
+
+#ifdef ESP_PLATFORM
+static const char *dashFirmwareVersion()
+{
+    const esp_app_desc_t *description = esp_app_get_description();
+    if (description && description->version[0] != '\0')
+        return description->version;
+    return FIRMWARE_VERSION;
+}
+
+static const char *dashOtaPartitionName(const esp_partition_t *running)
+{
+    if (!running)
+        return "unknown";
+    if (running->subtype == ESP_PARTITION_SUBTYPE_APP_OTA_0)
+        return "OTA_0";
+    if (running->subtype == ESP_PARTITION_SUBTYPE_APP_OTA_1)
+        return "OTA_1";
+    return running->label[0] ? running->label : "unknown";
+}
+#endif
 
 static bool dashInjectionActive()
 {
@@ -511,6 +573,12 @@ static void dashClearRetiredOptionPrefs()
 static void dashLoadPrefs()
 {
     prefs.begin(PREFS_NS, false);
+    lastOtaUploadTime = prefs.getString("ota_time", "");
+    if (!lastOtaUploadTime.isEmpty() && !dashValidOtaTime(lastOtaUploadTime))
+    {
+        prefs.remove("ota_time");
+        lastOtaUploadTime = "";
+    }
     uint8_t storedHw = prefs.getUChar("hw", DASH_DEFAULT_HW);
     uint8_t storedDefaultHw = prefs.getUChar("hw_def", kDashUnsetU8);
     bool migratedHw = storedHw != DASH_DEFAULT_HW || storedDefaultHw != DASH_DEFAULT_HW;
@@ -980,7 +1048,10 @@ static void handleOtaUpload()
     else if (upload.status == UPLOAD_FILE_END)
     {
         if (upload.totalSize > 0 && Update.end(true) && Update.isFinished())
+        {
+            dashPersistOtaTime(server.arg("ota_time"));
             dashLog("[OTA] Done: " + String(upload.totalSize) + " bytes");
+        }
         else
         {
             dashLog("[OTA] End failed: " + String(Update.errorString()));
@@ -1872,7 +1943,9 @@ static void handleSystemStatus()
     j += ",\"rtc_sram_bytes\":16384";
     j += ",\"rom_bytes\":393216";
     j += ",\"idf\":\"" IDF_VER "\"";
-    j += ",\"firmware\":\"" FIRMWARE_VERSION "\"";
+    j += ",\"firmware\":\"" + jsonEscape(String(dashFirmwareVersion())) + "\"";
+    j += ",\"ota_partition\":\"" + String(dashOtaPartitionName(running)) + "\"";
+    j += ",\"ota_time\":\"" + jsonEscape(lastOtaUploadTime) + "\"";
     j += ",\"mac\":\"" + String(macText) + "\"";
     j += ",\"reset\":\"" + String(dashResetReasonName(esp_reset_reason())) + "\"";
     j += ",\"uptime\":" + String((millis() - startMs) / 1000);
@@ -2145,10 +2218,6 @@ static void handleApStatus()
     j += "}";
     server.send(200, "application/json", j);
 }
-
-#ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "unknown"
-#endif
 
 // Dashboard frame callback wrapper
 
