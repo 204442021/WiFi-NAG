@@ -20,8 +20,8 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
         cls.ui_source = UI_SOURCE_FILE.read_text(encoding="utf-8-sig")
         cls.ui_generated = UI_GENERATED_FILE.read_text(encoding="utf-8-sig")
 
-    def test_version_file_is_single_v1_0_1_source(self) -> None:
-        self.assertEqual(self.version, "V1.0.1")
+    def test_version_file_is_single_v1_0_2_source(self) -> None:
+        self.assertEqual(self.version, "V1.0.2")
         self.assertNotIn("3.0.0-beta.5", self.version)
 
     def test_espidf_internal_version_comes_from_version_file(self) -> None:
@@ -76,6 +76,7 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
             with self.subTest(path=path.as_posix()):
                 self.assertNotIn("3.0.0-beta.5", text)
                 self.assertNotIn("V1.0.0", text)
+                self.assertNotIn("V1.0.1", text)
 
 
 if __name__ == "__main__":
