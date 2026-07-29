@@ -39,6 +39,10 @@ static volatile uint32_t appCanTaskIdleLoops = 0;
 static volatile bool frameReady = true;
 static void canISR() { frameReady = true; }
 
+static volatile bool appCanRestartPreparing = false;
+static bool appCanWriteModeKnown = false;
+static bool appLastWriteEnabled = false;
+
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD) && defined(DASH_RGB_STATUS_LED)
 static void appRefreshStatusLed(bool force = false);
 static void appWriteStatusLed(uint8_t red, uint8_t green, uint8_t blue);
@@ -50,6 +54,34 @@ static void appPollInjectionToggleButton();
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
 #include "web/mcp2515_dashboard.h"
 #endif
+
+static bool appSyncCanWriteMode(bool desiredWriteEnabled)
+{
+    if (!appDriver)
+        return false;
+    if (appCanRestartPreparing)
+        desiredWriteEnabled = false;
+    if (appCanWriteModeKnown && appLastWriteEnabled == desiredWriteEnabled)
+        return true;
+
+    const bool ok = appDriver->setWriteEnabled(desiredWriteEnabled);
+    if (ok)
+    {
+        appCanWriteModeKnown = true;
+        appLastWriteEnabled = desiredWriteEnabled;
+    }
+    return ok;
+}
+
+static void appPrepareCanForRestart()
+{
+    appCanRestartPreparing = true;
+    nagKillerRuntime = false;
+    appCanWriteModeKnown = true;
+    appLastWriteEnabled = false;
+    if (appDriver)
+        appDriver->prepareForRestart();
+}
 
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD) && defined(DASH_RGB_STATUS_LED)
 static void appWriteStatusLed(uint8_t red, uint8_t green, uint8_t blue)
@@ -173,12 +205,14 @@ static void appSetup(std::unique_ptr<Driver> drv, const char *readyMsg)
 #endif
 
     appDriver = std::move(drv);
+    // Configure the acceptance filter before the first TWAI installation so
+    // startup never needs an immediate stop/uninstall/reinstall cycle.
+    appDriver->setFilters(appHandler->filterIds(), appHandler->filterIdCount());
     if (!appDriver->init())
     {
         Serial.println("CAN init failed");
     }
 
-    appDriver->setFilters(appHandler->filterIds(), appHandler->filterIdCount());
     if constexpr (Driver::kSupportsISR)
     {
         appDriver->enableInterrupt(canISR);
@@ -198,6 +232,8 @@ static bool appLoop()
     appRefreshStatusLed(false);
 #endif
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
+    const bool desiredWriteEnabled = canActive && !Update.isRunning() && !appCanRestartPreparing;
+    appSyncCanWriteMode(desiredWriteEnabled);
     if (Update.isRunning())
     {
         delay(1);
@@ -207,6 +243,8 @@ static bool appLoop()
 #if defined(DASH_INJECTION_TOGGLE_PIN)
     appPollInjectionToggleButton();
 #endif
+#else
+    appSyncCanWriteMode(true);
 #endif
 
     if constexpr (Driver::kSupportsISR)
