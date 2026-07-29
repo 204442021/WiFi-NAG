@@ -46,9 +46,9 @@ jobs:
             echo "Regression test unexpectedly passed before implementation"
             exit 1
           fi
-          grep -q "FAILED" /tmp/v1-red.log
-          grep -q "AssertionError" /tmp/v1-red.log
-          if grep -qE "ImportError|ModuleNotFoundError|SyntaxError" /tmp/v1-red.log; then
+          grep -q '^Ran 6 tests' /tmp/v1-red.log
+          grep -q '^FAILED (failures=' /tmp/v1-red.log
+          if grep -qE '_FailedTest|^ERROR:' /tmp/v1-red.log; then
             echo "Regression test failed for an invalid reason"
             exit 1
           fi
