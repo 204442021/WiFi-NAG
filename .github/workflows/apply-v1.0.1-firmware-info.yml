@@ -1,0 +1,112 @@
+name: Apply V1.0.1 firmware info
+
+on:
+  push:
+    branches:
+      - V1.0.1
+    paths:
+      - .github/workflows/apply-v1.0.1-firmware-info.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout V1.0.1
+        uses: actions/checkout@v4
+        with:
+          ref: V1.0.1
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify regression test is red before implementation
+        shell: bash
+        run: |
+          set +e
+          python -m unittest test/test_firmware_info_regression.py -v >/tmp/v1-red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/v1-red.log
+          if [ "$status" -eq 0 ]; then
+            echo "Regression test unexpectedly passed before implementation"
+            exit 1
+          fi
+          grep -q "FAILED" /tmp/v1-red.log
+
+      - name: Apply V1.0.1 changes
+        run: python scripts/apply_v1_0_1_firmware_info.py
+
+      - name: Regenerate embedded dashboard
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install rjsmin csscompressor htmlmin
+          python scripts/minify_dashboard.py
+
+      - name: Run Python regression tests
+        run: python -m unittest discover -s test -p 'test_*.py' -v
+
+      - name: Install PlatformIO
+        run: python -m pip install platformio
+
+      - name: Create local build profile
+        run: cp platformio_profile.example.h platformio_profile.h
+
+      - name: Run native tests
+        run: |
+          pio test -e native_nag
+          pio test -e native_twai
+          pio test -e native_log_buffer
+
+      - name: Build ESP32-S3 firmware
+        run: pio run -e wifi_nag_ESP32_S3_CAN
+
+      - name: Verify ESP app description version
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          firmware = Path('.pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin').read_bytes()
+          magic = bytes.fromhex('32 54 cd ab')
+          versions = []
+          start = 0
+          while True:
+              pos = firmware.find(magic, start)
+              if pos < 0:
+                  break
+              raw = firmware[pos + 16:pos + 48].split(b'\0', 1)[0]
+              try:
+                  versions.append(raw.decode('utf-8'))
+              except UnicodeDecodeError:
+                  pass
+              start = pos + 1
+          print('ESP app description versions:', versions)
+          if 'V1.0.1' not in versions:
+              raise SystemExit('ESP app description version is not V1.0.1')
+          PY
+
+      - name: Confirm runtime version strings are unified
+        run: |
+          ! grep -RInE '3\.0\.0-beta\.5|V1\.0\.0' \
+            VERSION CMakeLists.txt platformio.ini scripts/platformio_sync_profile.py \
+            include src --exclude='mcp2515_dashboard_ui.h'
+
+      - name: Commit verified implementation
+        shell: bash
+        run: |
+          rm -f scripts/apply_v1_0_1_firmware_info.py
+          rm -f .github/workflows/apply-v1.0.1-firmware-info.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --stat
+          git commit -m "feat: add V1.0.1 firmware update metadata"
+          git push origin HEAD:V1.0.1
