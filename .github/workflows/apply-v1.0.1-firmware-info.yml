@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python -m unittest test/test_firmware_info_regression.py -v >/tmp/v1-red.log 2>&1
+          python -m unittest discover -s test -p 'test_firmware_info_regression.py' -v >/tmp/v1-red.log 2>&1
           status=$?
           set -e
           cat /tmp/v1-red.log
@@ -47,6 +47,11 @@ jobs:
             exit 1
           fi
           grep -q "FAILED" /tmp/v1-red.log
+          grep -q "AssertionError" /tmp/v1-red.log
+          if grep -qE "ImportError|ModuleNotFoundError|SyntaxError" /tmp/v1-red.log; then
+            echo "Regression test failed for an invalid reason"
+            exit 1
+          fi
 
       - name: Apply V1.0.1 changes
         run: python scripts/apply_v1_0_1_firmware_info.py
