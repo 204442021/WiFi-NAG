@@ -17,6 +17,10 @@ CONFIG_LWIP_TCPIP_TASK_AFFINITY_CPU1=y
 CONFIG_LWIP_TCPIP_TASK_AFFINITY=0x1
 CONFIG_FREERTOS_HZ=1000
 
+# Keep the legacy TWAI controller passive and responsive while OTA writes flash.
+CONFIG_TWAI_ISR_IN_IRAM=y
+CONFIG_TWAI_ERRATA_FIX_LISTEN_ONLY_DOM=y
+
 # ESP32-S3 max CPU clock for WiFi repeater + DNS filter + Nag runtime headroom.
 # CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80 is not set
 # CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160 is not set
