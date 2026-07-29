@@ -1,14 +1,18 @@
 name: Apply V1.0.1 firmware info
 
 on:
-  push:
+  pull_request:
     branches:
       - V1.0.1
-    paths:
-      - .github/workflows/apply-v1.0.1-firmware-info.yml
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   apply-and-verify:
@@ -17,11 +21,13 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Checkout V1.0.1
+      - name: Checkout pull request head
         uses: actions/checkout@v4
         with:
-          ref: V1.0.1
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -99,14 +105,15 @@ jobs:
             VERSION CMakeLists.txt platformio.ini scripts/platformio_sync_profile.py \
             include src --exclude='mcp2515_dashboard_ui.h'
 
-      - name: Commit verified implementation
+      - name: Commit verified implementation to pull request branch
         shell: bash
         run: |
           rm -f scripts/apply_v1_0_1_firmware_info.py
           rm -f .github/workflows/apply-v1.0.1-firmware-info.yml
+          rm -f .github/v1.0.1-apply-trigger
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --stat
           git commit -m "feat: add V1.0.1 firmware update metadata"
-          git push origin HEAD:V1.0.1
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
