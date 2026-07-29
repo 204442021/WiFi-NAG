@@ -220,10 +220,15 @@ function formatOtaLocalTime(date){
         "OTA browser time query",
     )
 
+    visibility_block = """document.addEventListener('visibilitychange',()=>{
+  if(!dashboardVisible())return;
+  poll();loadWifiStatus();loadApStatus();loadGatewayStatus();"""
     text = replace_once(
         text,
-        "  poll();loadWifiStatus();loadApStatus();loadGatewayStatus();",
-        "  poll();loadFirmwareInfo();loadWifiStatus();loadApStatus();loadGatewayStatus();",
+        visibility_block,
+        """document.addEventListener('visibilitychange',()=>{
+  if(!dashboardVisible())return;
+  poll();loadFirmwareInfo();loadWifiStatus();loadApStatus();loadGatewayStatus();""",
         "refresh firmware info on visibility",
     )
 
