@@ -3,13 +3,15 @@ name: WIFI-NAG V1.0.2 Build and Release
 on:
   push:
     branches: ["V1.0.2"]
+  pull_request:
+    branches: ["V1.0.1"]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: wifi-nag-v1.0.2-release
+  group: wifi-nag-v1.0.2-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -25,7 +27,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
 
       - name: Install PlatformIO
         run: python -m pip install --upgrade pip platformio
@@ -89,13 +90,25 @@ jobs:
           test -s .pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin
           cp .pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin dist/WIFI-NAG-V1.0.2-OTA.bin
 
-      - name: Publish V1.0.2 release
+      - name: Upload verified OTA artifact
         if: steps.version.outputs.value == 'V1.0.2'
+        uses: actions/upload-artifact@v4
+        with:
+          name: WIFI-NAG-V1.0.2-OTA
+          path: dist/WIFI-NAG-V1.0.2-OTA.bin
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish V1.0.2 release
+        if: >-
+          steps.version.outputs.value == 'V1.0.2' &&
+          (github.event_name == 'push' || github.event.pull_request.head.ref == 'V1.0.2')
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: V1.0.2
           ASSET: dist/WIFI-NAG-V1.0.2-OTA.bin
           NOTES: RELEASE_NOTES_V1.0.2.md
+          RELEASE_TARGET: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           test -s "$ASSET"
           test -s "$NOTES"
@@ -104,7 +117,7 @@ jobs:
             gh release upload "$TAG" "$ASSET" --clobber
           else
             gh release create "$TAG" "$ASSET" \
-              --target "$GITHUB_SHA" \
+              --target "$RELEASE_TARGET" \
               --title "WIFI-NAG V1.0.2" \
               --notes-file "$NOTES"
           fi
