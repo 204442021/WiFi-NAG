@@ -31,14 +31,14 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
         )
         self.assertIn('string(STRIP "${PROJECT_VER}" PROJECT_VER)', self.cmake)
         self.assertIn("esp_app_get_description()", self.dash)
-        self.assertIn('"firmware":"', self.dash)
+        self.assertIn('\\"firmware\\":\\"', self.dash)
 
     def test_backend_reports_partition_and_persisted_ota_time(self) -> None:
         self.assertIn("esp_ota_get_running_partition()", self.dash)
         self.assertIn("ESP_PARTITION_SUBTYPE_APP_OTA_0", self.dash)
         self.assertIn("ESP_PARTITION_SUBTYPE_APP_OTA_1", self.dash)
-        self.assertIn('"ota_partition":"', self.dash)
-        self.assertIn('"ota_time":"', self.dash)
+        self.assertIn('\\"ota_partition\\":\\"', self.dash)
+        self.assertIn('\\"ota_time\\":\\"', self.dash)
         self.assertIn('prefs.putString("ota_time", otaTime);', self.dash)
 
         success_guard = "upload.totalSize > 0 && Update.end(true) && Update.isFinished()"
@@ -48,8 +48,8 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
         self.assertLess(self.dash.index(success_guard), self.dash.index(persist_call))
 
     def test_firmware_update_card_has_exactly_required_metadata_fields(self) -> None:
-        for ui in (self.ui_source, self.ui_generated):
-            with self.subTest(file="source" if ui is self.ui_source else "generated"):
+        for label, ui in (("source", self.ui_source), ("generated", self.ui_generated)):
+            with self.subTest(file=label):
                 for element_id in ("fw-version", "fw-partition", "fw-ota-time"):
                     self.assertRegex(ui, rf'\bid=(?:"{element_id}"|{element_id}\b)')
                 self.assertIn("Firmware Version", ui)
