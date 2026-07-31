@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Localized the BLE FSD diagnostic receiver interface, including live status,
+  scan results, and receiver reasons, for the Chinese UI.
+- Made dashboard cards, configuration subsections, and BLE settings collapsed
+  by default while preserving user collapse preferences.
+- Enabled the BLE FSD diagnostic receiver by default for devices without a
+  saved preference.
+
+### Validation
+
+- ESP32-S3 firmware build succeeded for `wifi_nag_ESP32_S3_CAN`.
+- Native PlatformIO tests: 54 passed.
+
 ## [V3.0.1] - 2026-07-31
 
 ### Added
@@ -22,4 +36,3 @@
 - ESP32-S3 3 MiB OTA firmware build succeeded.
 - Python regression tests: 28 passed.
 - Native PlatformIO tests: 54 passed.
-
