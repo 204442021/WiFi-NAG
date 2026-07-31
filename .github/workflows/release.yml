@@ -83,6 +83,8 @@ jobs:
           cat release-notes.md
       - uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ github.ref_name }}
+          target_commitish: ${{ github.sha }}
           name: ${{ github.ref_name }}
           body_path: release-notes.md
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name,
