@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <memory>
 #include "can_frame_types.h"
 #include "drivers/can_driver.h"
@@ -39,6 +40,14 @@ static volatile uint32_t appCanTaskIdleLoops = 0;
 static volatile bool frameReady = true;
 static void canISR() { frameReady = true; }
 
+static Shared<bool> appCanRestartPreparing{false};
+static Shared<bool> appCanOtaActive{false};
+static Shared<bool> appCanWriteModeKnown{false};
+static Shared<bool> appLastWriteEnabled{false};
+// Serialize mode requests coming from the high-priority CAN task, the web
+// task's OTA callbacks, and the ESP shutdown handler.
+static std::mutex appCanModeMutex;
+
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD) && defined(DASH_RGB_STATUS_LED)
 static void appRefreshStatusLed(bool force = false);
 static void appWriteStatusLed(uint8_t red, uint8_t green, uint8_t blue);
@@ -47,9 +56,69 @@ static void appWriteStatusLed(uint8_t red, uint8_t green, uint8_t blue);
 static void appPollInjectionToggleButton();
 #endif
 
+static bool appBeginCanOtaGuard();
+static void appEndCanOtaGuard();
+static void appPrepareCanForRestart();
+
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
 #include "web/mcp2515_dashboard.h"
 #endif
+
+static bool appSyncCanWriteMode(bool desiredWriteEnabled)
+{
+    std::lock_guard<std::mutex> modeLock(appCanModeMutex);
+    if (!appDriver)
+        return false;
+    if (appCanRestartPreparing)
+        desiredWriteEnabled = false;
+    if (appCanWriteModeKnown && appLastWriteEnabled == desiredWriteEnabled)
+        return true;
+
+    const bool ok = appDriver->setWriteEnabled(desiredWriteEnabled);
+    if (ok)
+    {
+        appCanWriteModeKnown = true;
+        appLastWriteEnabled = desiredWriteEnabled;
+    }
+    return ok;
+}
+
+static bool appBeginCanOtaGuard()
+{
+    std::lock_guard<std::mutex> modeLock(appCanModeMutex);
+    // Keep this guard asserted through Update.end(): Update.isRunning() turns
+    // false before the HTTP result handler performs the final reboot.
+    appCanOtaActive = true;
+    nagKillerRuntime = false;
+    appCanWriteModeKnown = false;
+
+    const bool ok = appDriver && appDriver->setWriteEnabled(false);
+    // The CAN task owns the mode cache. Force it to verify the safe state on
+    // its next iteration instead of publishing state from the web task.
+    appCanWriteModeKnown = false;
+    return ok;
+}
+
+static void appEndCanOtaGuard()
+{
+    std::lock_guard<std::mutex> modeLock(appCanModeMutex);
+    if ((bool)appCanRestartPreparing)
+        return;
+    appCanOtaActive = false;
+    appCanWriteModeKnown = false;
+}
+
+static void appPrepareCanForRestart()
+{
+    std::lock_guard<std::mutex> modeLock(appCanModeMutex);
+    appCanRestartPreparing = true;
+    appCanOtaActive = true;
+    nagKillerRuntime = false;
+    appCanWriteModeKnown = false;
+    appLastWriteEnabled = false;
+    if (appDriver)
+        appDriver->prepareForRestart();
+}
 
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD) && defined(DASH_RGB_STATUS_LED)
 static void appWriteStatusLed(uint8_t red, uint8_t green, uint8_t blue)
@@ -173,12 +242,14 @@ static void appSetup(std::unique_ptr<Driver> drv, const char *readyMsg)
 #endif
 
     appDriver = std::move(drv);
+    // Configure the acceptance filter before the first TWAI installation so
+    // startup never needs an immediate stop/uninstall/reinstall cycle.
+    appDriver->setFilters(appHandler->filterIds(), appHandler->filterIdCount());
     if (!appDriver->init())
     {
         Serial.println("CAN init failed");
     }
 
-    appDriver->setFilters(appHandler->filterIds(), appHandler->filterIdCount());
     if constexpr (Driver::kSupportsISR)
     {
         appDriver->enableInterrupt(canISR);
@@ -198,8 +269,13 @@ static bool appLoop()
     appRefreshStatusLed(false);
 #endif
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
-    if (Update.isRunning())
+    const bool otaActive = (bool)appCanOtaActive || Update.isRunning();
+    const bool desiredWriteEnabled =
+        canActive && !otaActive && !(bool)appCanRestartPreparing;
+    appSyncCanWriteMode(desiredWriteEnabled);
+    if (otaActive)
     {
+        nagKillerRuntime = false;
         delay(1);
         return false;
     }
@@ -207,6 +283,8 @@ static bool appLoop()
 #if defined(DASH_INJECTION_TOGGLE_PIN)
     appPollInjectionToggleButton();
 #endif
+#else
+    appSyncCanWriteMode(true);
 #endif
 
     if constexpr (Driver::kSupportsISR)

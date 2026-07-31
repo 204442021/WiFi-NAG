@@ -137,6 +137,34 @@ void test_nag_does_not_echo_when_disabled()
     TEST_ASSERT_EQUAL(0, mock.sent.size());
 }
 
+void test_mock_driver_blocks_tx_while_write_is_disabled()
+{
+    CanFrame f = makeEpasFrame(0, 0.33, 0x0C);
+
+    TEST_ASSERT_TRUE(mock.setWriteEnabled(false));
+    TEST_ASSERT_FALSE(mock.send(f));
+    TEST_ASSERT_EQUAL(0, mock.sent.size());
+
+    TEST_ASSERT_TRUE(mock.setWriteEnabled(true));
+    TEST_ASSERT_TRUE(mock.send(f));
+    TEST_ASSERT_EQUAL(1, mock.sent.size());
+}
+
+void test_mock_driver_restart_guard_is_idempotent_and_irreversible()
+{
+    CanFrame f = makeEpasFrame(0, 0.33, 0x0C);
+
+    mock.prepareForRestart();
+    mock.prepareForRestart();
+    TEST_ASSERT_TRUE(mock.restartPrepared);
+    TEST_ASSERT_FALSE(mock.writeEnabled);
+    TEST_ASSERT_FALSE(mock.init());
+    TEST_ASSERT_FALSE(mock.send(f));
+    TEST_ASSERT_FALSE(mock.setWriteEnabled(true));
+    TEST_ASSERT_FALSE(mock.send(f));
+    TEST_ASSERT_EQUAL(0, mock.sent.size());
+}
+
 void test_nag_tracks_live_torque_even_when_disabled()
 {
     handler.nagKillerActive = false;
@@ -558,6 +586,8 @@ int main()
     RUN_TEST(test_nag_echoes_when_handson_2);
     RUN_TEST(test_nag_echoes_when_handson_3);
     RUN_TEST(test_nag_does_not_echo_when_disabled);
+    RUN_TEST(test_mock_driver_blocks_tx_while_write_is_disabled);
+    RUN_TEST(test_mock_driver_restart_guard_is_idempotent_and_irreversible);
     RUN_TEST(test_nag_tracks_live_torque_even_when_disabled);
     RUN_TEST(test_nag_ignores_non_880_id);
     RUN_TEST(test_nag_ignores_short_dlc);

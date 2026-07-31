@@ -17,6 +17,15 @@ CONFIG_LWIP_TCPIP_TASK_AFFINITY_CPU1=y
 CONFIG_LWIP_TCPIP_TASK_AFFINITY=0x1
 CONFIG_FREERTOS_HZ=1000
 
+# Keep the legacy TWAI controller interrupt-safe while OTA writes flash.
+# The project uses driver/twai.h (the legacy API), so enable its dedicated
+# IRAM option as well as the newer TWAI option exposed by ESP-IDF 6.
+CONFIG_TWAI_ISR_IN_IRAM_LEGACY=y
+CONFIG_TWAI_ISR_IN_IRAM=y
+# ESP-IDF 6 removed CONFIG_TWAI_ERRATA_FIX_LISTEN_ONLY_DOM. On affected S3
+# silicon the same workaround is now selected unconditionally by
+# TWAI_LL_HAS_LOM_DOM_ISSUE in the TWAI HAL.
+
 # ESP32-S3 max CPU clock for WiFi repeater + DNS filter + Nag runtime headroom.
 # CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80 is not set
 # CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160 is not set

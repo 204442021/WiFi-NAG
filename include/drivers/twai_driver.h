@@ -1,11 +1,15 @@
 #pragma once
 
+#include <cstring>
 #include "../can_frame_types.h"
 #include "can_driver.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcpp"
 #include <driver/twai.h>
 #pragma GCC diagnostic pop
+#include <driver/gpio.h>
+#include <esp_intr_alloc.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
@@ -25,7 +29,13 @@ public:
     static constexpr bool kSupportsISR = false;
 
     TWAIDriver(gpio_num_t txPin, gpio_num_t rxPin)
-        : txPin_(txPin), rxPin_(rxPin) {}
+        : txPin_(txPin), rxPin_(rxPin)
+    {
+        t_config_ = TWAI_TIMING_CONFIG_500KBITS();
+        f_config_ = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+        // Keep the transceiver recessive during startup and GPIO handoff.
+        forceTxRecessiveLocked();
+    }
 
     bool init() override
     {
@@ -34,15 +44,18 @@ public:
         if (!mutex_)
             return false;
 
-        g_config_ = TWAI_GENERAL_CONFIG_DEFAULT(txPin_, rxPin_, TWAI_MODE_NORMAL);
-        g_config_.rx_queue_len = TWAI_RX_QUEUE_LEN;
-        g_config_.tx_queue_len = TWAI_TX_QUEUE_LEN;
-        g_config_.alerts_enabled = kDiagnosticAlerts;
-
-        t_config_ = TWAI_TIMING_CONFIG_500KBITS();
-        f_config_ = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-
         lock();
+        if (shutdown_)
+        {
+            unlock();
+            return false;
+        }
+        writeEnabled_ = false; // Safe boot: real hardware starts listen-only.
+        if (driverInstalled_)
+        {
+            waitForBusIdleLocked();
+            stopAndUninstallLocked();
+        }
         driverOK_ = installAndStartLocked();
         unlock();
         return driverOK_;
@@ -50,7 +63,7 @@ public:
 
     void setFilters(const uint32_t *ids, uint8_t count) override
     {
-        if (count == 0)
+        if (!ids || count == 0)
             return;
 
         uint32_t differ = 0;
@@ -59,20 +72,90 @@ public:
             differ |= ids[0] ^ ids[i];
         }
 
-        uint32_t base = ids[0] & ~differ;
-        twai_filter_config_t nextFilter = f_config_;
-        nextFilter.acceptance_code = base << 21;
-        nextFilter.acceptance_mask = (differ << 21) | 0x001FFFFF;
-        nextFilter.single_filter = true;
+        const uint32_t base = ids[0] & ~differ;
+        const uint32_t nextCode = base << 21;
+        const uint32_t nextMask = (differ << 21) | 0x001FFFFF;
+        const uint8_t nextExactCount =
+            (count < kMaxExactFilters) ? count : kMaxExactFilters;
 
         lock();
+        const bool sameFilter = filterConfigured_ &&
+                                f_config_.acceptance_code == nextCode &&
+                                f_config_.acceptance_mask == nextMask &&
+                                f_config_.single_filter &&
+                                exactFilterListMatchesLocked(ids, nextExactCount);
+        if (sameFilter)
+        {
+            unlock();
+            return;
+        }
+
+        const bool reinstall = driverInstalled_ && !shutdown_;
+        if (reinstall)
+        {
+            waitForBusIdleLocked();
+            stopAndUninstallLocked();
+        }
+
         // TWAI only has a mask filter; sparse ID sets can pass false positives.
-        exactFilterCount_ = (count < kMaxExactFilters) ? count : kMaxExactFilters;
+        exactFilterCount_ = nextExactCount;
         for (uint8_t i = 0; i < exactFilterCount_; i++)
             exactFilterIds_[i] = ids[i];
-        f_config_ = nextFilter;
-        stopAndUninstallLocked();
+        f_config_.acceptance_code = nextCode;
+        f_config_.acceptance_mask = nextMask;
+        f_config_.single_filter = true;
+        filterConfigured_ = true;
+
+        if (reinstall)
+            driverOK_ = installAndStartLocked();
+        unlock();
+    }
+
+    bool setWriteEnabled(bool enabled) override
+    {
+        lock();
+        if (shutdown_)
+        {
+            const bool safeStateRequested = !enabled;
+            unlock();
+            return safeStateRequested;
+        }
+
+        if (driverInstalled_ && driverOK_ && writeEnabled_ == enabled)
+        {
+            unlock();
+            return true;
+        }
+
+        if (driverInstalled_)
+        {
+            waitForBusIdleLocked();
+            stopAndUninstallLocked();
+        }
+
+        writeEnabled_ = enabled;
         driverOK_ = installAndStartLocked();
+        const bool ok = driverOK_;
+        unlock();
+        return ok;
+    }
+
+    void prepareForRestart() override
+    {
+        lock();
+        if (!shutdown_)
+        {
+            shutdown_ = true;
+            writeEnabled_ = false;
+            if (driverInstalled_)
+            {
+                waitForBusIdleLocked();
+                stopAndUninstallLocked();
+            }
+        }
+        // Idempotent fallback: keep TX recessive even after failed install or
+        // repeated calls from multiple restart paths.
+        forceTxRecessiveLocked();
         unlock();
     }
 
@@ -83,6 +166,11 @@ public:
         for (uint16_t attempt = 0; attempt < kReadDrainBudget; attempt++)
         {
             lock();
+            if (shutdown_)
+            {
+                unlock();
+                return false;
+            }
             if (!driverOK_)
             {
                 tryRecover();
@@ -100,7 +188,7 @@ public:
                 unlock();
                 return false;
             }
-            bool accepted = exactFilterMatchesLocked(msg.identifier);
+            const bool accepted = exactFilterMatchesLocked(msg.identifier);
             unlock();
 
             if (!accepted)
@@ -108,8 +196,8 @@ public:
 
             frame.id = msg.identifier;
             frame.dlc = (msg.data_length_code <= 8) ? msg.data_length_code : 8;
-            memset(frame.data, 0, 8);
-            memcpy(frame.data, msg.data, frame.dlc);
+            std::memset(frame.data, 0, 8);
+            std::memcpy(frame.data, msg.data, frame.dlc);
             return true;
         }
 
@@ -119,7 +207,7 @@ public:
     bool send(const CanFrame &frame) override
     {
         lock();
-        if (!driverOK_)
+        if (!driverOK_ || !writeEnabled_ || shutdown_)
         {
             unlock();
             if (onSendFrame)
@@ -131,6 +219,8 @@ public:
         if (safetyTripped_)
         {
             unlock();
+            if (onSendFrame)
+                onSendFrame(frame, false);
             return false;
         }
 
@@ -155,19 +245,16 @@ public:
         }
 
         twai_message_t msg = {};
-        uint8_t dlc = (frame.dlc <= 8) ? frame.dlc : 8;
+        const uint8_t dlc = (frame.dlc <= 8) ? frame.dlc : 8;
         msg.identifier = frame.id;
         msg.data_length_code = dlc;
-        memcpy(msg.data, frame.data, dlc);
+        std::memcpy(msg.data, frame.data, dlc);
 
         // A delayed echo is less useful than a dropped echo. Never block the
         // CAN receive task waiting for TX queue space.
-        bool ok = twai_transmit(&msg, 0) == ESP_OK;
-        if (!ok)
-        {
-            if (isBusOff())
-                recoverWithCooldown();
-        }
+        const bool ok = twai_transmit(&msg, 0) == ESP_OK;
+        if (!ok && isBusOff())
+            recoverWithCooldown();
         unlock();
         if (onSendFrame)
             onSendFrame(frame, ok);
@@ -263,6 +350,7 @@ public:
 
         if (needsRestart)
         {
+            waitForBusIdleLocked();
             stopAndUninstallLocked();
             driverOK_ = installAndStartLocked();
             status = {};
@@ -287,6 +375,10 @@ private:
     static constexpr uint8_t kMaxExactFilters = 32;
     static constexpr uint16_t kReadDrainBudget = TWAI_READ_DRAIN_BUDGET;
     static constexpr uint32_t BUSOFF_COOLDOWN_MS = 1000;
+    // At 500 kbit/s, a short run of recessive bits identifies EOF,
+    // intermission, or bus idle without waiting through a full frame.
+    static constexpr int64_t kBusIdleStableUs = 12;
+    static constexpr int64_t kBusIdleTimeoutUs = 5000;
     static constexpr uint32_t kAlertPollIntervalMs = 100;
     static constexpr uint32_t kSafetyWindowMs = 1000;
     static constexpr uint32_t kErrorCounterTripThreshold = 96;
@@ -308,6 +400,18 @@ private:
         return value >= baseline ? value - baseline : value;
     }
 
+    bool exactFilterListMatchesLocked(const uint32_t *ids, uint8_t count) const
+    {
+        if (exactFilterCount_ != count)
+            return false;
+        for (uint8_t i = 0; i < count; i++)
+        {
+            if (exactFilterIds_[i] != ids[i])
+                return false;
+        }
+        return true;
+    }
+
     bool exactFilterMatchesLocked(uint32_t id) const
     {
         if (exactFilterCount_ == 0)
@@ -318,6 +422,38 @@ private:
                 return true;
         }
         return false;
+    }
+
+    bool waitForBusIdleLocked() const
+    {
+        const int64_t started = esp_timer_get_time();
+        int64_t recessiveSince = -1;
+        while (esp_timer_get_time() - started < kBusIdleTimeoutUs)
+        {
+            const int64_t now = esp_timer_get_time();
+            if (gpio_get_level(rxPin_) != 0)
+            {
+                if (recessiveSince < 0)
+                    recessiveSince = now;
+                if (now - recessiveSince >= kBusIdleStableUs)
+                    return true;
+            }
+            else
+            {
+                recessiveSince = -1;
+            }
+        }
+        return false;
+    }
+
+    void forceTxRecessiveLocked() const
+    {
+        gpio_reset_pin(txPin_);
+        gpio_pullup_en(txPin_);
+        // Latch HIGH before enabling output to avoid a dominant edge.
+        gpio_set_level(txPin_, 1);
+        gpio_set_direction(txPin_, GPIO_MODE_OUTPUT);
+        gpio_set_level(txPin_, 1);
     }
 
     static CanDriverState mapState(twai_state_t state)
@@ -456,6 +592,8 @@ private:
 
     void recoverWithCooldown()
     {
+        if (shutdown_)
+            return;
         uint32_t now = millis();
         if (now - lastRecovery_ < BUSOFF_COOLDOWN_MS)
             return;
@@ -463,6 +601,7 @@ private:
 
         collectAlertsLocked(true);
         noteBusOffLocked();
+        waitForBusIdleLocked();
         stopAndUninstallLocked();
         driverOK_ = installAndStartLocked();
         if (driverOK_)
@@ -471,11 +610,14 @@ private:
 
     void tryRecover()
     {
+        if (shutdown_)
+            return;
         uint32_t now = millis();
         if (now - lastRecovery_ < BUSOFF_COOLDOWN_MS * 10)
             return;
         lastRecovery_ = now;
 
+        waitForBusIdleLocked();
         stopAndUninstallLocked();
         driverOK_ = installAndStartLocked();
     }
@@ -492,11 +634,27 @@ private:
             xSemaphoreGive(mutex_);
     }
 
+    void configureGeneralLocked()
+    {
+        const twai_mode_t mode =
+            writeEnabled_ ? TWAI_MODE_NORMAL : TWAI_MODE_LISTEN_ONLY;
+        g_config_ = TWAI_GENERAL_CONFIG_DEFAULT(txPin_, rxPin_, mode);
+        g_config_.rx_queue_len = TWAI_RX_QUEUE_LEN;
+        g_config_.tx_queue_len = writeEnabled_ ? TWAI_TX_QUEUE_LEN : 0;
+        g_config_.alerts_enabled = kDiagnosticAlerts;
+        g_config_.intr_flags |= ESP_INTR_FLAG_IRAM;
+    }
+
     bool installAndStartLocked()
     {
+        if (shutdown_)
+            return false;
+
+        configureGeneralLocked();
         if (twai_driver_install(&g_config_, &t_config_, &f_config_) != ESP_OK)
         {
             driverInstalled_ = false;
+            forceTxRecessiveLocked();
             return false;
         }
         driverInstalled_ = true;
@@ -507,6 +665,7 @@ private:
         {
             twai_driver_uninstall();
             driverInstalled_ = false;
+            forceTxRecessiveLocked();
             return false;
         }
         return true;
@@ -514,24 +673,29 @@ private:
 
     void stopAndUninstallLocked()
     {
-        if (!driverInstalled_)
-            return;
-        collectAlertsLocked(true);
-        accumulateStatusLocked();
-        twai_stop();
-        twai_driver_uninstall();
+        if (driverInstalled_)
+        {
+            collectAlertsLocked(true);
+            accumulateStatusLocked();
+            twai_stop();
+            twai_driver_uninstall();
+        }
         driverInstalled_ = false;
         driverOK_ = false;
+        forceTxRecessiveLocked();
     }
 
     gpio_num_t txPin_;
     gpio_num_t rxPin_;
-    twai_general_config_t g_config_;
-    twai_timing_config_t t_config_;
-    twai_filter_config_t f_config_;
+    twai_general_config_t g_config_ = {};
+    twai_timing_config_t t_config_ = {};
+    twai_filter_config_t f_config_ = {};
     SemaphoreHandle_t mutex_ = nullptr;
     bool driverInstalled_ = false;
     bool driverOK_ = false;
+    bool writeEnabled_ = false;
+    bool shutdown_ = false;
+    bool filterConfigured_ = false;
     uint32_t lastRecovery_ = 0;
     uint32_t exactFilterIds_[kMaxExactFilters] = {};
     uint8_t exactFilterCount_ = 0;

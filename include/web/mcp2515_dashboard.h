@@ -436,7 +436,9 @@ static bool dashStaSsidLooksCorrupt(const String &ssid)
 static void dashApplyRuntimeState()
 {
 #if defined(NAG_KILLER)
-    nagKillerRuntime = nagKillerEnabled && canActive;
+    nagKillerRuntime = nagKillerEnabled && canActive &&
+                       !(bool)appCanOtaActive &&
+                       !(bool)appCanRestartPreparing;
 #else
     nagKillerRuntime = false;
 #endif
@@ -1338,6 +1340,7 @@ static void handleCanDiagnosticsReset()
 static void handleReboot()
 {
     server.send(200, "text/plain", "Rebooting...");
+    appPrepareCanForRestart();
     delay(200);
     ESP.restart();
 }
@@ -1355,6 +1358,7 @@ static void handleOtaResult()
     if (ok)
     {
         dashLog("[OTA] Upload complete -- rebooting");
+        appPrepareCanForRestart();
         delay(300);
         ESP.restart();
     }
@@ -1362,6 +1366,8 @@ static void handleOtaResult()
     {
         dashLog("[OTA] Upload FAILED: " + String(Update.errorString()));
         Update.abort();
+        appEndCanOtaGuard();
+        dashApplyRuntimeState();
     }
 }
 
@@ -1373,8 +1379,14 @@ static void handleOtaUpload()
     if (upload.status == UPLOAD_FILE_START)
     {
         dashLog("[OTA] Receiving: " + String(upload.filename.c_str()));
+        if (!appBeginCanOtaGuard())
+            dashLog("[OTA] CAN listen-only transition failed; TX pin held recessive");
         if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+        {
             dashLog("[OTA] Begin failed: " + String(Update.errorString()));
+            appEndCanOtaGuard();
+            dashApplyRuntimeState();
+        }
     }
     else if (upload.status == UPLOAD_FILE_WRITE)
     {
@@ -1382,6 +1394,8 @@ static void handleOtaUpload()
         {
             dashLog("[OTA] Write error: " + String(Update.errorString()));
             Update.abort();
+            appEndCanOtaGuard();
+            dashApplyRuntimeState();
         }
     }
     else if (upload.status == UPLOAD_FILE_END)
@@ -1392,12 +1406,16 @@ static void handleOtaUpload()
         {
             dashLog("[OTA] End failed: " + String(Update.errorString()));
             Update.abort();
+            appEndCanOtaGuard();
+            dashApplyRuntimeState();
         }
     }
     else if (upload.status == UPLOAD_FILE_ABORTED)
     {
         dashLog("[OTA] Upload aborted");
         Update.abort();
+        appEndCanOtaGuard();
+        dashApplyRuntimeState();
     }
 }
 
@@ -2630,11 +2648,22 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     ArduinoOTA.setHostname("wifi-nag");
     ArduinoOTA.setPassword(DASH_OTA_PASS);
     ArduinoOTA.onStart([]()
-                       { dashLog("[OTA] Starting..."); });
+                       {
+                           if (!appBeginCanOtaGuard())
+                               dashLog("[OTA] CAN listen-only transition failed; TX pin held recessive");
+                           dashLog("[OTA] Starting...");
+                       });
     ArduinoOTA.onEnd([]()
-                     { dashLog("[OTA] Done -- rebooting"); });
+                     {
+                         dashLog("[OTA] Done -- rebooting");
+                         appPrepareCanForRestart();
+                     });
     ArduinoOTA.onError([](ota_error_t e)
-                       { dashLog("[OTA] Error: " + String(e)); });
+                       {
+                           appEndCanOtaGuard();
+                           dashApplyRuntimeState();
+                           dashLog("[OTA] Error: " + String(e));
+                       });
     ArduinoOTA.begin();
 
     server.on("/", HTTP_GET, handleRoot);
@@ -2696,7 +2725,7 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
 
 static void mcpDashboardLoop()
 {
-    if (Update.isRunning())
+    if ((bool)appCanOtaActive || Update.isRunning())
         return;
     dashSerialDiagnosticsPoll();
     if (canOnline && millis() - lastFrameMs > 10000)

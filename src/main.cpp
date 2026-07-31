@@ -66,6 +66,7 @@ static void appServiceOtaHealthObservation()
     if (!canHealthy)
     {
         Serial.println("[OTA] Pending image failed health observation; rollback");
+        appPrepareCanForRestart();
         (void)esp_ota_mark_app_invalid_rollback_and_reboot();
         ESP.restart();
         return;
@@ -76,6 +77,7 @@ static void appServiceOtaHealthObservation()
     {
         Serial.printf("[OTA] Mark valid failed=%s; rollback\n",
                       esp_err_to_name(result));
+        appPrepareCanForRestart();
         (void)esp_ota_mark_app_invalid_rollback_and_reboot();
         ESP.restart();
         return;
@@ -151,6 +153,11 @@ static bool app_main_loop()
 #define APP_CAN_TASK_CORE 0
 #endif
 
+static void appCanShutdownHandler()
+{
+    appPrepareCanForRestart();
+}
+
 static void app_can_task(void *)
 {
     appCanTaskDedicated = true;
@@ -189,6 +196,8 @@ extern "C" void app_main(void)
         nvsErr = nvs_flash_init();
     }
     ESP_ERROR_CHECK(nvsErr);
+
+    ESP_ERROR_CHECK(esp_register_shutdown_handler(appCanShutdownHandler));
 
     app_main_setup();
     bool canTaskStarted = app_start_can_task();

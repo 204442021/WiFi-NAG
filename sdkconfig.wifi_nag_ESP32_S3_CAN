@@ -1663,8 +1663,7 @@ CONFIG_BT_SMP_CRYPTO_STACK_TINYCRYPT=y
 #
 # Legacy TWAI Driver Configurations
 #
-# default:
-# CONFIG_TWAI_ISR_IN_IRAM_LEGACY is not set
+CONFIG_TWAI_ISR_IN_IRAM_LEGACY=y
 # default:
 # CONFIG_TWAI_SUPPRESS_DEPRECATE_WARN is not set
 # default:
@@ -1941,12 +1940,13 @@ CONFIG_SPI_SLAVE_ISR_IN_IRAM=y
 #
 # ESP-Driver:TWAI Configurations
 #
-# default:
-# CONFIG_TWAI_ISR_IN_IRAM is not set
+CONFIG_TWAI_ISR_IN_IRAM=y
 # default:
 # CONFIG_TWAI_IO_FUNC_IN_IRAM is not set
 # default:
 # CONFIG_TWAI_ISR_CACHE_SAFE is not set
+# default:
+CONFIG_TWAI_OBJ_CACHE_SAFE=y
 # default:
 # CONFIG_TWAI_ENABLE_DEBUG_LOG is not set
 # end of ESP-Driver:TWAI Configurations
