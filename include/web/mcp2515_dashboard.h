@@ -2357,6 +2357,38 @@ static void handleSystemStatus()
 #endif
 }
 
+static void handleOtaStatus()
+{
+#ifdef ESP_PLATFORM
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    const esp_partition_t *target =
+        esp_ota_get_next_update_partition(running);
+
+    const auto otaSlot = [](const esp_partition_t *partition) -> int {
+        if (!partition ||
+            partition->subtype < ESP_PARTITION_SUBTYPE_APP_OTA_MIN ||
+            partition->subtype >= ESP_PARTITION_SUBTYPE_APP_OTA_MAX)
+            return -1;
+        return partition->subtype - ESP_PARTITION_SUBTYPE_APP_OTA_MIN;
+    };
+
+    String j = "{\"firmware\":\"" FIRMWARE_VERSION "\"";
+    j += ",\"current_label\":\"" + String(running ? running->label : "") + "\"";
+    j += ",\"current_slot\":" + String(otaSlot(running));
+    j += ",\"current_address\":" + String(running ? running->address : 0);
+    j += ",\"current_size\":" + String(running ? running->size : 0);
+    j += ",\"target_label\":\"" + String(target ? target->label : "") + "\"";
+    j += ",\"target_slot\":" + String(otaSlot(target));
+    j += ",\"target_address\":" + String(target ? target->address : 0);
+    j += ",\"target_size\":" + String(target ? target->size : 0);
+    j += "}";
+    server.send(200, "application/json", j);
+#else
+    server.send(200, "application/json",
+                "{\"firmware\":\"native\",\"current_slot\":-1,\"target_slot\":-1}");
+#endif
+}
+
 #ifdef ESP_PLATFORM
 static void dashSerialPrintHelp()
 {
@@ -2690,6 +2722,7 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     server.on("/wifi_config", HTTP_POST, handleWifiConfig);
     server.on("/wifi_status", HTTP_GET, handleWifiStatus);
     server.on("/system_status", HTTP_GET, handleSystemStatus);
+    server.on("/ota_status", HTTP_GET, handleOtaStatus);
     server.on("/wifi_networks", HTTP_GET, handleWifiNetworks);
     server.on("/wifi_connect", HTTP_POST, handleWifiConnect);
     server.on("/wifi_delete", HTTP_POST, handleWifiDelete);

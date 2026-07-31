@@ -11,8 +11,12 @@ RUNTIME_HEADER = (
 DASHBOARD = (
     ROOT / "include" / "web" / "mcp2515_dashboard.h"
 ).read_text(encoding="utf-8")
+UI_SOURCE = (
+    ROOT / "include" / "web" / "mcp2515_dashboard_ui.src.h"
+).read_text(encoding="utf-8")
 MAIN = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
 PLATFORMIO = (ROOT / "platformio.ini").read_text(encoding="utf-8")
+CMAKE = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
 SDK_DEFAULTS = (ROOT / "sdkconfig.wifi_nag.defaults").read_text(
     encoding="utf-8"
 )
@@ -93,6 +97,34 @@ class OtaRegressionTests(unittest.TestCase):
         ):
             with self.subTest(token=token):
                 self.assertIn(token, MAIN)
+
+    def test_ota_page_reports_runtime_partition_details(self) -> None:
+        for token in (
+            "esp_ota_get_running_partition()",
+            "esp_ota_get_next_update_partition(running)",
+            '\\"current_size\\"',
+            '\\"target_size\\"',
+            'server.on("/ota_status", HTTP_GET, handleOtaStatus)',
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, DASHBOARD)
+
+        for token in (
+            'id="ota-version"',
+            'id="ota-current-partition"',
+            'id="ota-target-partition"',
+            'id="ota-partition-size"',
+            "fetchPollJson('/ota_status',2500)",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, UI_SOURCE)
+
+    def test_espidf_application_descriptor_uses_release_version(self) -> None:
+        self.assertIn(
+            'file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/VERSION" PROJECT_VER',
+            CMAKE,
+        )
+        self.assertIn('string(STRIP "${PROJECT_VER}" PROJECT_VER)', CMAKE)
 
 
 if __name__ == "__main__":
