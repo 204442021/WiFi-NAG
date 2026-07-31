@@ -46,7 +46,15 @@ jobs:
         with:
           path: release-assets
       - name: Rename firmware file
-        run: mv release-assets/firmware-wifi-nag-esp32-s3/firmware.bin release-assets/firmware-wifi-nag-esp32-s3.bin
+        shell: bash
+        run: |
+          firmware_path="$(find release-assets -type f -name firmware.bin -print -quit)"
+          if [[ -z "${firmware_path}" ]]; then
+            echo "Could not find firmware.bin under release-assets" >&2
+            find release-assets -maxdepth 4 -type f -print >&2 || true
+            exit 1
+          fi
+          mv "${firmware_path}" release-assets/firmware-wifi-nag-esp32-s3.bin
       - name: Extract changelog section for this tag
         run: |
           TAG="${GITHUB_REF_NAME}"

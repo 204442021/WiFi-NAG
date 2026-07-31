@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Made the GitHub Release workflow locate the uploaded firmware artifact
+  regardless of the download-artifact directory layout.
+
 ## [V3.0.2] - 2026-07-31
 
 ### Changed
