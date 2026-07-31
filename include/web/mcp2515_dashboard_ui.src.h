@@ -313,8 +313,6 @@ body.wifi-nag .hdr-title{font-weight:800;letter-spacing:.2px}
 body.wifi-nag .hw-badge{border-color:var(--goldBd);background:var(--goldBg);color:var(--gold)}
 body.wifi-nag #config-hardware-section{padding-top:2px;border-top:0}
 body.wifi-nag #config-hardware-section .subsec-head{padding:10px 0 8px;border-bottom:1px solid var(--bd)}
-body.wifi-nag #config-card>.card-hdr .card-min-btn,
-body.wifi-nag #config-hardware-section>.subsec-head .subsec-btn{display:none !important}
 body.wifi-nag #can-write-row{padding-top:14px}
 body.wifi-nag #can-write-row .setting-name,
 body.wifi-nag #nag-mode-row .setting-name,
@@ -832,7 +830,17 @@ const I18N_ZH={
   'Firmware Update':'固件更新','Manual OTA':'手动 OTA','Firmware Version':'固件版本','Current Partition':'当前分区','Target Partition':'目标分区','Partition Size':'分区大小','Manual firmware upload only. Select a local .bin and flash it to the device.':'仅保留手动固件上传。选择本地 .bin 并刷写到设备。','Tap to select firmware .bin':'点击选择 firmware .bin','Or drag and drop a file here':'或将文件拖到这里','Uploading...':'上传中...','Flash Firmware':'刷写固件','Reset OTA Credentials':'重置 OTA 凭据','OTA Credentials Reset':'OTA 凭据已重置','OTA Username:':'OTA 用户名：','OTA Password:':'OTA 密码：','Flashing...':'刷写中...','Done! Device is rebooting...':'完成！设备正在重启...','Upload failed:':'上传失败：','Connection error':'连接错误','Use the generated PlatformIO firmware.bin for this board.':'请使用为这块板生成的 PlatformIO firmware.bin。','Current build path:':'当前构建路径：',
   'Confirm':'确认','Continue':'继续','Cancel':'取消','Reboot device?':'重启设备？','CAN bus writes affect vehicle behavior. Remove device immediately if unexpected behavior occurs. Not affiliated with any vehicle manufacturer.':'CAN 写入会影响车辆行为。如出现异常请立即拔除设备。与任何车厂无关联。'
 };
-Object.assign(I18N_ZH,{'Ali':'阿里','Tencent':'腾讯','fetch error':'获取失败','network':'网络错误','scan failed':'扫描失败'});
+Object.assign(I18N_ZH,{
+  'Ali':'阿里','Tencent':'腾讯','fetch error':'获取失败','network':'网络错误','scan failed':'扫描失败',
+  'BLE FSD Diagnostic Receiver':'BLE FSD 诊断接收器',
+  'Receives and validates the LILYGO FSD_ACTIVE protocol, then opens a visible diagnostic-only timer. It does not send or modify CAN frames.':'接收并校验 LILYGO FSD_ACTIVE 协议，然后开启一个可见的诊断计时窗口。此功能不会发送或修改 CAN 帧。',
+  'Link / RSSI':'连接 / 信号','Connected Device':'已连接设备','GATT / Last Packet':'GATT / 最近数据包','State / Left':'状态 / 剩余时间','Last Sequence':'最近序列号','CRC / Repeat':'CRC / 重复包','Windows / Timeout':'诊断窗口 / 超时','Last Reject':'最近拒绝原因',
+  'Auto-collapse after connection':'连接后自动折叠','Expand settings':'展开设置','Collapse settings':'折叠设置','LILYGO MAC (AA:BB:CC:DD:EE:FF)':'LILYGO MAC 地址 (AA:BB:CC:DD:EE:FF)','RSSI threshold dBm':'RSSI 阈值（dBm）','Diagnostic window ms':'诊断窗口（毫秒）','Save BLE':'保存 BLE','Scan LILYGO (10s)':'扫描 LILYGO（10 秒）','Scan nearby (keep connection)':'扫描附近设备（保持连接）','BLE receiver disabled.':'BLE 接收器已关闭。',
+  'CONNECTED':'已连接','SCANNING':'扫描中','WAITING':'等待连接','OFF':'已关闭','SUBSCRIBED':'已订阅','NOT SUBSCRIBED':'未订阅','NO RX':'未接收','DISABLED':'已禁用','IDLE':'空闲','TEST_ACTIVE':'测试激活','AWAIT_CLEAR':'等待清除','UNKNOWN':'未知','Unnamed':'未命名设备','Connecting device…':'正在连接设备…',
+  'none':'无','disabled':'已禁用','length':'长度错误','magic':'标识错误','version':'版本错误','command':'命令错误','state':'状态错误','crc':'CRC 错误','duplicate_seq':'重复序列','old_seq':'过期序列','timestamp':'时间戳错误','can_unhealthy':'CAN 状态异常','await_clear':'等待清除','unknown':'未知',
+  'starting':'启动中','remote_clear':'远端已清除','subscribed':'已订阅','mac_required':'需要配置 MAC 地址','discovery_done':'发现已完成','discovery':'正在发现设备','scanning':'正在扫描','scan_failed':'扫描失败','not_connectable':'设备不可连接','connecting':'正在连接','connect_failed':'连接失败','disconnected':'连接已断开','addr_failed':'地址解析失败','init_failed':'初始化失败','switching_peer':'正在切换设备','scan_cancel_failed':'停止扫描失败','test_active':'测试已激活',
+  'Scanning nearby BLE devices...':'正在扫描附近的 BLE 设备...','Scanning…':'正在扫描…','Unnamed BLE device':'未命名 BLE 设备','FSD service':'FSD 服务','other service':'其他服务','connected':'已连接','saved':'已保存','Use':'使用','BLE scan failed':'BLE 扫描失败','BLE save failed':'BLE 保存失败','error':'错误'
+});
 const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
 Object.assign(I18N_EN,{});
 const I18N_RX=[
@@ -887,7 +895,6 @@ let dashboardInitialLoaded=false;
 let dashboardPollStopped=false;
 let systemStatusTimer=null;
 let systemStatusEnabled=false;
-let wifiNagInitialUiApplied=false;
 let dashboardStaIp='';
 let networkPerformanceMode=localStorage.getItem('netPerfMode')!=='0';
 let uiModeSetting=localStorage.getItem('uiMode')||'auto';
@@ -929,13 +936,6 @@ function setCollapsedPanel(el,collapsed,persist){
   if(btn)btn.textContent=trText(collapsed?'Show':'Hide');
   if(persist&&el.dataset.collapseKey)localStorage.setItem(el.dataset.collapseKey,collapsed?'1':'0');
 }
-function expandCarEssentials(){
-  ['system-card','config-card'].forEach(id=>setCollapsedPanel($(id),false,true));
-  ['config-hardware-section','wifi-internet-section','gateway-section'].forEach(id=>setCollapsedPanel($(id),false,true));
-}
-function expandWifiNagDefaults(){
-  ['config-card','config-hardware-section','wifi-hotspot-section','wifi-internet-section','gateway-section'].forEach(id=>setCollapsedPanel($(id),false,true));
-}
 function updateUiModeUi(){
   document.querySelectorAll('.ui-mode-btn').forEach(btn=>{
     const active=(btn.dataset.uiMode||'auto')===uiModeSetting;
@@ -951,11 +951,6 @@ function applyWifiNagMode(){
   const title=document.querySelector('.hdr-title');if(title)title.textContent='EVtools WIFI-NAG';
   setText('hw-badge','WIFI-NAG');
   setText('s-inj-lbl','CAN Write');
-  if(!wifiNagInitialUiApplied){
-    wifiNagInitialUiApplied=true;
-    setCollapsedPanel($('system-card'),false,false);
-    expandWifiNagDefaults();
-  }
 }
 function applyUiMode(){
   uiModeSetting=normalizeUiMode(uiModeSetting);
@@ -970,7 +965,6 @@ function setUiMode(mode,persist){
   uiModeSetting=normalizeUiMode(mode);
   if(persist)localStorage.setItem('uiMode',uiModeSetting);
   applyUiMode();
-  if(isCarUiActive())expandCarEssentials();
   startDashboardPolling();
 }
 function scrollCarSection(id){
@@ -1093,7 +1087,7 @@ function initCardMinimizers(){
   document.querySelectorAll('.card').forEach((card,i)=>{
     const hdr=card.querySelector('.card-hdr');if(!hdr||hdr.querySelector('.card-min-btn'))return;
     const title=card.querySelector('.card-title');
-    const key='cardCollapse:v2:'+i+':'+((title?title.textContent:'card').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-'));
+    const key='cardCollapse:v3:'+i+':'+((title?title.textContent:'card').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-'));
     card.dataset.collapseKey=key;
     const btn=document.createElement('button');
     btn.type='button';
@@ -1106,9 +1100,7 @@ function initCardMinimizers(){
     };
     hdr.appendChild(btn);
     const stored=localStorage.getItem(key);
-    const titleText=(title?title.textContent:'').trim().toLowerCase();
-    const carDefaultOpen=isCarUiActive()&&(titleText.startsWith('configuration')||titleText.startsWith('system status'));
-    const collapsed=stored===null?!carDefaultOpen:stored==='1';
+    const collapsed=stored===null?true:stored==='1';
     card.classList.toggle('collapsed',collapsed);
     btn.textContent=trText(collapsed?'Show':'Hide');
   });
@@ -1119,7 +1111,7 @@ function initSubsectionMinimizers(){
     const explicitKey=sec.dataset.subkey||'';
     const title=sec.querySelector('.subsec-title');
     const safe=((title?title.textContent:'section').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-'));
-    const key='subCollapse:v2:'+(explicitKey||i+':'+safe);
+    const key='subCollapse:v3:'+(explicitKey||i+':'+safe);
     sec.dataset.collapseKey=key;
     const btn=document.createElement('button');
     btn.type='button';
@@ -1132,8 +1124,7 @@ function initSubsectionMinimizers(){
     };
     hdr.appendChild(btn);
     const stored=localStorage.getItem(key);
-    const carDefaultOpen=isCarUiActive()&&['config-hardware','config-wifi-internet','config-gateway'].includes(explicitKey);
-    const collapsed=stored===null?!carDefaultOpen:stored==='1';
+    const collapsed=stored===null?true:stored==='1';
     sec.classList.toggle('collapsed',collapsed);
     btn.textContent=trText(collapsed?'Show':'Hide');
   });
@@ -1334,8 +1325,8 @@ let bleFsdAutoCollapseTarget='';
 function setBleFsdControlsCollapsed(collapsed,persist){
   const controls=$('ble-rx-controls'),btn=$('ble-rx-controls-toggle');
   if(controls)controls.style.display=collapsed?'none':'block';
-  if(btn)btn.textContent=collapsed?'Expand settings':'Collapse settings';
-  if(persist)localStorage.setItem('bleFsdControlsCollapsed',collapsed?'1':'0');
+  if(btn)btn.textContent=trText(collapsed?'Expand settings':'Collapse settings');
+  if(persist)localStorage.setItem('bleFsdControlsCollapsed:v2',collapsed?'1':'0');
 }
 function toggleBleFsdControls(){
   const controls=$('ble-rx-controls');
@@ -1348,7 +1339,8 @@ function saveBleFsdCollapsePreference(){
 function initBleFsdControls(){
   const auto=$('ble-rx-auto-collapse');
   if(auto)auto.checked=localStorage.getItem('bleFsdAutoCollapse')!=='0';
-  setBleFsdControlsCollapsed(localStorage.getItem('bleFsdControlsCollapsed')==='1',false);
+  const stored=localStorage.getItem('bleFsdControlsCollapsed:v2');
+  setBleFsdControlsCollapsed(stored===null?true:stored==='1',false);
 }
 function updateBleFsd(d,includeConfig){
   const enabled=!!bleFsdValue(d,'enabled',d.bleRxEnabled);
@@ -1369,7 +1361,7 @@ function updateBleFsd(d,includeConfig){
   const dup=Number(bleFsdValue(d,'duplicates',d.bleRxDuplicates)||0);
   const timeout=Number(bleFsdValue(d,'timeouts',d.bleRxTimeouts)||0);
   const t=$('ble-rx-enabled');if(t)t.checked=enabled;
-  const scanBtn=$('ble-rx-scan-btn');if(scanBtn)scanBtn.textContent=connected?'Scan nearby (keep connection)':'Scan LILYGO (10s)';
+  const scanBtn=$('ble-rx-scan-btn');if(scanBtn)scanBtn.textContent=trText(connected?'Scan nearby (keep connection)':'Scan LILYGO (10s)');
   if(includeConfig){
     const mac=$('ble-rx-mac'),r=$('ble-rx-rssi'),w=$('ble-rx-window');
     if(mac&&document.activeElement!==mac)mac.value=d.mac||'';
@@ -1377,19 +1369,21 @@ function updateBleFsd(d,includeConfig){
     if(w&&document.activeElement!==w)w.value=Number(d.testWindowMs===undefined?10000:d.testWindowMs);
   }
   const link=connected?'CONNECTED':(scanning?'SCANNING':(enabled?'WAITING':'OFF'));
-  setCanDiag('ble-rx-link',link+(rssi?(' / '+rssi+' dBm'):''),connected?'ok':enabled?'warn':'dim');
-  const deviceText=peerMac?((peerName||'Unnamed')+' / '+peerMac):(connected?'Connecting device…':'--');
+  setCanDiag('ble-rx-link',trText(link)+(rssi?(' / '+rssi+' dBm'):''),connected?'ok':enabled?'warn':'dim');
+  const deviceText=peerMac?((peerName||trText('Unnamed'))+' / '+peerMac):(connected?trText('Connecting device…'):'--');
   setCanDiag('ble-rx-device',deviceText,connected?'ok':peerMac?'warn':'dim');
-  setCanDiag('ble-rx-session',(subscribed?'SUBSCRIBED':'NOT SUBSCRIBED')+' / '+(lastPacket?'RX':'NO RX'),
+  setCanDiag('ble-rx-session',trText(subscribed?'SUBSCRIBED':'NOT SUBSCRIBED')+' / '+trText(lastPacket?'RX':'NO RX'),
              connected&&subscribed?'ok':connected?'warn':'dim');
-  setCanDiag('ble-rx-state',state+(state==='TEST_ACTIVE'?(' / '+Math.ceil(remaining/1000)+'s'):''),
+  setCanDiag('ble-rx-state',trText(state)+(state==='TEST_ACTIVE'?(' / '+Math.ceil(remaining/1000)+'s'):''),
              state==='TEST_ACTIVE'?'ok':state==='AWAIT_CLEAR'?'warn':'dim');
   setCanDiag('ble-rx-seq',seq||'--',seq?'ok':'dim');
   setCanDiag('ble-rx-errors',crc+' / '+dup,(crc||dup)?'warn':'ok');
   setCanDiag('ble-rx-windows',windows+' / '+timeout,timeout?'warn':'ok');
-  setCanDiag('ble-rx-reject',reject,reject==='none'?'ok':'warn');
+  setCanDiag('ble-rx-reject',trText(reject),reject==='none'?'ok':'warn');
   const reasonEl=$('ble-rx-reason');if(reasonEl){
-    reasonEl.textContent='Receiver: '+reason+' — diagnostic-only; no BLE-to-CAN control link.';
+    reasonEl.textContent=dashLang==='zh'
+      ?'接收器：'+trText(reason)+' — 仅用于诊断；BLE 不会控制 CAN。'
+      :'Receiver: '+reason+' — diagnostic-only; no BLE-to-CAN control link.';
     reasonEl.style.color=state==='TEST_ACTIVE'?'var(--ok)':reject!=='none'?'var(--warn)':'var(--tx3)';
   }
   const auto=$('ble-rx-auto-collapse');
@@ -1422,27 +1416,27 @@ async function saveBleFsdConfig(){
   }catch(e){
     bleFsdAutoCollapsePending=false;
     bleFsdAutoCollapseTarget='';
-    const reason=$('ble-rx-reason');if(reason){reason.textContent='BLE save failed: '+(e.message||'error');reason.style.color='var(--err)';}
+    const reason=$('ble-rx-reason');if(reason){reason.textContent=trText('BLE save failed')+': '+trText(e.message||'error');reason.style.color='var(--err)';}
   }
 }
 let bleFsdScanTimer=null;
 function renderBleFsdScan(d){
   const list=$('ble-rx-scan-results'),status=$('ble-rx-scan-status'),btn=$('ble-rx-scan-btn');
-  if(status){status.textContent=d.scanning?'Scanning nearby BLE devices...':((d.devices||[]).length+' device(s) found');status.style.color=d.scanning?'var(--acc)':'var(--tx3)';}
+  if(status){const count=(d.devices||[]).length;status.textContent=d.scanning?trText('Scanning nearby BLE devices...'):(dashLang==='zh'?(count+' 个设备'):(count+' device(s) found'));status.style.color=d.scanning?'var(--acc)':'var(--tx3)';}
   if(btn)btn.disabled=!!d.scanning;
   if(!list)return;
   const devices=d.devices||[];
-  if(!devices.length){list.style.display=d.scanning?'block':'none';list.innerHTML=d.scanning?'<div style="padding:10px;color:var(--tx3);font-size:11px">Scanning…</div>':'';return;}
+  if(!devices.length){list.style.display=d.scanning?'block':'none';list.innerHTML=d.scanning?'<div style="padding:10px;color:var(--tx3);font-size:11px">'+trText('Scanning…')+'</div>':'';return;}
   list.style.display='block';
   list.innerHTML=devices.map(x=>{
     const mac=escapeHtml(x.mac||'');
-    const name=escapeHtml(x.name||'Unnamed BLE device');
-    const service=x.fsdService?'<span style="color:var(--ok)">FSD service</span>':'<span style="color:var(--tx3)">other service</span>';
-    const relation=x.connected?'<span style="color:var(--ok)">connected</span>':(x.saved?'<span style="color:var(--acc)">saved</span>':'');
+    const name=escapeHtml(x.name||trText('Unnamed BLE device'));
+    const service=x.fsdService?'<span style="color:var(--ok)">'+trText('FSD service')+'</span>':'<span style="color:var(--tx3)">'+trText('other service')+'</span>';
+    const relation=x.connected?'<span style="color:var(--ok)">'+trText('connected')+'</span>':(x.saved?'<span style="color:var(--acc)">'+trText('saved')+'</span>':'');
     return '<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--bd)">'+
       '<div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+name+'</div>'+
       '<div style="font:11px monospace;color:var(--tx3)">'+mac+' • '+(x.rssi||0)+' dBm • '+service+(relation?' • '+relation:'')+'</div></div>'+
-      '<button class="sniff-btn" data-ble-mac="'+mac+'" onclick="useBleFsdDevice(this.dataset.bleMac)">Use</button></div>';
+      '<button class="sniff-btn" data-ble-mac="'+mac+'" onclick="useBleFsdDevice(this.dataset.bleMac)">'+trText('Use')+'</button></div>';
   }).join('');
 }
 async function pollBleFsdScan(){
@@ -1460,7 +1454,7 @@ async function scanBleFsd(){
     renderBleFsdScan(d);
     bleFsdScanTimer=setInterval(pollBleFsdScan,900);
   }catch(e){
-    const status=$('ble-rx-scan-status');if(status){status.textContent='BLE scan failed';status.style.color='var(--err)';}
+    const status=$('ble-rx-scan-status');if(status){status.textContent=trText('BLE scan failed');status.style.color='var(--err)';}
   }
 }
 function useBleFsdDevice(mac){
@@ -2467,7 +2461,7 @@ document.addEventListener('visibilitychange',()=>{
   if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
   pollLog();
 });
-orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();initBleFsdControls();if(isCarUiActive())expandCarEssentials();initSystemMonitor();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();loadOtaStatus();if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();poll();
+orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();initBleFsdControls();initSystemMonitor();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();loadOtaStatus();if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();poll();
 </script>
 </body>
 </html>

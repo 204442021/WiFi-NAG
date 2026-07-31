@@ -677,7 +677,7 @@ static void dashLoadPrefs()
     if (prefs.getUChar("sp_sel", 1) != 1)
         prefs.putUChar("sp_sel", 1);
     bool ep = prefs.getBool("eprn", false);
-    bleFsdConfig.enabled = prefs.getBool("ble_rx", false);
+    bleFsdConfig.enabled = prefs.getBool("ble_rx", true);
     String bleMac = prefs.getString("ble_mac", "");
     strlcpy(bleFsdConfig.peerMac, bleMac.c_str(), sizeof(bleFsdConfig.peerMac));
     bleFsdConfig.rssiThreshold = std::clamp<int>(prefs.getChar("ble_rssi", -90), -100, -20);

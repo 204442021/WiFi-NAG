@@ -96,6 +96,36 @@ class BleConnectedDeviceStatusTests(unittest.TestCase):
         self.assertIn("bleFsdAutoCollapsePending", UI_SOURCE)
         self.assertIn("initBleFsdControls()", UI_SOURCE)
 
+    def test_ble_diagnostics_are_enabled_by_default(self) -> None:
+        self.assertIn("bool enabled = true", HEADER)
+        self.assertIn('prefs.getBool("ble_rx", true)', DASH)
+
+    def test_ble_dashboard_has_complete_chinese_status_text(self) -> None:
+        for text in (
+            "'BLE FSD Diagnostic Receiver':'BLE FSD 诊断接收器'",
+            "'Connected Device':'已连接设备'",
+            "'CONNECTED':'已连接'",
+            "'SUBSCRIBED':'已订阅'",
+            "'TEST_ACTIVE':'测试激活'",
+            "'duplicate_seq':'重复序列'",
+            "'Scanning nearby BLE devices...':'正在扫描附近的 BLE 设备...'",
+        ):
+            with self.subTest(text=text):
+                self.assertIn(text, UI_SOURCE)
+        self.assertIn("trText(link)", UI_SOURCE)
+        self.assertIn("trText(state)", UI_SOURCE)
+        self.assertIn("trText(reject)", UI_SOURCE)
+
+    def test_all_dashboard_panels_start_collapsed(self) -> None:
+        self.assertIn("cardCollapse:v3:", UI_SOURCE)
+        self.assertIn("subCollapse:v3:", UI_SOURCE)
+        self.assertGreaterEqual(
+            UI_SOURCE.count("const collapsed=stored===null?true:stored==='1';"), 2
+        )
+        self.assertIn("bleFsdControlsCollapsed:v2", UI_SOURCE)
+        self.assertNotIn("expandCarEssentials", UI_SOURCE)
+        self.assertNotIn("expandWifiNagDefaults", UI_SOURCE)
+
     def test_ble_runtime_services_a_mode_without_web_polling(self) -> None:
         self.assertIn("dashServiceBleFsdRuntime", DASH)
         self.assertIn("nag->triggerAModeWindow(windowMs)", DASH)

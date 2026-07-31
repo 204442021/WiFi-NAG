@@ -52,7 +52,7 @@ struct BleFsdPacket
 
 struct BleFsdReceiverConfig
 {
-    bool enabled = false;
+    bool enabled = true;
     char peerMac[18] = ""; // Canonical AA:BB:CC:DD:EE:FF, mandatory whitelist.
     int8_t rssiThreshold = -90;
     uint32_t testWindowMs = 10000;
