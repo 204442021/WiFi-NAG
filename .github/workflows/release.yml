@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*.*.*"
+      - "V*.*.*"
   workflow_dispatch:
 
 permissions:
@@ -59,7 +60,22 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           VER="${TAG#v}"
-          awk -v v="$VER" 'BEGIN{f=0} /^## \[/{ if(f) exit; if($0 ~ "^## \\[" v "\\]") { f=1; print; next } } f { print }' CHANGELOG.md > release-notes.md
+          VER="${VER#V}"
+          awk -v tag="$TAG" -v ver="$VER" '
+            BEGIN { f=0 }
+            /^## \[/ {
+              if (f) exit
+              heading = $0
+              sub(/^## \[/, "", heading)
+              sub(/\].*$/, "", heading)
+              if (heading == tag || heading == ver || heading == "V" ver) {
+                f=1
+                print
+                next
+              }
+            }
+            f { print }
+          ' CHANGELOG.md > release-notes.md
           if [ ! -s release-notes.md ]; then
             echo "Release ${TAG}" > release-notes.md
           fi

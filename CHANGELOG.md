@@ -6,6 +6,8 @@
 
 - Made the GitHub Release workflow locate the uploaded firmware artifact
   regardless of the download-artifact directory layout.
+- Made release triggering and changelog extraction handle the repository's
+  uppercase `Vx.y.z` version tags.
 
 ## [V3.0.2] - 2026-07-31
 
