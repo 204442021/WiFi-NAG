@@ -95,7 +95,7 @@ void endTest(const char *reason, bool awaitClear)
     gTestEndsAtMs = 0;
     gStatus.testRemainingMs = 0;
     gStatus.state = awaitClear ? BleFsdReceiverState::AwaitingClear
-                                : BleFsdReceiverState::Idle;
+                               : BleFsdReceiverState::Idle;
     setReason(reason);
 }
 
@@ -659,11 +659,16 @@ const char *bleFsdReceiverStateName(BleFsdReceiverState state)
 {
     switch (state)
     {
-    case BleFsdReceiverState::Disabled: return "DISABLED";
-    case BleFsdReceiverState::Idle: return "IDLE";
-    case BleFsdReceiverState::TestActive: return "TEST_ACTIVE";
-    case BleFsdReceiverState::AwaitingClear: return "AWAIT_CLEAR";
-    default: return "UNKNOWN";
+    case BleFsdReceiverState::Disabled:
+        return "DISABLED";
+    case BleFsdReceiverState::Idle:
+        return "IDLE";
+    case BleFsdReceiverState::TestActive:
+        return "TEST_ACTIVE";
+    case BleFsdReceiverState::AwaitingClear:
+        return "AWAIT_CLEAR";
+    default:
+        return "UNKNOWN";
     }
 }
 
@@ -671,20 +676,34 @@ const char *bleFsdRejectReasonName(BleFsdRejectReason reason)
 {
     switch (reason)
     {
-    case BleFsdRejectReason::None: return "none";
-    case BleFsdRejectReason::Disabled: return "disabled";
-    case BleFsdRejectReason::InvalidLength: return "length";
-    case BleFsdRejectReason::InvalidMagic: return "magic";
-    case BleFsdRejectReason::InvalidVersion: return "version";
-    case BleFsdRejectReason::InvalidCommand: return "command";
-    case BleFsdRejectReason::InvalidState: return "state";
-    case BleFsdRejectReason::InvalidCrc: return "crc";
-    case BleFsdRejectReason::DuplicateSequence: return "duplicate_seq";
-    case BleFsdRejectReason::OldSequence: return "old_seq";
-    case BleFsdRejectReason::InvalidTimestamp: return "timestamp";
-    case BleFsdRejectReason::CanUnhealthy: return "can_unhealthy";
-    case BleFsdRejectReason::AwaitingClear: return "await_clear";
-    default: return "unknown";
+    case BleFsdRejectReason::None:
+        return "none";
+    case BleFsdRejectReason::Disabled:
+        return "disabled";
+    case BleFsdRejectReason::InvalidLength:
+        return "length";
+    case BleFsdRejectReason::InvalidMagic:
+        return "magic";
+    case BleFsdRejectReason::InvalidVersion:
+        return "version";
+    case BleFsdRejectReason::InvalidCommand:
+        return "command";
+    case BleFsdRejectReason::InvalidState:
+        return "state";
+    case BleFsdRejectReason::InvalidCrc:
+        return "crc";
+    case BleFsdRejectReason::DuplicateSequence:
+        return "duplicate_seq";
+    case BleFsdRejectReason::OldSequence:
+        return "old_seq";
+    case BleFsdRejectReason::InvalidTimestamp:
+        return "timestamp";
+    case BleFsdRejectReason::CanUnhealthy:
+        return "can_unhealthy";
+    case BleFsdRejectReason::AwaitingClear:
+        return "await_clear";
+    default:
+        return "unknown";
     }
 }
 

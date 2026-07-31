@@ -351,7 +351,7 @@ static void mcpDashOnCanSafetyTrip(CanSafetyReason reason)
 static uint32_t dashNagEchoCount()
 {
     if (dashHandler)
-        return (uint32_t)static_cast<NagHandler *>(dashHandler)->nagEchoCount;
+        return (uint32_t) static_cast<NagHandler *>(dashHandler)->nagEchoCount;
     return 0;
 }
 
@@ -1719,7 +1719,6 @@ static void dashCheckWifi()
             staRetryAt = now + retryMs;
         }
     }
-
 }
 
 // Cached scan results — a full-channel scan in APSTA mode briefly drops the
@@ -2176,7 +2175,8 @@ static void dashReadCpuLoad(uint8_t &core0Load, uint8_t &core1Load, bool &valid)
 
     uint32_t idleDelta0 = idle[0] - prevIdle[0];
     uint32_t idleDelta1 = idle[1] - prevIdle[1];
-    auto loadFromIdle = [](uint32_t idleDelta, uint32_t elapsedUs) -> uint8_t {
+    auto loadFromIdle = [](uint32_t idleDelta, uint32_t elapsedUs) -> uint8_t
+    {
         uint32_t idlePct = elapsedUs ? (idleDelta * 100UL + elapsedUs / 2) / elapsedUs : 0;
         if (idlePct > 100)
             idlePct = 100;
@@ -2364,7 +2364,8 @@ static void handleOtaStatus()
     const esp_partition_t *target =
         esp_ota_get_next_update_partition(running);
 
-    const auto otaSlot = [](const esp_partition_t *partition) -> int {
+    const auto otaSlot = [](const esp_partition_t *partition) -> int
+    {
         if (!partition ||
             partition->subtype < ESP_PARTITION_SUBTYPE_APP_OTA_MIN ||
             partition->subtype >= ESP_PARTITION_SUBTYPE_APP_OTA_MAX)
@@ -2683,19 +2684,16 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
                        {
                            if (!appBeginCanOtaGuard())
                                dashLog("[OTA] CAN listen-only transition failed; TX pin held recessive");
-                           dashLog("[OTA] Starting...");
-                       });
+                           dashLog("[OTA] Starting..."); });
     ArduinoOTA.onEnd([]()
                      {
                          dashLog("[OTA] Done -- rebooting");
-                         appPrepareCanForRestart();
-                     });
+                         appPrepareCanForRestart(); });
     ArduinoOTA.onError([](ota_error_t e)
                        {
                            appEndCanOtaGuard();
                            dashApplyRuntimeState();
-                           dashLog("[OTA] Error: " + String(e));
-                       });
+                           dashLog("[OTA] Error: " + String(e)); });
     ArduinoOTA.begin();
 
     server.on("/", HTTP_GET, handleRoot);
