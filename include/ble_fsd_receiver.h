@@ -62,6 +62,7 @@ struct BleFsdReceiverStatus
 {
     bool initialized = false;
     bool scanning = false;
+    bool discoveryActive = false;
     bool connected = false;
     bool subscribed = false;
     bool remoteActive = false;
@@ -94,6 +95,8 @@ struct BleFsdScanEntry
     int8_t rssi = 0;
     bool fsdServiceAdvertised = false;
     bool connectable = false;
+    bool connected = false;
+    bool saved = false;
 };
 
 inline uint16_t bleFsdCrc16(const uint8_t *data, size_t length)

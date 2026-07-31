@@ -11,6 +11,7 @@ RUNTIME_FILE = ROOT / "src" / "espidf_runtime.cpp"
 CAN_DRIVER_FILE = ROOT / "include" / "drivers" / "can_driver.h"
 TWAI_DRIVER_FILE = ROOT / "include" / "drivers" / "twai_driver.h"
 PLATFORMIO_FILE = ROOT / "platformio.ini"
+PROFILE_EXAMPLE_FILE = ROOT / "platformio_profile.example.h"
 
 
 class WifiNagRegressionTests(unittest.TestCase):
@@ -23,6 +24,7 @@ class WifiNagRegressionTests(unittest.TestCase):
         cls.can_driver = CAN_DRIVER_FILE.read_text(encoding="utf-8")
         cls.twai_driver = TWAI_DRIVER_FILE.read_text(encoding="utf-8")
         cls.platformio = PLATFORMIO_FILE.read_text(encoding="utf-8")
+        cls.profile_example = PROFILE_EXAMPLE_FILE.read_text(encoding="utf-8")
 
     def assertHasUiId(self, element_id: str) -> None:
         pattern = rf'\bid=(?:"{re.escape(element_id)}"|{re.escape(element_id)}\b)'
@@ -119,6 +121,13 @@ class WifiNagRegressionTests(unittest.TestCase):
     def test_espidf_wifi_logging_is_not_info_verbose(self) -> None:
         self.assertIn('esp_log_level_set("wifi", ESP_LOG_WARN);', self.runtime)
         self.assertIn('esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);', self.runtime)
+
+    def test_wifi_ap_start_is_checked_and_uses_unique_wpa2_ssid(self) -> None:
+        self.assertIn('#define DASH_SSID "WIFI-NAG"', self.profile_example)
+        self.assertIn("WIFI_AUTH_WPA2_PSK", self.runtime)
+        self.assertIn("esp_wifi_init failed", self.runtime)
+        self.assertIn("softAP failed", self.runtime)
+        self.assertIn("if (!initialized_)", self.runtime)
 
     def test_sta_retry_backoff_keeps_apsta_but_reduces_reconnect_churn(self) -> None:
         self.assertIn("kDashStaBackoffFailureThreshold = 3", self.dash)

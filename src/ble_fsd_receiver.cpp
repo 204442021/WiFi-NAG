@@ -26,9 +26,47 @@ bool gHaveSourceTimestamp = false;
 uint32_t gTestEndsAtMs = 0;
 bool gDiscoveryMode = false;
 uint32_t gDiscoveryEndsAtMs = 0;
+bool gHostSynced = false;
+bool gDiscoveryStartPending = false;
 static constexpr size_t kMaxScanResults = 10;
 BleFsdScanEntry gScanResults[kMaxScanResults] = {};
 size_t gScanResultCount = 0;
+
+bool textEqualsIgnoreCase(const char *a, const char *b)
+{
+    if (!a || !b)
+        return false;
+    while (*a && *b)
+    {
+        char ca = *a++;
+        char cb = *b++;
+        if (ca >= 'a' && ca <= 'z')
+            ca = static_cast<char>(ca - 'a' + 'A');
+        if (cb >= 'a' && cb <= 'z')
+            cb = static_cast<char>(cb - 'a' + 'A');
+        if (ca != cb)
+            return false;
+    }
+    return *a == '\0' && *b == '\0';
+}
+
+void seedConfiguredPeerScanEntry()
+{
+    if (!gConfig.peerMac[0] || gScanResultCount >= kMaxScanResults)
+        return;
+
+    BleFsdScanEntry &entry = gScanResults[gScanResultCount++];
+    std::snprintf(entry.mac, sizeof(entry.mac), "%s", gConfig.peerMac);
+    if (textEqualsIgnoreCase(gStatus.peerMac, gConfig.peerMac))
+    {
+        std::snprintf(entry.name, sizeof(entry.name), "%s", gStatus.peerName);
+        entry.rssi = gStatus.rssi;
+        entry.connected = gStatus.connected;
+        entry.connectable = gStatus.connected;
+        entry.fsdServiceAdvertised = gStatus.subscribed;
+    }
+    entry.saved = true;
+}
 
 uint32_t nowMs()
 {
@@ -331,7 +369,10 @@ int onService(uint16_t connHandle, const struct ble_gatt_error *error,
 
 void startScan()
 {
-    if ((!gConfig.enabled && !gDiscoveryMode) || gStatus.connected || gStatus.scanning)
+    if (!gHostSynced ||
+        (!gConfig.enabled && !gDiscoveryMode) ||
+        (gStatus.connected && !gDiscoveryMode) ||
+        gStatus.scanning)
         return;
     if (!gDiscoveryMode)
     {
@@ -343,9 +384,28 @@ void startScan()
         }
     }
     struct ble_gap_disc_params params = {};
+    // WiFi AP and BLE share one 2.4 GHz radio. NimBLE's zero defaults are
+    // 30 ms interval / 30 ms window (100% scan duty), which can prevent WiFi
+    // clients from associating. Keep normal background scanning below 20%.
+    params.itvl = BLE_GAP_SCAN_ITVL_MS(gDiscoveryMode ? 100 : 160);
+    params.window = BLE_GAP_SCAN_WIN_MS(gDiscoveryMode ? 40 : 30);
     params.filter_duplicates = gDiscoveryMode ? 0 : 1;
     params.passive = 1;
-    if (ble_gap_disc(gOwnAddrType, BLE_HS_FOREVER, &params, gapEvent, nullptr) == 0)
+    int32_t durationMs = BLE_HS_FOREVER;
+    if (gDiscoveryMode)
+    {
+        const uint32_t now = nowMs();
+        if (static_cast<int32_t>(now - gDiscoveryEndsAtMs) >= 0)
+        {
+            gDiscoveryMode = false;
+            gDiscoveryStartPending = false;
+            setReason("discovery_done");
+            startScan();
+            return;
+        }
+        durationMs = static_cast<int32_t>(gDiscoveryEndsAtMs - now);
+    }
+    if (ble_gap_disc(gOwnAddrType, durationMs, &params, gapEvent, nullptr) == 0)
     {
         gStatus.scanning = true;
         setReason(gDiscoveryMode ? "discovery" : "scanning");
@@ -377,7 +437,7 @@ void recordAdvertisement(const struct ble_gap_disc_desc &disc)
     size_t index = gScanResultCount;
     for (size_t i = 0; i < gScanResultCount; ++i)
     {
-        if (std::strcmp(gScanResults[i].mac, mac) == 0)
+        if (textEqualsIgnoreCase(gScanResults[i].mac, mac))
         {
             index = i;
             break;
@@ -396,6 +456,9 @@ void recordAdvertisement(const struct ble_gap_disc_desc &disc)
     entry.connectable = disc.event_type == BLE_HCI_ADV_RPT_EVTYPE_ADV_IND ||
                         disc.event_type == BLE_HCI_ADV_RPT_EVTYPE_DIR_IND;
     entry.fsdServiceAdvertised = advertisesFsdService(disc);
+    entry.saved = textEqualsIgnoreCase(mac, gConfig.peerMac);
+    entry.connected = gStatus.connected &&
+                      textEqualsIgnoreCase(mac, gStatus.peerMac);
 
     struct ble_hs_adv_fields fields = {};
     if (ble_hs_adv_parse_fields(&fields, disc.data, disc.length_data) == 0 &&
@@ -502,17 +565,33 @@ int gapEvent(struct ble_gap_event *event, void *)
         gHaveSourceTimestamp = false;
         if (gStatus.state == BleFsdReceiverState::TestActive)
             endTest("link_lost", false);
-        else
+        else if (!gDiscoveryMode)
             setReason("disconnected");
+        if (gDiscoveryMode)
+        {
+            // A manual discovery request deliberately tears down the current
+            // single BLE link, then starts its bounded scan from this callback.
+            startScan();
+            return 0;
+        }
         startScan();
         return 0;
 
     case BLE_GAP_EVENT_DISC_COMPLETE:
         gStatus.scanning = false;
-        if (gDiscoveryMode && static_cast<int32_t>(nowMs() - gDiscoveryEndsAtMs) >= 0)
+        if (gDiscoveryMode && gDiscoveryStartPending)
+        {
+            gDiscoveryStartPending = false;
+            startScan();
+            return 0;
+        }
+        if (gDiscoveryMode)
         {
             gDiscoveryMode = false;
             setReason("discovery_done");
+            if (!gStatus.connected)
+                startScan();
+            return 0;
         }
         startScan();
         return 0;
@@ -524,6 +603,7 @@ int gapEvent(struct ble_gap_event *event, void *)
 
 void onReset(int)
 {
+    gHostSynced = false;
     gStatus.connected = false;
     gStatus.subscribed = false;
     gStatus.scanning = false;
@@ -541,6 +621,7 @@ void onSync()
         setReason("addr_failed");
         return;
     }
+    gHostSynced = true;
     startScan();
 }
 
@@ -550,6 +631,28 @@ void hostTask(void *)
     nimble_port_freertos_deinit();
 }
 #endif
+
+bool ensureBleInitialized()
+{
+    if (gStatus.initialized)
+        return true;
+#ifdef ESP_PLATFORM
+    if (nimble_port_init() != 0)
+    {
+        setReason("init_failed");
+        return false;
+    }
+    ble_hs_cfg.sync_cb = onSync;
+    ble_hs_cfg.reset_cb = onReset;
+    ble_svc_gap_device_name_set("WIFI-NAG BLE RX");
+    gStatus.initialized = true;
+    nimble_port_freertos_init(hostTask);
+#else
+    gStatus.initialized = true;
+    gHostSynced = true;
+#endif
+    return true;
+}
 } // namespace
 
 const char *bleFsdReceiverStateName(BleFsdReceiverState state)
@@ -590,36 +693,23 @@ void bleFsdReceiverStart(const BleFsdReceiverConfig &config)
     gConfig = config;
     gStatus.state = config.enabled ? BleFsdReceiverState::Idle : BleFsdReceiverState::Disabled;
     setReason(config.enabled ? "starting" : "disabled");
-#ifdef ESP_PLATFORM
-    if (!gStatus.initialized)
-    {
-        if (nimble_port_init() != 0)
-        {
-            setReason("init_failed");
-            return;
-        }
-        ble_hs_cfg.sync_cb = onSync;
-        ble_hs_cfg.reset_cb = onReset;
-        ble_svc_gap_device_name_set("WIFI-NAG BLE RX");
-        gStatus.initialized = true;
-        nimble_port_freertos_init(hostTask);
-    }
-    else if (config.enabled)
-    {
+    // Do not reserve Bluetooth controller/host memory when BLE RX is disabled.
+    // Discovery and a later enable request initialize the stack lazily.
+    if (!config.enabled)
+        return;
+    if (ensureBleInitialized())
         startScan();
-    }
-#else
-    gStatus.initialized = true;
-#endif
 }
 
 void bleFsdReceiverConfigure(const BleFsdReceiverConfig &config)
 {
     const bool wasEnabled = gConfig.enabled;
+    const bool wasDiscovering = gDiscoveryMode;
     const bool peerChanged =
         std::strcmp(gConfig.peerMac, config.peerMac) != 0;
     gConfig = config;
     gDiscoveryMode = false;
+    gDiscoveryStartPending = false;
     if (peerChanged)
     {
         gStatus.peerMac[0] = '\0';
@@ -651,9 +741,17 @@ void bleFsdReceiverConfigure(const BleFsdReceiverConfig &config)
         gHaveSourceTimestamp = false;
     }
 #ifdef ESP_PLATFORM
-    if (gStatus.initialized)
-        startScan();
+    if (wasDiscovering && gStatus.scanning)
+        ble_gap_disc_cancel();
+    if (peerChanged && gConnHandle != BLE_HS_CONN_HANDLE_NONE)
+    {
+        setReason("switching_peer");
+        ble_gap_terminate(gConnHandle, BLE_ERR_REM_USER_CONN_TERM);
+        return;
+    }
 #endif
+    if (ensureBleInitialized())
+        startScan();
 }
 
 void bleFsdReceiverTick(bool canHealthy)
@@ -673,13 +771,12 @@ void bleFsdReceiverTick(bool canHealthy)
         return;
     }
     const uint32_t now = nowMs();
-    if (gDiscoveryMode && static_cast<int32_t>(now - gDiscoveryEndsAtMs) >= 0)
+    if (gDiscoveryMode &&
+        static_cast<int32_t>(now - gDiscoveryEndsAtMs) >= 0 &&
+        !gStatus.scanning)
     {
         gDiscoveryMode = false;
-#ifdef ESP_PLATFORM
-        if (gStatus.scanning)
-            ble_gap_disc_cancel();
-#endif
+        gDiscoveryStartPending = false;
         setReason("discovery_done");
     }
     if (gStatus.state == BleFsdReceiverState::TestActive)
@@ -704,6 +801,7 @@ BleFsdReceiverStatus bleFsdReceiverGetStatus()
 {
     const uint32_t now = nowMs();
     BleFsdReceiverStatus snapshot = gStatus;
+    snapshot.discoveryActive = gDiscoveryMode;
     if (snapshot.state == BleFsdReceiverState::TestActive &&
         static_cast<int32_t>(gTestEndsAtMs - now) > 0)
         snapshot.testRemainingMs = gTestEndsAtMs - now;
@@ -713,17 +811,28 @@ BleFsdReceiverStatus bleFsdReceiverGetStatus()
 bool bleFsdReceiverStartDiscovery(uint32_t durationMs)
 {
     durationMs = std::clamp(durationMs, 1000UL, 30000UL);
-    if (!gStatus.initialized || gStatus.connected)
-        return false;
     gDiscoveryMode = true;
     gDiscoveryEndsAtMs = nowMs() + durationMs;
+    gDiscoveryStartPending = false;
     gScanResultCount = 0;
     std::memset(gScanResults, 0, sizeof(gScanResults));
+    seedConfiguredPeerScanEntry();
     setReason("discovery");
+    if (!ensureBleInitialized())
+    {
+        gDiscoveryMode = false;
+        return false;
+    }
 #ifdef ESP_PLATFORM
     if (gStatus.scanning)
     {
-        ble_gap_disc_cancel();
+        gDiscoveryStartPending = true;
+        if (ble_gap_disc_cancel() != 0)
+        {
+            gDiscoveryStartPending = false;
+            setReason("scan_cancel_failed");
+            return false;
+        }
         return true;
     }
     startScan();

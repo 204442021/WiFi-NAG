@@ -510,6 +510,50 @@ static void dashProcessCanSafetyTrip()
     dashSetCanActive(false, dashCanSafetyReasonName(reason));
 }
 
+static void dashServiceBleFsdRuntime()
+{
+    static unsigned long lastServiceMs = 0;
+    static BleFsdReceiverState previousState = BleFsdReceiverState::Disabled;
+    const unsigned long now = millis();
+    if (now - lastServiceMs < 50)
+        return;
+    lastServiceMs = now;
+
+    CanDriverDiagnostics diagnostics = {};
+    const bool canHealthy =
+        dashDriver &&
+        dashDriver->getDiagnostics(diagnostics) &&
+        diagnostics.available &&
+        diagnostics.state == CanDriverState::Running &&
+        !diagnostics.safetyTripped &&
+        diagnostics.txErrorCounter < 96 &&
+        diagnostics.rxErrorCounter < 96;
+
+    bleFsdReceiverTick(canHealthy);
+    const BleFsdReceiverStatus status = bleFsdReceiverGetStatus();
+#if defined(NAG_KILLER)
+    if (NagHandler *nag = dashNagActiveHandler())
+    {
+        if (status.state == BleFsdReceiverState::TestActive &&
+            previousState != BleFsdReceiverState::TestActive &&
+            nagKillerEnabled && canActive)
+        {
+            const uint32_t windowMs =
+                status.testRemainingMs > 0 ? status.testRemainingMs : 10000UL;
+            nag->triggerAModeWindow(windowMs);
+            dashLog("[BLE] A mode active for " + String(windowMs) + " ms");
+        }
+        else if (status.state != BleFsdReceiverState::TestActive &&
+                 previousState == BleFsdReceiverState::TestActive)
+        {
+            nag->cancelAModeWindow();
+            dashLog("[BLE] A mode inactive");
+        }
+    }
+#endif
+    previousState = status.state;
+}
+
 [[maybe_unused]] static void dashToggleCanActive(const char *reason = nullptr)
 {
     dashSetCanActive(!canActive, reason);
@@ -870,28 +914,7 @@ static void handleStatus()
     bool ep = dashHandler ? (bool)dashHandler->enablePrint : false;
     CanDriverDiagnostics canDiag = {};
     bool canDiagAvailable = dashDriver && dashDriver->getDiagnostics(canDiag);
-    const bool canHealthy = canDiagAvailable &&
-                            canDiag.state == CanDriverState::Running &&
-                            !canDiag.safetyTripped &&
-                            canDiag.txErrorCounter < 96 &&
-                            canDiag.rxErrorCounter < 96;
-    bleFsdReceiverTick(canHealthy);
     const BleFsdReceiverStatus bleStatus = bleFsdReceiverGetStatus();
-#if defined(NAG_KILLER)
-    // Bridge BLE TEST_ACTIVE (a diagnostic edge) to a display-only 10s A-mode
-    // window on the Nag handler. Only fires on the rising edge and only when
-    // CAN Write is ON (nagKillerEnabled && canActive). It never writes CAN by
-    // itself; it just forces MODE_A and drives the torque-page display.
-    static BleFsdReceiverState dashBlePrevState = BleFsdReceiverState::Disabled;
-    if (bleStatus.state == BleFsdReceiverState::TestActive &&
-        dashBlePrevState != BleFsdReceiverState::TestActive &&
-        nagKillerEnabled && canActive)
-    {
-        if (NagHandler *nag = dashNagActiveHandler())
-            nag->triggerAModeWindow(10000);
-    }
-    dashBlePrevState = bleStatus.state;
-#endif
     if (canDiagAvailable &&
         (canDiagLastSampleMs == 0 || now - canDiagLastSampleMs >= 500))
     {
@@ -1002,6 +1025,8 @@ static void handleStatus()
     j += bleFsdConfig.enabled ? "true" : "false";
     j += ",\"bleRxConnected\":";
     j += bleStatus.connected ? "true" : "false";
+    j += ",\"bleRxDiscoveryActive\":";
+    j += bleStatus.discoveryActive ? "true" : "false";
     j += ",\"bleRxState\":\"";
     j += bleFsdReceiverStateName(bleStatus.state);
     j += "\",\"bleRxRemainingMs\":";
@@ -1072,6 +1097,8 @@ static String dashBleFsdStatusJson(bool includeConfig)
     j += ",\"initialized\":";
     j += s.initialized ? "true" : "false";
     j += ",\"scanning\":";
+    j += s.discoveryActive ? "true" : "false";
+    j += ",\"radioScanning\":";
     j += s.scanning ? "true" : "false";
     j += ",\"connected\":";
     j += s.connected ? "true" : "false";
@@ -1129,6 +1156,8 @@ static String dashBleFsdScanJson(bool started)
     String j = "{\"ok\":true,\"started\":";
     j += started ? "true" : "false";
     j += ",\"scanning\":";
+    j += status.discoveryActive ? "true" : "false";
+    j += ",\"radioScanning\":";
     j += status.scanning ? "true" : "false";
     j += ",\"reason\":\"";
     j += status.lastReason;
@@ -1147,6 +1176,10 @@ static String dashBleFsdScanJson(bool started)
         j += entries[i].fsdServiceAdvertised ? "true" : "false";
         j += ",\"connectable\":";
         j += entries[i].connectable ? "true" : "false";
+        j += ",\"connected\":";
+        j += entries[i].connected ? "true" : "false";
+        j += ",\"saved\":";
+        j += entries[i].saved ? "true" : "false";
         j += "}";
     }
     j += "]}";
@@ -2552,6 +2585,7 @@ static void webTask(void *)
     for (;;)
     {
         dashProcessCanSafetyTrip();
+        dashServiceBleFsdRuntime();
         ArduinoOTA.handle();
         server.handleClient();
         dashCheckWifi();
@@ -2575,7 +2609,6 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
         dashLog("[WARN] SPIFFS mount failed");
 
     dashLoadPrefs();
-    bleFsdReceiverStart(bleFsdConfig);
     dashGatewayLoad();
     // Always boot in AP+STA mode so the STA interface is ready immediately.
     // This prevents connection failures to saved networks caused by late mode switching.
@@ -2643,6 +2676,9 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
 #endif
 
     server.begin();
+    // Bring up AP/WebUI first. BLE shares the same 2.4 GHz radio and must not
+    // delay or starve the recovery/configuration access point after OTA.
+    bleFsdReceiverStart(bleFsdConfig);
     if (strlen(staSSID) > 0)
         dashScheduleSTAConnect(kDashStaBootDelayMs);
 #if CONFIG_FREERTOS_UNICORE

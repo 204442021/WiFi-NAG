@@ -472,7 +472,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       <div class="setting-row nag-only" id="nag-mode-row">
         <div class="setting-info">
           <div class="setting-name">Nag Mode</div>
-          <div class="setting-desc" id="nag-mode-meta">A = fixed +1.80 Nm. A_V2 random-sweeps inside the range every 2000 ms.</div>
+          <div class="setting-desc" id="nag-mode-meta">A is idle by default and outputs fixed +1.80 Nm only during a new BLE-triggered 10 s window. A_V2 keeps its manual random sweep.</div>
         </div>
         <div class="hw-seg nag-mode-control" id="nag-mode-seg">
           <button class="hw-btn active" data-v="0" onclick="setNagMode(0)">A</button>
@@ -499,7 +499,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       <div class="setting-row nag-only" id="nag-amode-row">
         <div class="setting-info">
           <div class="setting-name">A Mode Live (BLE Trigger)</div>
-          <div class="setting-desc">BLE FSD TEST_ACTIVE forces Nag Mode A for 10 s (only when CAN Write is ON). Live torque data below.
+          <div class="setting-desc">Mode A remains idle until a validated BLE FSD TEST_ACTIVE rising edge opens one 10 s output window (only when CAN Write is ON).
             <span class="nag-torque-status">
               <span class="nag-status-pill" id="nag-amode-state">A mode: --</span>
               <span class="nag-status-pill" id="nag-amode-live">实时: --</span>
@@ -546,18 +546,26 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
         </div>
         <label class="tgl"><input type="checkbox" id="ble-rx-enabled" onchange="saveBleFsdConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
-      <div class="ble-rx-form" style="display:grid;grid-template-columns:minmax(0,1fr) 74px 94px auto;gap:6px;margin-top:9px">
-        <input class="sniff-input" id="ble-rx-mac" placeholder="LILYGO MAC (AA:BB:CC:DD:EE:FF)">
-        <input class="sniff-input" id="ble-rx-rssi" type="number" min="-100" max="-20" value="-90" title="RSSI threshold dBm">
-        <input class="sniff-input" id="ble-rx-window" type="number" min="1000" max="60000" step="1000" value="10000" title="Diagnostic window ms">
-        <button class="sniff-btn" onclick="saveBleFsdConfig()">Save BLE</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:9px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--tx3)">
+          <input type="checkbox" id="ble-rx-auto-collapse" onchange="saveBleFsdCollapsePreference()"> Auto-collapse after connection
+        </label>
+        <button class="sniff-btn" id="ble-rx-controls-toggle" onclick="toggleBleFsdControls()">Collapse settings</button>
       </div>
-      <div style="display:flex;gap:6px;align-items:center;margin-top:8px">
-        <button class="sniff-btn" id="ble-rx-scan-btn" onclick="scanBleFsd()">Scan LILYGO (10s)</button>
-        <span class="setting-desc" id="ble-rx-scan-status" style="margin:0"></span>
+      <div id="ble-rx-controls">
+        <div class="ble-rx-form" style="display:grid;grid-template-columns:minmax(0,1fr) 74px 94px auto;gap:6px;margin-top:9px">
+          <input class="sniff-input" id="ble-rx-mac" placeholder="LILYGO MAC (AA:BB:CC:DD:EE:FF)">
+          <input class="sniff-input" id="ble-rx-rssi" type="number" min="-100" max="-20" value="-90" title="RSSI threshold dBm">
+          <input class="sniff-input" id="ble-rx-window" type="number" min="1000" max="60000" step="1000" value="10000" title="Diagnostic window ms">
+          <button class="sniff-btn" onclick="saveBleFsdConfig()">Save BLE</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:8px">
+          <button class="sniff-btn" id="ble-rx-scan-btn" onclick="scanBleFsd()">Scan LILYGO (10s)</button>
+          <span class="setting-desc" id="ble-rx-scan-status" style="margin:0"></span>
+        </div>
+        <div id="ble-rx-scan-results" style="display:none;margin-top:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2);overflow:hidden"></div>
+        <div class="setting-desc" id="ble-rx-reason" style="margin-top:7px">BLE receiver disabled.</div>
       </div>
-      <div id="ble-rx-scan-results" style="display:none;margin-top:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2);overflow:hidden"></div>
-      <div class="setting-desc" id="ble-rx-reason" style="margin-top:7px">BLE receiver disabled.</div>
     </div>
   </div>
 
@@ -803,7 +811,7 @@ const I18N_ZH={
   'CAN Bus':'CAN 总线','CAN Frames':'CAN 帧','CAN TX':'CAN 发送','RX':'接收','TX':'发送','TX Errors':'发送错误','Uptime':'运行时间','Reboot':'重启','READ ONLY':'只读模式','CAN WRITE ON':'CAN 写入开启','Read Only':'只读模式',
   'Frames received per second / total RX':'每秒接收帧数 / 总接收数','CAN Write':'CAN 写入','CAN Write On':'开启 CAN 写入','CAN Write Off':'关闭 CAN 写入','CAN write is enabled. Nag echo can transmit.':'CAN 写入已开启，Nag echo 可发送。','Read-only mode. CAN frames are monitored but not written.':'只读模式：只监听 CAN 帧，不写入。',
   'Configuration':'配置','Device settings':'设备设置','Device settings for Nag, WiFi, DNS and logging.':'Nag、WiFi、DNS 和日志设置。','Nag / CAN Write':'Nag / CAN 写入','Nag Mode':'Nag 模式','A_V2 Range':'A_V2 范围','CAN Diagnostics':'CAN 诊断',
-  'Read-only monitoring when off; Nag 0x370 echo writes when on.':'关闭时仅监听；开启时发送 Nag 0x370 echo。','OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'关闭 = 只读 CAN 监听。开启 = 允许 Nag 880 (0x370) 计数器 +1 echo 写入。','A = fixed +1.80 Nm. A_V2 random-sweeps inside the range every 2000 ms.':'A = 固定 +1.80 Nm。A_V2 每 2000 ms 在范围内伪随机扫动。','Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.':'Nm 端点限制在 -1.80 到 +1.80；如果填反会自动交换。','A_V2: random sweep':'A_V2：随机扫动','A: fixed +1.80 Nm echo':'A：固定 +1.80 Nm echo','echo':'echo','skip':'跳过','drop':'丢弃',
+  'Read-only monitoring when off; Nag 0x370 echo writes when on.':'关闭时仅监听；开启时发送 Nag 0x370 echo。','OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'关闭 = 只读 CAN 监听。开启 = 允许 Nag 880 (0x370) 计数器 +1 echo 写入。','A is idle by default and outputs fixed +1.80 Nm only during a new BLE-triggered 10 s window. A_V2 keeps its manual random sweep.':'A 模式默认空闲，仅在新的 BLE 触发后开启 10 秒固定 +1.80 Nm 输出；A_V2 保留手动随机扫动。','Mode A remains idle until a validated BLE FSD TEST_ACTIVE rising edge opens one 10 s output window (only when CAN Write is ON).':'A 模式默认不启动；仅当有效 BLE FSD TEST_ACTIVE 上升沿到来时开启一次 10 秒输出窗口（且 CAN 写入必须开启）。','Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.':'Nm 端点限制在 -1.80 到 +1.80；如果填反会自动交换。','A_V2: random sweep':'A_V2：随机扫动','A: waiting for BLE trigger':'A：等待 BLE 触发','echo':'echo','skip':'跳过','drop':'丢弃',
   'Read-only TWAI health counters. Only one echo may wait for TX; newer echoes are dropped while it is pending. BUS-OFF or excessive errors automatically lock CAN writing.':'只读 TWAI 健康诊断。发送区只允许一个 echo 等待；未完成时新的过期 echo 会被丢弃。出现 BUS-OFF 或错误过多时自动锁止 CAN 写入。','TWAI State':'TWAI 状态','Queue Reject / Stale Drop':'入队失败 / 过期丢弃','TX Failed / Bus Error':'发送失败 / 总线错误','Arbitration Total / s':'仲裁竞争累计 / 秒','RX Miss / Overrun':'接收丢失 / FIFO 溢出','BUS-OFF / Recovered':'BUS-OFF / 恢复','Warning / Passive':'错误警告 / 被动','Safety Protection':'安全保护','Reset Diagnostics':'清零诊断','RUNNING':'运行中','STOPPED':'已停止','RECOVERING':'恢复中','UNAVAILABLE':'不可用','READY':'就绪','LOCKED':'已锁止','BUS_OFF':'BUS-OFF','TEC_LIMIT':'TEC 超限','REC_LIMIT':'REC 超限','BUS_ERROR_BURST':'总线错误激增','TX_FAILURE_BURST':'发送失败激增',
   'Save':'保存','Saved':'已保存','Saving...':'保存中...','Save failed':'保存失败','CAN write save failed':'CAN 写入保存失败','CAN write blocked by safety protection':'CAN 写入被安全保护阻止','Nag mode save failed':'Nag 模式保存失败','A_V2 range save failed':'A_V2 范围保存失败','CAN diagnostics reset failed':'CAN 诊断清零失败',
   'System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','Chip':'芯片','CPU':'CPU','Clock / Bus':'时钟 / 总线','CPU Load':'CPU 负载','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Uptime / Core':'运行时间 / 核心','Heap RAM':'堆内存','Internal RAM':'内部 RAM','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','Flash / App':'Flash / 应用','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','warming up':'采样中','unavailable':'不可用','offline':'离线','not enabled':'未启用','enabled':'已启用','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','STA online':'STA 在线','STA offline':'STA 离线','on':'开启','off':'关闭','unknown':'未知','fixed':'固定',
@@ -1311,10 +1319,31 @@ function updateFsdControl(d){
 function bleFsdValue(d,name,fallback){
   return d[name]!==undefined?d[name]:fallback;
 }
+let bleFsdAutoCollapsePending=false;
+let bleFsdAutoCollapseTarget='';
+function setBleFsdControlsCollapsed(collapsed,persist){
+  const controls=$('ble-rx-controls'),btn=$('ble-rx-controls-toggle');
+  if(controls)controls.style.display=collapsed?'none':'block';
+  if(btn)btn.textContent=collapsed?'Expand settings':'Collapse settings';
+  if(persist)localStorage.setItem('bleFsdControlsCollapsed',collapsed?'1':'0');
+}
+function toggleBleFsdControls(){
+  const controls=$('ble-rx-controls');
+  setBleFsdControlsCollapsed(!controls||controls.style.display!=='none',true);
+}
+function saveBleFsdCollapsePreference(){
+  const auto=$('ble-rx-auto-collapse');
+  localStorage.setItem('bleFsdAutoCollapse',auto&&auto.checked?'1':'0');
+}
+function initBleFsdControls(){
+  const auto=$('ble-rx-auto-collapse');
+  if(auto)auto.checked=localStorage.getItem('bleFsdAutoCollapse')!=='0';
+  setBleFsdControlsCollapsed(localStorage.getItem('bleFsdControlsCollapsed')==='1',false);
+}
 function updateBleFsd(d,includeConfig){
   const enabled=!!bleFsdValue(d,'enabled',d.bleRxEnabled);
   const connected=!!bleFsdValue(d,'connected',d.bleRxConnected);
-  const scanning=!!bleFsdValue(d,'scanning',false);
+  const scanning=!!bleFsdValue(d,'scanning',d.bleRxDiscoveryActive);
   const state=String(bleFsdValue(d,'state',d.bleRxState)||'DISABLED');
   const remaining=Number(bleFsdValue(d,'remainingMs',d.bleRxRemainingMs)||0);
   const rssi=Number(bleFsdValue(d,'rssi',d.bleRxRssi)||0);
@@ -1330,6 +1359,7 @@ function updateBleFsd(d,includeConfig){
   const dup=Number(bleFsdValue(d,'duplicates',d.bleRxDuplicates)||0);
   const timeout=Number(bleFsdValue(d,'timeouts',d.bleRxTimeouts)||0);
   const t=$('ble-rx-enabled');if(t)t.checked=enabled;
+  const scanBtn=$('ble-rx-scan-btn');if(scanBtn)scanBtn.textContent=connected?'Scan nearby (keep connection)':'Scan LILYGO (10s)';
   if(includeConfig){
     const mac=$('ble-rx-mac'),r=$('ble-rx-rssi'),w=$('ble-rx-window');
     if(mac&&document.activeElement!==mac)mac.value=d.mac||'';
@@ -1352,6 +1382,14 @@ function updateBleFsd(d,includeConfig){
     reasonEl.textContent='Receiver: '+reason+' — diagnostic-only; no BLE-to-CAN control link.';
     reasonEl.style.color=state==='TEST_ACTIVE'?'var(--ok)':reject!=='none'?'var(--warn)':'var(--tx3)';
   }
+  const auto=$('ble-rx-auto-collapse');
+  const targetMatches=!bleFsdAutoCollapseTarget||
+    peerMac.toUpperCase()===bleFsdAutoCollapseTarget;
+  if(bleFsdAutoCollapsePending&&connected&&subscribed&&!scanning&&targetMatches){
+    if(!auto||auto.checked)setBleFsdControlsCollapsed(true,true);
+    bleFsdAutoCollapsePending=false;
+    bleFsdAutoCollapseTarget='';
+  }
 }
 async function loadBleFsdConfig(){
   return runPoll('ble_fsd',async()=>{
@@ -1363,6 +1401,8 @@ async function saveBleFsdConfig(){
   const mac=$('ble-rx-mac')?$('ble-rx-mac').value.trim():'';
   const rssi=$('ble-rx-rssi')?$('ble-rx-rssi').value:'-90';
   const windowMs=$('ble-rx-window')?$('ble-rx-window').value:'10000';
+  bleFsdAutoCollapsePending=!!enabled&&!!mac;
+  bleFsdAutoCollapseTarget=mac.toUpperCase();
   try{
     const body='enabled='+enabled+'&mac='+encodeURIComponent(mac)+'&rssi='+encodeURIComponent(rssi)+'&window='+encodeURIComponent(windowMs);
     const r=await fetch('/ble_fsd',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
@@ -1370,6 +1410,8 @@ async function saveBleFsdConfig(){
     if(!r.ok||d.ok===false)throw new Error(d.error||'save failed');
     updateBleFsd(d,true);
   }catch(e){
+    bleFsdAutoCollapsePending=false;
+    bleFsdAutoCollapseTarget='';
     const reason=$('ble-rx-reason');if(reason){reason.textContent='BLE save failed: '+(e.message||'error');reason.style.color='var(--err)';}
   }
 }
@@ -1386,9 +1428,10 @@ function renderBleFsdScan(d){
     const mac=escapeHtml(x.mac||'');
     const name=escapeHtml(x.name||'Unnamed BLE device');
     const service=x.fsdService?'<span style="color:var(--ok)">FSD service</span>':'<span style="color:var(--tx3)">other service</span>';
+    const relation=x.connected?'<span style="color:var(--ok)">connected</span>':(x.saved?'<span style="color:var(--acc)">saved</span>':'');
     return '<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--bd)">'+
       '<div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+name+'</div>'+
-      '<div style="font:11px monospace;color:var(--tx3)">'+mac+' • '+(x.rssi||0)+' dBm • '+service+'</div></div>'+
+      '<div style="font:11px monospace;color:var(--tx3)">'+mac+' • '+(x.rssi||0)+' dBm • '+service+(relation?' • '+relation:'')+'</div></div>'+
       '<button class="sniff-btn" data-ble-mac="'+mac+'" onclick="useBleFsdDevice(this.dataset.bleMac)">Use</button></div>';
   }).join('');
 }
@@ -1401,6 +1444,7 @@ async function pollBleFsdScan(){
 }
 async function scanBleFsd(){
   if(bleFsdScanTimer){clearInterval(bleFsdScanTimer);bleFsdScanTimer=null;}
+  setBleFsdControlsCollapsed(false,true);
   try{
     const d=await fetchPollJson('/ble_fsd_scan?start=1',2000);
     renderBleFsdScan(d);
@@ -1412,6 +1456,8 @@ async function scanBleFsd(){
 function useBleFsdDevice(mac){
   const input=$('ble-rx-mac');if(input)input.value=mac||'';
   const enabled=$('ble-rx-enabled');if(enabled)enabled.checked=true;
+  bleFsdAutoCollapsePending=true;
+  bleFsdAutoCollapseTarget=String(mac||'').toUpperCase();
   saveBleFsdConfig();
 }
 
@@ -1442,7 +1488,7 @@ function updateNagControl(d){
   const seg=$('nag-mode-seg');if(seg)updSeg(seg,mode,'hw-btn');
   const minInp=$('nag-av2-min');if(minInp&&document.activeElement!==minInp)minInp.value=state.nagAv2Min.toFixed(2);
   const maxInp=$('nag-av2-max');if(maxInp&&document.activeElement!==maxInp)maxInp.value=state.nagAv2Max.toFixed(2);
-  const meta=$('nag-mode-meta');if(meta)meta.textContent=trText(mode===4?'A_V2: random sweep':'A: fixed +1.80 Nm echo');
+  const meta=$('nag-mode-meta');if(meta)meta.textContent=trText(mode===4?'A_V2: random sweep':'A: waiting for BLE trigger');
   const live=Number(d.nagLiveTorqueNm||0);
   const last=Number(d.nagLastTorqueNm||0);
   const liveMeta=$('nag-live-meta');if(liveMeta)liveMeta.textContent=(dashLang==='zh'?'\u5b9e\u65f6: ':'live: ')+live.toFixed(2)+' Nm';
@@ -2386,7 +2432,7 @@ document.addEventListener('visibilitychange',()=>{
   if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
   pollLog();
 });
-orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();if(isCarUiActive())expandCarEssentials();initSystemMonitor();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();poll();
+orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();initBleFsdControls();if(isCarUiActive())expandCarEssentials();initSystemMonitor();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();poll();
 </script>
 </body>
 </html>

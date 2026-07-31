@@ -514,12 +514,34 @@ void WiFiClass::ensure()
     if (initialized_)
         return;
     configureWifiLogLevels();
-    esp_netif_init();
-    esp_event_loop_create_default();
-    apNetif_ = esp_netif_create_default_wifi_ap();
-    staNetif_ = esp_netif_create_default_wifi_sta();
+    const esp_err_t netifResult = esp_netif_init();
+    if (netifResult != ESP_OK && netifResult != ESP_ERR_INVALID_STATE)
+    {
+        ESP_LOGE(kCompatTag, "esp_netif_init failed: %s", esp_err_to_name(netifResult));
+        return;
+    }
+    const esp_err_t loopResult = esp_event_loop_create_default();
+    if (loopResult != ESP_OK && loopResult != ESP_ERR_INVALID_STATE)
+    {
+        ESP_LOGE(kCompatTag, "event loop init failed: %s", esp_err_to_name(loopResult));
+        return;
+    }
+    if (!apNetif_)
+        apNetif_ = esp_netif_create_default_wifi_ap();
+    if (!staNetif_)
+        staNetif_ = esp_netif_create_default_wifi_sta();
+    if (!apNetif_ || !staNetif_)
+    {
+        ESP_LOGE(kCompatTag, "default WiFi netif creation failed");
+        return;
+    }
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    esp_wifi_init(&cfg);
+    const esp_err_t initResult = esp_wifi_init(&cfg);
+    if (initResult != ESP_OK)
+    {
+        ESP_LOGE(kCompatTag, "esp_wifi_init failed: %s", esp_err_to_name(initResult));
+        return;
+    }
     if (!wifiEventHandlersRegistered)
     {
         esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifiEventHandler, nullptr, nullptr);
@@ -532,8 +554,13 @@ void WiFiClass::ensure()
 void WiFiClass::mode(wifi_mode_t modeValue)
 {
     ensure();
-    esp_wifi_set_mode(modeValue);
-    esp_wifi_start();
+    if (!initialized_)
+        return;
+    const esp_err_t modeResult = esp_wifi_set_mode(modeValue);
+    const esp_err_t startResult = modeResult == ESP_OK ? esp_wifi_start() : modeResult;
+    if (modeResult != ESP_OK || startResult != ESP_OK)
+        ESP_LOGE(kCompatTag, "WiFi mode/start failed: mode=%s start=%s",
+                 esp_err_to_name(modeResult), esp_err_to_name(startResult));
 }
 
 wifi_mode_t WiFiClass::getMode()
@@ -549,12 +576,16 @@ wifi_mode_t WiFiClass::getMode()
 void WiFiClass::setSleep(bool enabled)
 {
     ensure();
+    if (!initialized_)
+        return;
     esp_wifi_set_ps(enabled ? WIFI_PS_MIN_MODEM : WIFI_PS_NONE);
 }
 
 bool WiFiClass::softAPConfig(IPAddress local, IPAddress gateway, IPAddress subnet)
 {
     ensure();
+    if (!initialized_ || !apNetif_)
+        return false;
     esp_netif_ip_info_t ip = {};
     ip.ip = local.raw();
     ip.gw = gateway.raw();
@@ -568,6 +599,8 @@ bool WiFiClass::softAPConfig(IPAddress local, IPAddress gateway, IPAddress subne
 bool WiFiClass::softAP(const char *ssid, const char *pass, int channelValue, int hidden, int maxConn)
 {
     ensure();
+    if (!initialized_)
+        return false;
     wifi_config_t cfg = {};
     std::snprintf(reinterpret_cast<char *>(cfg.ap.ssid), sizeof(cfg.ap.ssid), "%s", ssid ? ssid : "");
     std::snprintf(reinterpret_cast<char *>(cfg.ap.password), sizeof(cfg.ap.password), "%s", pass ? pass : "");
@@ -575,15 +608,26 @@ bool WiFiClass::softAP(const char *ssid, const char *pass, int channelValue, int
     cfg.ap.channel = channelValue;
     cfg.ap.max_connection = maxConn;
     cfg.ap.ssid_hidden = hidden;
-    cfg.ap.authmode = pass && std::strlen(pass) >= 8 ? WIFI_AUTH_WPA_WPA2_PSK : WIFI_AUTH_OPEN;
-    esp_wifi_set_config(WIFI_IF_AP, &cfg);
-    esp_wifi_start();
+    cfg.ap.authmode = pass && std::strlen(pass) >= 8 ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN;
+    const esp_err_t configResult = esp_wifi_set_config(WIFI_IF_AP, &cfg);
+    const esp_err_t startResult = configResult == ESP_OK ? esp_wifi_start() : configResult;
+    if (configResult != ESP_OK || startResult != ESP_OK)
+    {
+        ESP_LOGE(kCompatTag, "softAP failed: config=%s start=%s",
+                 esp_err_to_name(configResult), esp_err_to_name(startResult));
+        return false;
+    }
     return true;
 }
 
 void WiFiClass::begin(const char *ssid, const char *pass)
 {
     ensure();
+    if (!initialized_)
+    {
+        wifiStaStatus = WL_CONNECT_FAILED;
+        return;
+    }
     wifiStaStatus = WL_IDLE_STATUS;
     wifiLastDisconnectReason = 0;
     // Ensure the STA interface is enabled before configuring it.

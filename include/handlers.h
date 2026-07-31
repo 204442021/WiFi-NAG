@@ -78,7 +78,7 @@ struct NagHandler : public CarManagerBase
     static constexpr int16_t kTorqueMaxCentiNm = 180;
 
     uint32_t modeStartMs = 0;
-    uint32_t aModeActiveEndsMs = 0; // 0 = A-mode display window inactive
+    uint32_t aModeActiveEndsMs = 0; // 0 = BLE-gated A-mode output inactive
     bool hasLastInjected = false;
     uint16_t lastInjectedRaw = 0;
     uint8_t lastInjectedCounter = 0;
@@ -177,14 +177,17 @@ struct NagHandler : public CarManagerBase
         modeStartMs = nowMs();
     }
 
-    // Display-only A-mode activation window. Forces MODE_A and starts a
-    // time-bounded window used by the WebUI torque page. It never alters the
-    // CAN echo gating, timing, encoding, checksum, counter, or echo-skip
-    // behavior in handleMessage().
+    // BLE-triggered A-mode activation window. MODE_A is idle unless this
+    // window is active; MODE_A_V2 retains its existing manual behavior.
     void triggerAModeWindow(uint32_t windowMs)
     {
         setMode(MODE_A);
         aModeActiveEndsMs = nowMs() + windowMs;
+    }
+
+    void cancelAModeWindow()
+    {
+        aModeActiveEndsMs = 0;
     }
 
     bool aModeActive() const
@@ -286,6 +289,11 @@ struct NagHandler : public CarManagerBase
         lastObservedCentiNm = rawToCentiNm(readTorqueRaw(frame));
 
         if (!nagKillerActive || !nagKillerRuntime)
+            return;
+
+        // Fixed A mode is never active by default. A new validated BLE rising
+        // edge opens the only permitted time-bounded output window.
+        if ((uint8_t)nagMode == MODE_A && !aModeActive())
             return;
 
         if (isOwnEcho(frame))

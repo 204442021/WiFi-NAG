@@ -53,6 +53,9 @@ void setUp()
     mock.reset();
     handler = NagHandler();
     handler.enablePrint = false;
+    // Existing fixed-A behavior tests run inside an explicit BLE-style window.
+    handler.setTestNowMs(0);
+    handler.triggerAModeWindow(60000);
 }
 
 void tearDown() {}
@@ -81,6 +84,22 @@ void test_nag_av2_default_range_is_1_50_to_1_80_nm()
 // ============================================================
 // Basic echo behavior
 // ============================================================
+
+void test_nag_a_mode_is_idle_without_ble_window()
+{
+    NagHandler idleHandler;
+    MockDriver idleMock;
+    idleHandler.enablePrint = false;
+    idleHandler.setTestNowMs(0);
+
+    CanFrame f = makeEpasFrame(0, 0.33, 0x0C);
+    NagHandler::writeTorqueRaw(f, NagHandler::centiNmToRaw(33));
+    idleHandler.handleMessage(f, idleMock);
+
+    TEST_ASSERT_EQUAL(0, idleMock.sent.size());
+    TEST_ASSERT_FALSE(idleHandler.aModeActive());
+    TEST_ASSERT_EQUAL_INT16(33, idleHandler.lastObservedCenti());
+}
 
 void test_nag_echoes_when_handson_0()
 {
@@ -495,6 +514,7 @@ void test_nag_output_dlc_is_8()
 
 void test_nag_a_mode_window_forces_mode_a_and_expires()
 {
+    handler.cancelAModeWindow();
     handler.setTestNowMs(1000);
     handler.setMode(NagHandler::MODE_A_V2);
     TEST_ASSERT_EQUAL_UINT8(NagHandler::MODE_A_V2, (uint8_t)handler.nagMode);
@@ -508,10 +528,18 @@ void test_nag_a_mode_window_forces_mode_a_and_expires()
     handler.setTestNowMs(6000);
     TEST_ASSERT_TRUE(handler.aModeActive());
     TEST_ASSERT_EQUAL_UINT32(5000, handler.aModeRemainingMs());
+    CanFrame activeFrame = makeEpasFrame(0, 0.33, 0x01);
+    handler.handleMessage(activeFrame, mock);
+    TEST_ASSERT_EQUAL(1, mock.sent.size());
+    TEST_ASSERT_FLOAT_WITHIN(0.01, 1.80, decodeTorqueNm(mock.sent[0]));
 
     handler.setTestNowMs(11000);
     TEST_ASSERT_FALSE(handler.aModeActive());
     TEST_ASSERT_EQUAL_UINT32(0, handler.aModeRemainingMs());
+    mock.reset();
+    CanFrame expiredFrame = makeEpasFrame(0, 0.33, 0x02);
+    handler.handleMessage(expiredFrame, mock);
+    TEST_ASSERT_EQUAL(0, mock.sent.size());
 }
 
 int main()
@@ -524,6 +552,7 @@ int main()
     RUN_TEST(test_nag_av2_default_range_is_1_50_to_1_80_nm);
 
     // Basic echo behavior
+    RUN_TEST(test_nag_a_mode_is_idle_without_ble_window);
     RUN_TEST(test_nag_echoes_when_handson_0);
     RUN_TEST(test_nag_echoes_when_handson_1);
     RUN_TEST(test_nag_echoes_when_handson_2);

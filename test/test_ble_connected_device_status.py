@@ -61,6 +61,49 @@ class BleConnectedDeviceStatusTests(unittest.TestCase):
         self.assertIn("setCanDiag('ble-rx-device'", UI_SOURCE)
         self.assertIn("setCanDiag('ble-rx-session'", UI_SOURCE)
 
+    def test_ble_scan_is_wifi_coexistence_friendly(self) -> None:
+        self.assertIn("params.itvl = BLE_GAP_SCAN_ITVL_MS", SOURCE)
+        self.assertIn("params.window = BLE_GAP_SCAN_WIN_MS", SOURCE)
+        self.assertIn("gDiscoveryMode ? 100 : 160", SOURCE)
+        self.assertIn("gDiscoveryMode ? 40 : 30", SOURCE)
+        self.assertIn("if (!config.enabled)", SOURCE)
+        self.assertIn("ensureBleInitialized()", SOURCE)
+
+        ap_start = DASH.index("dashStartAccessPoint(true)")
+        ble_start = DASH.index("bleFsdReceiverStart(bleFsdConfig)")
+        self.assertLess(ap_start, ble_start)
+
+    def test_manual_rescan_is_distinct_from_background_scan(self) -> None:
+        self.assertIn("bool discoveryActive", HEADER)
+        self.assertIn("bool connected = false", HEADER)
+        self.assertIn("bool saved = false", HEADER)
+        self.assertIn("gDiscoveryStartPending", SOURCE)
+        self.assertIn("(gStatus.connected && !gDiscoveryMode)", SOURCE)
+        self.assertIn("seedConfiguredPeerScanEntry()", SOURCE)
+        self.assertIn("status.discoveryActive", DASH)
+        self.assertIn('\\"radioScanning\\":', DASH)
+
+    def test_ble_controls_auto_collapse_and_can_be_reopened(self) -> None:
+        for element_id in (
+            "ble-rx-controls",
+            "ble-rx-controls-toggle",
+            "ble-rx-auto-collapse",
+        ):
+            with self.subTest(element_id=element_id):
+                self.assertIn(f'id="{element_id}"', UI_SOURCE)
+        self.assertIn("setBleFsdControlsCollapsed", UI_SOURCE)
+        self.assertIn("toggleBleFsdControls", UI_SOURCE)
+        self.assertIn("bleFsdAutoCollapsePending", UI_SOURCE)
+        self.assertIn("initBleFsdControls()", UI_SOURCE)
+
+    def test_ble_runtime_services_a_mode_without_web_polling(self) -> None:
+        self.assertIn("dashServiceBleFsdRuntime", DASH)
+        self.assertIn("nag->triggerAModeWindow(windowMs)", DASH)
+        self.assertIn("nag->cancelAModeWindow()", DASH)
+        self.assertIn("dashServiceBleFsdRuntime();", DASH)
+        self.assertIn("MODE_A && !aModeActive()", (ROOT / "include" / "handlers.h").read_text(encoding="utf-8"))
+        self.assertIn("A: waiting for BLE trigger", UI_SOURCE)
+
 
 if __name__ == "__main__":
     unittest.main()
