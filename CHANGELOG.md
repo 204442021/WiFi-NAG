@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [V3.0.2] - 2026-07-31
+
 ### Changed
 
 - Localized the BLE FSD diagnostic receiver interface, including live status,
