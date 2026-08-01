@@ -352,7 +352,7 @@ static void mcpDashOnCanSafetyTrip(CanSafetyReason reason)
 static uint32_t dashNagEchoCount()
 {
     if (dashHandler)
-        return (uint32_t) static_cast<NagHandler *>(dashHandler)->nagEchoCount;
+        return (uint32_t)static_cast<NagHandler *>(dashHandler)->nagEchoCount;
     return 0;
 }
 
@@ -1044,6 +1044,8 @@ static void handleStatus()
     j += bleStatus.connectedAtMs;
     j += ",\"bleRxLastDisconnectAtMs\":";
     j += bleStatus.lastDisconnectAtMs;
+    j += ",\"bleRxLastPacketAtMs\":";
+    j += bleStatus.lastPacketAtMs;
     j += ",\"bleRxReject\":\"";
     j += bleFsdRejectReasonName(bleStatus.lastReject);
     j += "\",\"bleRxReason\":\"";
@@ -1056,6 +1058,14 @@ static void handleStatus()
     j += bleStatus.duplicateCount;
     j += ",\"bleRxTimeouts\":";
     j += bleStatus.timeoutCount;
+    j += ",\"bleRxRejected\":";
+    j += bleStatus.rejectedCount;
+    j += ",\"bleRxAcceptedPackets\":";
+    j += bleStatus.acceptedPackets;
+    j += ",\"bleRxDisconnects\":";
+    j += bleStatus.disconnectCount;
+    j += ",\"bleRxRemoteActive\":";
+    j += bleStatus.remoteActive ? "true" : "false";
     j += ",\"fps\":";
     {
         unsigned long fpsX10 = static_cast<unsigned long>(fps * 10.0f + 0.5f);

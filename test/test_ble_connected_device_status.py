@@ -15,6 +15,12 @@ DASH = (ROOT / "include" / "web" / "mcp2515_dashboard.h").read_text(
 UI_SOURCE = (
     ROOT / "include" / "web" / "mcp2515_dashboard_ui.src.h"
 ).read_text(encoding="utf-8")
+MINIFIER = (ROOT / "scripts" / "minify_dashboard.py").read_text(
+    encoding="utf-8"
+)
+TEST_WORKFLOW = (ROOT / ".github" / "workflows" / "tests.yml").read_text(
+    encoding="utf-8"
+)
 
 
 class BleConnectedDeviceStatusTests(unittest.TestCase):
@@ -120,14 +126,64 @@ class BleConnectedDeviceStatusTests(unittest.TestCase):
         self.assertIn("trText(reject)", UI_SOURCE)
 
     def test_all_dashboard_panels_start_collapsed(self) -> None:
-        self.assertIn("cardCollapse:v3:", UI_SOURCE)
-        self.assertIn("subCollapse:v3:", UI_SOURCE)
-        self.assertGreaterEqual(
-            UI_SOURCE.count("const collapsed=stored===null?true:stored==='1';"), 2
-        )
-        self.assertIn("bleFsdControlsCollapsed:v2", UI_SOURCE)
+        self.assertNotIn("cardCollapse:v3:", UI_SOURCE)
+        self.assertNotIn("subCollapse:v3:", UI_SOURCE)
+        self.assertNotIn("bleFsdControlsCollapsed:v2", UI_SOURCE)
+        self.assertGreaterEqual(UI_SOURCE.count("classList.add('collapsed')"), 2)
+        self.assertIn("setBleFsdControlsCollapsed(true)", UI_SOURCE)
         self.assertNotIn("expandCarEssentials", UI_SOURCE)
         self.assertNotIn("expandWifiNagDefaults", UI_SOURCE)
+
+    def test_v303_repair_assessment_and_download_are_wired(self) -> None:
+        for element_id in (
+            "ble-repair-summary",
+            "ble-repair-detail",
+            "ble-repair-counts",
+            "ble-diag-download",
+            "ble-diag-download-status",
+        ):
+            with self.subTest(element_id=element_id):
+                self.assertIn(f'id="{element_id}"', UI_SOURCE)
+
+        self.assertIn("updateBleRepairAssessment", UI_SOURCE)
+        self.assertIn("downloadBleFsdDiagnostics", UI_SOURCE)
+        self.assertIn("BleFsdDiagnostics.assess", UI_SOURCE)
+        self.assertIn("BleFsdDiagnostics.buildBundle", UI_SOURCE)
+        self.assertIn("URL.createObjectURL", UI_SOURCE)
+        self.assertIn("/*__BLE_FSD_DIAGNOSTICS_CORE__*/", UI_SOURCE)
+        self.assertIn("BLE_FSD_DIAGNOSTICS", MINIFIER)
+        self.assertIn("__BLE_FSD_DIAGNOSTICS_CORE__", MINIFIER)
+
+        download_start = UI_SOURCE.index("async function downloadBleFsdDiagnostics")
+        download_end = UI_SOURCE.index("let bleFsdScanTimer", download_start)
+        download_source = UI_SOURCE[download_start:download_end]
+        for endpoint in (
+            "/status",
+            "/ble_fsd",
+            "/system_status",
+            "/ota_status",
+            "/log?since=0",
+        ):
+            with self.subTest(endpoint=endpoint):
+                self.assertIn(endpoint, download_source)
+        for credential_endpoint in ("/wifi_config", "/wifi_networks", "/ap_config"):
+            with self.subTest(credential_endpoint=credential_endpoint):
+                self.assertNotIn(credential_endpoint, download_source)
+
+    def test_status_poll_exposes_repair_diagnostic_counters(self) -> None:
+        for json_field in (
+            "bleRxLastPacketAtMs",
+            "bleRxRejected",
+            "bleRxAcceptedPackets",
+            "bleRxDisconnects",
+            "bleRxRemoteActive",
+        ):
+            with self.subTest(json_field=json_field):
+                self.assertIn(json_field, DASH)
+        self.assertIn(
+            "bleFsdValue(d,'lastPacketAtMs',d.bleRxLastPacketAtMs)",
+            UI_SOURCE,
+        )
 
     def test_ble_runtime_services_a_mode_without_web_polling(self) -> None:
         self.assertIn("dashServiceBleFsdRuntime", DASH)
@@ -138,6 +194,9 @@ class BleConnectedDeviceStatusTests(unittest.TestCase):
         self.assertIn("dashServiceBleFsdRuntime();", DASH)
         self.assertIn("MODE_A && !aModeActive()", (ROOT / "include" / "handlers.h").read_text(encoding="utf-8"))
         self.assertIn("A: waiting for BLE trigger", UI_SOURCE)
+
+    def test_native_ble_receiver_suite_runs_in_github_actions(self) -> None:
+        self.assertIn("- native_ble_fsd", TEST_WORKFLOW)
 
 
 if __name__ == "__main__":

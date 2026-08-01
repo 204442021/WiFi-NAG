@@ -38,7 +38,7 @@ struct BleFsdCoreSnapshot
 
 class BleFsdReceiverCore
 {
-  public:
+public:
     void setFallbackWindowMs(uint32_t windowMs)
     {
         fallbackWindowMs_ = clampWindow(windowMs);
@@ -172,7 +172,7 @@ class BleFsdReceiverCore
         return result;
     }
 
-  private:
+private:
     static bool isOlder(uint32_t candidate, uint32_t reference)
     {
         return static_cast<int32_t>(candidate - reference) < 0;
@@ -342,7 +342,7 @@ struct BleFsdBridgeDecision
 
 class BleFsdWindowBridgeCore
 {
-  public:
+public:
     BleFsdBridgeDecision update(const BleFsdReceiverStatus &status,
                                 bool outputEnabled)
     {
@@ -378,7 +378,7 @@ class BleFsdWindowBridgeCore
         return result;
     }
 
-  private:
+private:
     uint32_t handledWindows_ = 0;
     bool armed_ = false;
 };

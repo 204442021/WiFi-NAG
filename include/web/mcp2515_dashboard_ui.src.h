@@ -155,7 +155,7 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 /* Form controls */
 .sniff-input{flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:8px;
   padding:7px 10px;color:var(--tx);font-size:12px;font-family:inherit;transition:border .2s}
-.sniff-input{width:100%;min-width:0;box-sizing:border-box;} 
+.sniff-input{width:100%;min-width:0;box-sizing:border-box;}
 .sniff-input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--accBg)}
 .sniff-input::placeholder{color:var(--tx3)}
 .sniff-btn{padding:7px 12px;background:var(--card);border:1px solid var(--bd);border-radius:8px;
@@ -174,6 +174,15 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .can-diag-label{font-size:10px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .can-diag-value{margin-top:2px;font-size:12px;font-weight:700;color:var(--tx2);font-family:monospace;word-break:break-word}
 .can-diag-actions{display:flex;justify-content:flex-end;margin-top:8px}
+.ble-repair-box{margin-top:10px;padding:10px;border:1px solid var(--accBd);border-radius:8px;background:var(--accBg)}
+.ble-repair-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ble-repair-title{font-size:11px;font-weight:700;color:var(--acc)}
+.ble-repair-summary{font-size:12px;font-weight:700;color:var(--tx);margin-top:6px}
+.ble-repair-summary.ok{color:var(--ok)}
+.ble-repair-summary.warning,.ble-repair-summary.waiting{color:var(--warn)}
+.ble-repair-summary.error{color:var(--err)}
+.ble-repair-detail,.ble-repair-counts,.ble-repair-download-status{font-size:10px;color:var(--tx3);margin-top:4px;line-height:1.5}
+.ble-repair-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
 .gateway-profile-btn.active,.gateway-upstream-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
 /* Buttons */
 .btn-row{display:flex;gap:8px;margin-top:14px}
@@ -545,6 +554,18 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
             <div class="can-diag-item"><div class="can-diag-label">Windows / Timeout</div><div class="can-diag-value" id="ble-rx-windows">--</div></div>
             <div class="can-diag-item"><div class="can-diag-label">Last Reject</div><div class="can-diag-value" id="ble-rx-reject">--</div></div>
           </div>
+          <div class="ble-repair-box">
+            <div class="ble-repair-head">
+              <div class="ble-repair-title">V3.0.3 Repair Diagnosis</div>
+            </div>
+            <div class="ble-repair-summary waiting" id="ble-repair-summary">Waiting for diagnostics</div>
+            <div class="ble-repair-detail" id="ble-repair-detail">Waiting for the first live status snapshot.</div>
+            <div class="ble-repair-counts" id="ble-repair-counts">Accepted 0 / Rejected 0 / Disconnects 0 / Remote idle</div>
+            <div class="ble-repair-actions">
+              <button class="sniff-btn" id="ble-diag-download" onclick="downloadBleFsdDiagnostics()">Download diagnostics JSON</button>
+              <span class="ble-repair-download-status" id="ble-diag-download-status"></span>
+            </div>
+          </div>
         </div>
         <label class="tgl"><input type="checkbox" id="ble-rx-enabled" onchange="saveBleFsdConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
@@ -810,6 +831,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
 </div>
 
 <script>
+/*__BLE_FSD_DIAGNOSTICS_CORE__*/
 const $=id=>document.getElementById(id);
 let dashLang=localStorage.getItem('dashLang')||'zh';
 const I18N_ZH={
@@ -836,6 +858,7 @@ Object.assign(I18N_ZH,{
   'Receives and validates the LILYGO FSD_ACTIVE protocol, then opens a visible diagnostic-only timer. It does not send or modify CAN frames.':'接收并校验 LILYGO FSD_ACTIVE 协议，然后开启一个可见的诊断计时窗口。此功能不会发送或修改 CAN 帧。',
   'Link / RSSI':'连接 / 信号','Connected Device':'已连接设备','GATT / Last Packet':'GATT / 最近数据包','State / Left':'状态 / 剩余时间','Last Sequence':'最近序列号','CRC / Repeat':'CRC / 重复包','Windows / Timeout':'诊断窗口 / 超时','Last Reject':'最近拒绝原因',
   'Auto-collapse after connection':'连接后自动折叠','Expand settings':'展开设置','Collapse settings':'折叠设置','LILYGO MAC (AA:BB:CC:DD:EE:FF)':'LILYGO MAC 地址 (AA:BB:CC:DD:EE:FF)','RSSI threshold dBm':'RSSI 阈值（dBm）','Diagnostic window ms':'诊断窗口（毫秒）','Save BLE':'保存 BLE','Scan LILYGO (10s)':'扫描 LILYGO（10 秒）','Scan nearby (keep connection)':'扫描附近设备（保持连接）','BLE receiver disabled.':'BLE 接收器已关闭。',
+  'V3.0.3 Repair Diagnosis':'V3.0.3 修复诊断','Waiting for diagnostics':'等待诊断数据','Waiting for the first live status snapshot.':'等待第一份实时状态快照。','Download diagnostics JSON':'下载诊断 JSON','Collecting diagnostics...':'正在收集诊断...','Diagnostics downloaded':'诊断已下载','Partial diagnostics downloaded':'部分诊断已下载','Diagnostic download failed':'诊断下载失败',
   'CONNECTED':'已连接','SCANNING':'扫描中','WAITING':'等待连接','OFF':'已关闭','SUBSCRIBED':'已订阅','NOT SUBSCRIBED':'未订阅','NO RX':'未接收','DISABLED':'已禁用','IDLE':'空闲','TEST_ACTIVE':'测试激活','AWAIT_CLEAR':'等待清除','UNKNOWN':'未知','Unnamed':'未命名设备','Connecting device…':'正在连接设备…',
   'none':'无','disabled':'已禁用','length':'长度错误','magic':'标识错误','version':'版本错误','command':'命令错误','state':'状态错误','crc':'CRC 错误','duplicate_seq':'重复序列','old_seq':'过期序列','timestamp':'时间戳错误','can_unhealthy':'CAN 状态异常','await_clear':'等待清除','unknown':'未知',
   'starting':'启动中','remote_clear':'远端已清除','subscribed':'已订阅','mac_required':'需要配置 MAC 地址','discovery_done':'发现已完成','discovery':'正在发现设备','scanning':'正在扫描','scan_failed':'扫描失败','not_connectable':'设备不可连接','connecting':'正在连接','connect_failed':'连接失败','disconnected':'连接已断开','addr_failed':'地址解析失败','init_failed':'初始化失败','switching_peer':'正在切换设备','scan_cancel_failed':'停止扫描失败','test_active':'测试已激活',
@@ -929,12 +952,11 @@ function resolveUiMode(){
 function isCarUiActive(){
   return uiModeEffective==='car';
 }
-function setCollapsedPanel(el,collapsed,persist){
+function setCollapsedPanel(el,collapsed){
   if(!el)return;
   el.classList.toggle('collapsed',!!collapsed);
   const btn=el.querySelector('.card-min-btn,.subsec-btn');
   if(btn)btn.textContent=trText(collapsed?'Show':'Hide');
-  if(persist&&el.dataset.collapseKey)localStorage.setItem(el.dataset.collapseKey,collapsed?'1':'0');
 }
 function updateUiModeUi(){
   document.querySelectorAll('.ui-mode-btn').forEach(btn=>{
@@ -970,8 +992,8 @@ function setUiMode(mode,persist){
 function scrollCarSection(id){
   const el=$(id);if(!el)return;
   const card=el.closest&&el.closest('.card');
-  if(card)setCollapsedPanel(card,false,true);
-  if(el.classList&&el.classList.contains('subsec'))setCollapsedPanel(el,false,true);
+  if(card)setCollapsedPanel(card,false);
+  if(el.classList&&el.classList.contains('subsec'))setCollapsedPanel(el,false);
   el.scrollIntoView({behavior:isCarUiActive()?'auto':'smooth',block:'start'});
 }
 
@@ -1086,47 +1108,33 @@ function orderDashboardCards(){
 function initCardMinimizers(){
   document.querySelectorAll('.card').forEach((card,i)=>{
     const hdr=card.querySelector('.card-hdr');if(!hdr||hdr.querySelector('.card-min-btn'))return;
-    const title=card.querySelector('.card-title');
-    const key='cardCollapse:v3:'+i+':'+((title?title.textContent:'card').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-'));
-    card.dataset.collapseKey=key;
     const btn=document.createElement('button');
     btn.type='button';
     btn.className='sniff-btn card-min-btn';
     btn.onclick=()=>{
       const collapsed=!card.classList.contains('collapsed');
       card.classList.toggle('collapsed',collapsed);
-      localStorage.setItem(key,collapsed?'1':'0');
       btn.textContent=trText(collapsed?'Show':'Hide');
     };
     hdr.appendChild(btn);
-    const stored=localStorage.getItem(key);
-    const collapsed=stored===null?true:stored==='1';
-    card.classList.toggle('collapsed',collapsed);
-    btn.textContent=trText(collapsed?'Show':'Hide');
+    card.classList.add('collapsed');
+    btn.textContent=trText('Show');
   });
 }
 function initSubsectionMinimizers(){
   document.querySelectorAll('.subsec').forEach((sec,i)=>{
     const hdr=sec.querySelector('.subsec-head');if(!hdr||hdr.querySelector('.subsec-btn'))return;
-    const explicitKey=sec.dataset.subkey||'';
-    const title=sec.querySelector('.subsec-title');
-    const safe=((title?title.textContent:'section').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-'));
-    const key='subCollapse:v3:'+(explicitKey||i+':'+safe);
-    sec.dataset.collapseKey=key;
     const btn=document.createElement('button');
     btn.type='button';
     btn.className='sniff-btn subsec-btn';
     btn.onclick=()=>{
       const collapsed=!sec.classList.contains('collapsed');
       sec.classList.toggle('collapsed',collapsed);
-      localStorage.setItem(key,collapsed?'1':'0');
       btn.textContent=trText(collapsed?'Show':'Hide');
     };
     hdr.appendChild(btn);
-    const stored=localStorage.getItem(key);
-    const collapsed=stored===null?true:stored==='1';
-    sec.classList.toggle('collapsed',collapsed);
-    btn.textContent=trText(collapsed?'Show':'Hide');
+    sec.classList.add('collapsed');
+    btn.textContent=trText('Show');
   });
 }
 
@@ -1322,15 +1330,14 @@ function bleFsdValue(d,name,fallback){
 }
 let bleFsdAutoCollapsePending=false;
 let bleFsdAutoCollapseTarget='';
-function setBleFsdControlsCollapsed(collapsed,persist){
+function setBleFsdControlsCollapsed(collapsed){
   const controls=$('ble-rx-controls'),btn=$('ble-rx-controls-toggle');
   if(controls)controls.style.display=collapsed?'none':'block';
   if(btn)btn.textContent=trText(collapsed?'Expand settings':'Collapse settings');
-  if(persist)localStorage.setItem('bleFsdControlsCollapsed:v2',collapsed?'1':'0');
 }
 function toggleBleFsdControls(){
   const controls=$('ble-rx-controls');
-  setBleFsdControlsCollapsed(!controls||controls.style.display!=='none',true);
+  setBleFsdControlsCollapsed(!controls||controls.style.display!=='none');
 }
 function saveBleFsdCollapsePreference(){
   const auto=$('ble-rx-auto-collapse');
@@ -1339,8 +1346,41 @@ function saveBleFsdCollapsePreference(){
 function initBleFsdControls(){
   const auto=$('ble-rx-auto-collapse');
   if(auto)auto.checked=localStorage.getItem('bleFsdAutoCollapse')!=='0';
-  const stored=localStorage.getItem('bleFsdControlsCollapsed:v2');
-  setBleFsdControlsCollapsed(stored===null?true:stored==='1',false);
+  setBleFsdControlsCollapsed(true);
+}
+const BLE_REPAIR_ZH={
+  RECEIVER_DISABLED:['BLE 接收器未开启','请先启用并配置 BLE 接收器。'],
+  BLE_DISCONNECTED:['BLE 设备未连接','检查对端 MAC、距离、信号阈值以及 FSD 是否正在广播。'],
+  GATT_NOT_SUBSCRIBED:['BLE 已连接但未订阅通知','连接存在，但 FSD_ACTIVE 数据还无法送达。'],
+  CAN_SAFETY_TRIPPED:['CAN 安全保护已触发','检查安全保护原因和 CAN 总线状态。'],
+  CAN_UNHEALTHY:['CAN 驱动状态异常','BLE 指令会等待 CAN 恢复，恢复后允许同序列重试。'],
+  CAN_BUS_OFFLINE:['BLE 已收到数据，但 CAN 总线离线','检查接线、车辆唤醒状态和 0x370 实时帧。'],
+  WAITING_FOR_PACKET:['BLE 已就绪，等待 FSD 数据','触发一次 FSD；如果计数不变化，请下载诊断。'],
+  PACKET_REJECTED:['最近的 BLE 数据包被拒绝','查看拒绝原因、序列号和错误计数。'],
+  CAN_WRITE_DISABLED:['BLE 触发已接受，但 CAN 写入关闭','只有确认安全后才开启 CAN Write。'],
+  A_MODE_NOT_ACTIVE:['接收窗口已激活，但 A 模式未启动','问题可能在 BLE 到 Nag 桥接或下游运行门控。'],
+  WINDOW_ACTIVE:['BLE 触发与 A 模式扭矩窗口均已激活','V3.0.3 修复链路正在正常工作。'],
+  TRIGGER_ACCEPTED:['BLE 触发窗口已激活','接收器已接受本次 FSD 激活。'],
+  HEALTHY_IDLE:['BLE 修复链路正常，当前空闲','正在等待下一次 FSD 激活。']
+};
+function updateBleRepairAssessment(status,ble){
+  if(typeof BleFsdDiagnostics==='undefined')return;
+  const assessment=BleFsdDiagnostics.assess(status||{},ble||{});
+  const localized=dashLang==='zh'?BLE_REPAIR_ZH[assessment.code]:null;
+  const summary=$('ble-repair-summary'),detail=$('ble-repair-detail'),counts=$('ble-repair-counts');
+  if(summary){
+    summary.textContent=localized?localized[0]:assessment.headline;
+    summary.className='ble-repair-summary '+assessment.level;
+    summary.dataset.code=assessment.code;
+  }
+  if(detail)detail.textContent=localized?localized[1]:assessment.detail;
+  if(counts){
+    const accepted=Number(ble.acceptedPackets||0),rejected=Number(ble.rejected||0),disconnects=Number(ble.disconnects||0);
+    const remote=ble.remoteActive?(dashLang==='zh'?'远端激活':'Remote active'):(dashLang==='zh'?'远端空闲':'Remote idle');
+    counts.textContent=dashLang==='zh'
+      ?'已接受 '+accepted+' / 已拒绝 '+rejected+' / 断线 '+disconnects+' / '+remote
+      :'Accepted '+accepted+' / Rejected '+rejected+' / Disconnects '+disconnects+' / '+remote;
+  }
 }
 function updateBleFsd(d,includeConfig){
   const enabled=!!bleFsdValue(d,'enabled',d.bleRxEnabled);
@@ -1352,7 +1392,7 @@ function updateBleFsd(d,includeConfig){
   const peerMac=String(bleFsdValue(d,'peerMac',d.bleRxPeerMac)||'');
   const peerName=String(bleFsdValue(d,'peerName',d.bleRxPeerName)||'');
   const subscribed=!!bleFsdValue(d,'subscribed',d.bleRxSubscribed);
-  const lastPacket=Number(bleFsdValue(d,'lastPacketAtMs',0)||0);
+  const lastPacket=Number(bleFsdValue(d,'lastPacketAtMs',d.bleRxLastPacketAtMs)||0);
   const seq=Number(bleFsdValue(d,'lastSequence',d.bleRxLastSeq)||0);
   const reject=String(bleFsdValue(d,'lastReject',d.bleRxReject)||'none');
   const reason=String(bleFsdValue(d,'reason',d.bleRxReason)||'--');
@@ -1360,6 +1400,10 @@ function updateBleFsd(d,includeConfig){
   const crc=Number(bleFsdValue(d,'crcErrors',d.bleRxCrcErrors)||0);
   const dup=Number(bleFsdValue(d,'duplicates',d.bleRxDuplicates)||0);
   const timeout=Number(bleFsdValue(d,'timeouts',d.bleRxTimeouts)||0);
+  const rejected=Number(bleFsdValue(d,'rejected',d.bleRxRejected)||0);
+  const accepted=Number(bleFsdValue(d,'acceptedPackets',d.bleRxAcceptedPackets)||0);
+  const disconnects=Number(bleFsdValue(d,'disconnects',d.bleRxDisconnects)||0);
+  const remoteActive=!!bleFsdValue(d,'remoteActive',d.bleRxRemoteActive);
   const t=$('ble-rx-enabled');if(t)t.checked=enabled;
   const scanBtn=$('ble-rx-scan-btn');if(scanBtn)scanBtn.textContent=trText(connected?'Scan nearby (keep connection)':'Scan LILYGO (10s)');
   if(includeConfig){
@@ -1380,6 +1424,11 @@ function updateBleFsd(d,includeConfig){
   setCanDiag('ble-rx-errors',crc+' / '+dup,(crc||dup)?'warn':'ok');
   setCanDiag('ble-rx-windows',windows+' / '+timeout,timeout?'warn':'ok');
   setCanDiag('ble-rx-reject',trText(reject),reject==='none'?'ok':'warn');
+  updateBleRepairAssessment(d,{
+    enabled,connected,subscribed,state,remainingMs:remaining,lastPacketAtMs:lastPacket,
+    lastSequence:seq,lastReject:reject,acceptedPackets:accepted,rejected,
+    disconnects,remoteActive
+  });
   const reasonEl=$('ble-rx-reason');if(reasonEl){
     reasonEl.textContent=dashLang==='zh'
       ?'接收器：'+trText(reason)+' — 仅用于诊断；BLE 不会控制 CAN。'
@@ -1390,7 +1439,7 @@ function updateBleFsd(d,includeConfig){
   const targetMatches=!bleFsdAutoCollapseTarget||
     peerMac.toUpperCase()===bleFsdAutoCollapseTarget;
   if(bleFsdAutoCollapsePending&&connected&&subscribed&&!scanning&&targetMatches){
-    if(!auto||auto.checked)setBleFsdControlsCollapsed(true,true);
+    if(!auto||auto.checked)setBleFsdControlsCollapsed(true);
     bleFsdAutoCollapsePending=false;
     bleFsdAutoCollapseTarget='';
   }
@@ -1417,6 +1466,55 @@ async function saveBleFsdConfig(){
     bleFsdAutoCollapsePending=false;
     bleFsdAutoCollapseTarget='';
     const reason=$('ble-rx-reason');if(reason){reason.textContent=trText('BLE save failed')+': '+trText(e.message||'error');reason.style.color='var(--err)';}
+  }
+}
+async function collectBleFsdDiagnosticEndpoint(name,url,timeoutMs){
+  try{
+    return {name,value:await fetchJsonWithTimeout(url,{},timeoutMs)};
+  }catch(error){
+    return {name,error:String(error&&error.message||error||'collection failed')};
+  }
+}
+async function downloadBleFsdDiagnostics(){
+  const btn=$('ble-diag-download'),statusEl=$('ble-diag-download-status');
+  if(btn)btn.disabled=true;
+  if(statusEl){statusEl.textContent=trText('Collecting diagnostics...');statusEl.style.color='var(--acc)';}
+  const collectedAt=new Date().toISOString();
+  const endpoints=[
+    ['status','/status',5000],
+    ['bleFsd','/ble_fsd',3000],
+    ['system','/system_status',3000],
+    ['ota','/ota_status',3000],
+    ['logs','/log?since=0',3000]
+  ];
+  try{
+    const results=await Promise.all(endpoints.map(x=>collectBleFsdDiagnosticEndpoint(x[0],x[1],x[2])));
+    const snapshots={},failures=[];
+    results.forEach((entry,index)=>{
+      if(entry.error)failures.push({endpoint:endpoints[index][1],error:entry.error});
+      else snapshots[entry.name]=entry.value;
+    });
+    const bundle=BleFsdDiagnostics.buildBundle(snapshots,failures,{
+      collectedAt,uiMode:uiModeEffective,language:dashLang
+    });
+    const blob=new Blob([JSON.stringify(bundle,null,2)],{type:'application/json;charset=utf-8'});
+    const objectUrl=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=objectUrl;
+    link.download=BleFsdDiagnostics.fileName(collectedAt);
+    link.style.display='none';
+    document.body.appendChild(link);
+    link.click();
+    if(link.parentNode)link.parentNode.removeChild(link);
+    setTimeout(()=>URL.revokeObjectURL(objectUrl),0);
+    if(statusEl){
+      statusEl.textContent=trText(failures.length?'Partial diagnostics downloaded':'Diagnostics downloaded')+(failures.length?' ('+failures.length+')':'');
+      statusEl.style.color=failures.length?'var(--warn)':'var(--ok)';
+    }
+  }catch(error){
+    if(statusEl){statusEl.textContent=trText('Diagnostic download failed')+': '+actionErrorMessage(error,'error');statusEl.style.color='var(--err)';}
+  }finally{
+    if(btn)btn.disabled=false;
   }
 }
 let bleFsdScanTimer=null;
@@ -1448,7 +1546,7 @@ async function pollBleFsdScan(){
 }
 async function scanBleFsd(){
   if(bleFsdScanTimer){clearInterval(bleFsdScanTimer);bleFsdScanTimer=null;}
-  setBleFsdControlsCollapsed(false,true);
+  setBleFsdControlsCollapsed(false);
   try{
     const d=await fetchPollJson('/ble_fsd_scan?start=1',2000);
     renderBleFsdScan(d);

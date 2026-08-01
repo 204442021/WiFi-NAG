@@ -28,11 +28,22 @@
 
 - Added native BLE receiver state-machine tests and exposed `remoteActive`,
   accepted packet count, and disconnect count through `/ble_fsd`.
+- Added a live V3.0.3 BLE repair assessment that distinguishes link,
+  subscription, packet validation, CAN safety, CAN Write, and A-mode gates.
+- Added one-click, redacted JSON diagnostics download using the existing
+  `/status`, `/ble_fsd`, `/system_status`, `/ota_status`, and `/log` endpoints.
+  Partial endpoint failures are recorded without blocking the download.
+
+### Changed
+
+- Made every dashboard card, configuration subsection, and BLE settings panel
+  start collapsed after every page load instead of restoring expanded state.
 
 ### Validation
 
 - Native PlatformIO tests: 68 passed.
-- Python regression tests: 32 passed.
+- Python regression tests: 37 passed.
+- Node.js BLE diagnostics behavior tests: 11 passed.
 - ESP32 firmware build and binary publication were intentionally not performed
   for this source-only task.
 

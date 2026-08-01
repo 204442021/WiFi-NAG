@@ -87,7 +87,12 @@ class WifiNagRegressionTests(unittest.TestCase):
             with self.subTest(route=route):
                 self.assertIn(route, self.dash)
 
-        for element_id in ["can-write-tgl", "nag-mode", "nag-av2-min", "nag-av2-max"]:
+        for element_id in [
+            "can-write-tgl",
+            "nag-mode-seg",
+            "nag-av2-min",
+            "nag-av2-max",
+        ]:
             with self.subTest(element_id=element_id):
                 self.assertHasUiId(element_id)
 

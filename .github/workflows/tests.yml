@@ -57,6 +57,7 @@ jobs:
           - native_nag
           - native_twai
           - native_log_buffer
+          - native_ble_fsd
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6

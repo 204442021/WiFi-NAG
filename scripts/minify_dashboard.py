@@ -13,19 +13,32 @@ import subprocess
 import sys
 from pathlib import Path
 
-import rjsmin
-import csscompressor
-import htmlmin
+try:
+    import rjsmin
+except ImportError:
+    rjsmin = None
+
+try:
+    import csscompressor
+except ImportError:
+    csscompressor = None
+
+try:
+    import htmlmin
+except ImportError:
+    htmlmin = None
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "include" / "web" / "mcp2515_dashboard_ui.src.h"
 DST = ROOT / "include" / "web" / "mcp2515_dashboard_ui.h"
+BLE_FSD_DIAGNOSTICS = ROOT / "include" / "web" / "ble_fsd_diagnostics.js"
+BLE_FSD_DIAGNOSTICS_MARKER = "/*__BLE_FSD_DIAGNOSTICS_CORE__*/"
 
 
 def terser_minify(code: str) -> str:
     terser = shutil.which("terser")
     if not terser:
-        return rjsmin.jsmin(code)
+        return rjsmin.jsmin(code) if rjsmin else code
     proc = subprocess.run(
         [terser, "--compress", "--ecma", "2020"],
         input=code,
@@ -34,8 +47,25 @@ def terser_minify(code: str) -> str:
     )
     if proc.returncode != 0:
         print(f"warn: terser failed: {proc.stderr}", file=sys.stderr)
-        return rjsmin.jsmin(code)
+        return rjsmin.jsmin(code) if rjsmin else code
     return proc.stdout
+
+
+def css_minify(code: str) -> str:
+    return csscompressor.compress(code) if csscompressor else code
+
+
+def html_minify(code: str) -> str:
+    if not htmlmin:
+        return code
+    return htmlmin.minify(
+        code,
+        remove_comments=True,
+        remove_empty_space=True,
+        remove_all_empty_space=True,
+        reduce_boolean_attributes=True,
+        keep_pre=True,
+    )
 
 
 def minify_blocks(html: str, tag: str, fn) -> str:
@@ -52,6 +82,16 @@ def minify_blocks(html: str, tag: str, fn) -> str:
 
 
 text = SRC.read_text(encoding="utf-8") if SRC.exists() else DST.read_text(encoding="utf-8")
+if SRC.exists():
+    marker_count = text.count(BLE_FSD_DIAGNOSTICS_MARKER)
+    if marker_count != 1:
+        print(
+            f"expected one {BLE_FSD_DIAGNOSTICS_MARKER} marker, found {marker_count}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    diagnostics_core = BLE_FSD_DIAGNOSTICS.read_text(encoding="utf-8")
+    text = text.replace(BLE_FSD_DIAGNOSTICS_MARKER, diagnostics_core)
 m = re.search(r'R"HTML\((.*)\)HTML";', text, re.DOTALL)
 if not m:
     print("no HTML payload found", file=sys.stderr)
@@ -60,16 +100,26 @@ if not m:
 html = m.group(1)
 before = len(html)
 
-html = minify_blocks(html, "style", csscompressor.compress)
+missing_minifiers = [
+    name
+    for name, module in (
+        ("rjsmin", rjsmin),
+        ("csscompressor", csscompressor),
+        ("htmlmin", htmlmin),
+    )
+    if module is None
+]
+if missing_minifiers:
+    print(
+        "warn: optional minifiers unavailable ("
+        + ", ".join(missing_minifiers)
+        + "); generating valid gzip output without those reductions",
+        file=sys.stderr,
+    )
+
+html = minify_blocks(html, "style", css_minify)
 html = minify_blocks(html, "script", terser_minify)
-html = htmlmin.minify(
-    html,
-    remove_comments=True,
-    remove_empty_space=True,
-    remove_all_empty_space=True,
-    reduce_boolean_attributes=True,
-    keep_pre=True,
-)
+html = html_minify(html)
 
 raw_len = len(html)
 gz = gzip.compress(html.encode("utf-8"), compresslevel=9, mtime=0)
