@@ -42,7 +42,7 @@
 ### Validation
 
 - Native PlatformIO tests: 68 passed.
-- Python regression tests: 37 passed.
+- Python regression tests: 38 passed.
 - Node.js BLE diagnostics behavior tests: 11 passed.
 - ESP32 firmware build and binary publication were intentionally not performed
   for this source-only task.

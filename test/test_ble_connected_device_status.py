@@ -198,6 +198,13 @@ class BleConnectedDeviceStatusTests(unittest.TestCase):
     def test_native_ble_receiver_suite_runs_in_github_actions(self) -> None:
         self.assertIn("- native_ble_fsd", TEST_WORKFLOW)
 
+    def test_feature_branches_do_not_build_firmware(self) -> None:
+        self.assertIn(
+            "if: github.event_name == 'workflow_dispatch' || "
+            "github.ref == 'refs/heads/main'",
+            TEST_WORKFLOW,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

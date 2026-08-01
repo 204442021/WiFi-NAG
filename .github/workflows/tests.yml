@@ -69,6 +69,7 @@ jobs:
       - run: pio test -e ${{ matrix.env }}
 
   firmware-build:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

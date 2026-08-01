@@ -352,7 +352,7 @@ static void mcpDashOnCanSafetyTrip(CanSafetyReason reason)
 static uint32_t dashNagEchoCount()
 {
     if (dashHandler)
-        return (uint32_t)static_cast<NagHandler *>(dashHandler)->nagEchoCount;
+        return static_cast<uint32_t>(static_cast<NagHandler *>(dashHandler)->nagEchoCount);
     return 0;
 }
 
