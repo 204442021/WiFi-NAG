@@ -15,6 +15,8 @@ The work covers:
 - authoritative handling of the sender hold duration and clear packet;
 - reliable propagation of each accepted activation to the Nag A-mode window;
 - API diagnostics and native regression tests;
+- dashboard panels that always start collapsed after every page load;
+- a V3.0.3 BLE repair assessment with one-click JSON diagnostics download;
 - V3.0.3 release metadata.
 
 It does not attempt to recover an activation that starts and finishes while the two devices remain completely disconnected. That requires a later sender-side snapshot-on-connect improvement.
@@ -102,6 +104,27 @@ Extend `/ble_fsd` output with the receiver fields that already exist but are not
 
 These fields allow field diagnosis to distinguish BLE delivery failure, sequence rejection, CAN gating, and downstream CAN transmit drops.
 
+### Dashboard Repair Assessment
+
+Every dashboard card, configuration subsection, and the inner BLE settings panel starts collapsed on every page load. A user may expand panels for the current page session, but the dashboard does not restore an expanded state after refresh. The existing BLE auto-collapse-after-connection option remains useful within the current session.
+
+The BLE receiver area shows a concise V3.0.3 repair assessment derived from live `/status` and `/ble_fsd` fields. It distinguishes at least: receiver disabled, BLE disconnected, GATT not subscribed, waiting for the first packet, packet rejection, unhealthy or safety-tripped CAN, CAN Write disabled, trigger received without an A-mode window, active torque window, and healthy idle operation.
+
+The assessment is advisory and read-only. It must not change BLE, CAN, Nag, or safety state.
+
+### One-click Diagnostic Download
+
+The browser collects existing read-only endpoints instead of adding a large firmware-side report builder. One click downloads a UTF-8 JSON file containing:
+
+- schema and V3.0.3 repair identifiers;
+- browser collection time and UI mode;
+- the human-readable assessment and machine-readable reason code;
+- raw `/status`, `/ble_fsd`, `/system_status`, and `/ota_status` snapshots;
+- recent `/log` lines when available;
+- a list of endpoints that could not be collected.
+
+Collection is best-effort: failure of one endpoint does not prevent download of the remaining snapshots. Common password, token, and authorization values in log text are redacted before the file is created. The report does not request WiFi configuration endpoints and therefore does not collect saved WiFi passwords.
+
 ## Tests
 
 Add native tests against the production receiver core for:
@@ -118,6 +141,8 @@ Add native tests against the production receiver core for:
 
 Keep the existing Nag handler, TWAI, dashboard, OTA, and Wi-Fi regression suites. Add source-contract checks only where they verify API wiring; behavioral assertions belong in the native core tests.
 
+Add host-side JavaScript behavior tests for the repair assessment, partial snapshot collection, secret redaction, deterministic JSON schema, and filename generation. Add dashboard integration checks for the forced-collapse controls, visible assessment fields, download action, and injected diagnostics core. Regenerate the embedded minified/gzipped dashboard, but do not compile the ESP32 firmware.
+
 ## Release and Compatibility
 
 Update `VERSION` and `CHANGELOG.md` so the source tree identifies itself as V3.0.3. No BLE wire-format change is made, so WiFi-NAG V3.0.3 remains compatible with T2CAN-FSD V1.5.3. Firmware compilation, binary packaging, tagging, and release publication are explicitly outside this task.
@@ -130,5 +155,8 @@ Update `VERSION` and `CHANGELOG.md` so the source tree identifies itself as V3.0
 - A matching clear stops torque output immediately.
 - The default T2CAN-FSD 5,000 ms hold produces a 5,000 ms receiver/Nag window rather than 10,000 ms.
 - A rapid second activation retriggers the Nag window.
+- Every dashboard card, subsection, and BLE settings panel is collapsed again after a page refresh, regardless of prior expansion.
+- The live repair assessment identifies the most likely BLE/CAN gate state without changing device state.
+- One click downloads a parseable, redacted JSON report even if one or more optional endpoints fail.
 - All relevant native and Python regression tests pass and source metadata reports V3.0.3 before the branch is proposed for merge. ESP32 firmware compilation is intentionally not performed in this task.
 
