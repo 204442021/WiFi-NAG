@@ -44,8 +44,8 @@
 - Native PlatformIO tests: 68 passed.
 - Python regression tests: 38 passed.
 - Node.js BLE diagnostics behavior tests: 11 passed.
-- ESP32 firmware build and binary publication were intentionally not performed
-  for this source-only task.
+- ESP32-S3 firmware build succeeded for `wifi_nag_ESP32_S3_CAN`; the
+  1,295,904-byte application image uses 30.90% of the 4 MiB OTA slot.
 
 ## [V3.0.2] - 2026-07-31
 
