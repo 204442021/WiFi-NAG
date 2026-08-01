@@ -33,7 +33,7 @@ class BleConnectedDeviceStatusTests(unittest.TestCase):
             "updatePeerFromAdvertisement",
             "addressToText(disc.addr, gStatus.peerMac)",
             "gStatus.connectedAtMs = nowMs()",
-            "gStatus.lastDisconnectAtMs = nowMs()",
+            "gStatus.lastDisconnectAtMs = now",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, SOURCE)
@@ -47,6 +47,9 @@ class BleConnectedDeviceStatusTests(unittest.TestCase):
             "bleRxPeerMac",
             "bleRxPeerName",
             "bleRxSubscribed",
+            "remoteActive",
+            "acceptedPackets",
+            "disconnects",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, DASH)
@@ -128,7 +131,9 @@ class BleConnectedDeviceStatusTests(unittest.TestCase):
 
     def test_ble_runtime_services_a_mode_without_web_polling(self) -> None:
         self.assertIn("dashServiceBleFsdRuntime", DASH)
-        self.assertIn("nag->triggerAModeWindow(windowMs)", DASH)
+        self.assertIn("BleFsdWindowBridgeCore bridge", DASH)
+        self.assertIn("bridge.update(status, nagKillerEnabled && canActive)", DASH)
+        self.assertIn("nag->triggerAModeWindow(decision.windowMs)", DASH)
         self.assertIn("nag->cancelAModeWindow()", DASH)
         self.assertIn("dashServiceBleFsdRuntime();", DASH)
         self.assertIn("MODE_A && !aModeActive()", (ROOT / "include" / "handlers.h").read_text(encoding="utf-8"))

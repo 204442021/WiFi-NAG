@@ -38,6 +38,7 @@
 #include "handlers.h"
 #include "can_helpers.h"
 #include "ble_fsd_receiver.h"
+#include "ble_fsd_receiver_core.h"
 #include <ArduinoJson.h>
 #include "web/mcp2515_dashboard_ui.h"
 
@@ -515,7 +516,7 @@ static void dashProcessCanSafetyTrip()
 static void dashServiceBleFsdRuntime()
 {
     static unsigned long lastServiceMs = 0;
-    static BleFsdReceiverState previousState = BleFsdReceiverState::Disabled;
+    static BleFsdWindowBridgeCore bridge;
     const unsigned long now = millis();
     if (now - lastServiceMs < 50)
         return;
@@ -536,24 +537,20 @@ static void dashServiceBleFsdRuntime()
 #if defined(NAG_KILLER)
     if (NagHandler *nag = dashNagActiveHandler())
     {
-        if (status.state == BleFsdReceiverState::TestActive &&
-            previousState != BleFsdReceiverState::TestActive &&
-            nagKillerEnabled && canActive)
+        const BleFsdBridgeDecision decision =
+            bridge.update(status, nagKillerEnabled && canActive);
+        if (decision.trigger)
         {
-            const uint32_t windowMs =
-                status.testRemainingMs > 0 ? status.testRemainingMs : 10000UL;
-            nag->triggerAModeWindow(windowMs);
-            dashLog("[BLE] A mode active for " + String(windowMs) + " ms");
+            nag->triggerAModeWindow(decision.windowMs);
+            dashLog("[BLE] A mode active for " + String(decision.windowMs) + " ms");
         }
-        else if (status.state != BleFsdReceiverState::TestActive &&
-                 previousState == BleFsdReceiverState::TestActive)
+        if (decision.cancel)
         {
             nag->cancelAModeWindow();
             dashLog("[BLE] A mode inactive");
         }
     }
 #endif
-    previousState = status.state;
 }
 
 [[maybe_unused]] static void dashToggleCanActive(const char *reason = nullptr)
@@ -1140,6 +1137,12 @@ static String dashBleFsdStatusJson(bool includeConfig)
     j += s.rejectedCount;
     j += ",\"windows\":";
     j += s.testWindows;
+    j += ",\"remoteActive\":";
+    j += s.remoteActive ? "true" : "false";
+    j += ",\"acceptedPackets\":";
+    j += s.acceptedPackets;
+    j += ",\"disconnects\":";
+    j += s.disconnectCount;
     j += "}";
     return j;
 }

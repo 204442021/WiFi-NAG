@@ -1,4 +1,5 @@
 #include "ble_fsd_receiver.h"
+#include "ble_fsd_receiver_core.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -20,10 +21,8 @@ namespace
 {
 BleFsdReceiverConfig gConfig{};
 BleFsdReceiverStatus gStatus{};
+BleFsdReceiverCore gCore{};
 bool gCanHealthy = false;
-bool gHaveSequence = false;
-bool gHaveSourceTimestamp = false;
-uint32_t gTestEndsAtMs = 0;
 bool gDiscoveryMode = false;
 uint32_t gDiscoveryEndsAtMs = 0;
 bool gHostSynced = false;
@@ -83,119 +82,34 @@ void setReason(const char *reason)
                   reason ? reason : "");
 }
 
-bool sequenceIsOlder(uint32_t candidate, uint32_t reference)
+void syncCoreStatus(uint32_t now)
 {
-    return static_cast<int32_t>(candidate - reference) < 0;
+    bleFsdApplyCoreSnapshot(gCore.snapshot(now), gStatus);
 }
 
-void endTest(const char *reason, bool awaitClear)
+void recordReject(BleFsdRejectReason reason)
 {
-    if (gStatus.state == BleFsdReceiverState::TestActive)
-        gStatus.timeoutCount++;
-    gTestEndsAtMs = 0;
-    gStatus.testRemainingMs = 0;
-    gStatus.state = awaitClear ? BleFsdReceiverState::AwaitingClear
-                               : BleFsdReceiverState::Idle;
-    setReason(reason);
-}
-
-void reject(BleFsdRejectReason reason)
-{
-    gStatus.lastReject = reason;
-    gStatus.rejectedCount++;
-    if (reason == BleFsdRejectReason::InvalidCrc)
-        gStatus.crcErrors++;
-    if (reason == BleFsdRejectReason::DuplicateSequence)
-        gStatus.duplicateCount++;
+    const uint32_t now = nowMs();
+    gCore.recordReject(reason, now);
+    syncCoreStatus(now);
+    setReason(bleFsdRejectReasonName(reason));
 }
 
 void acceptPacket(const BleFsdPacket &packet)
 {
     const uint32_t now = nowMs();
+    const BleFsdCoreResult result = gCore.onPacket(packet, gCanHealthy, now);
+    syncCoreStatus(now);
 
-    if (packet.sourceTimestampMs == 0)
-    {
-        reject(BleFsdRejectReason::InvalidTimestamp);
-        return;
-    }
-    if (gHaveSequence)
-    {
-        if (packet.sequence == gStatus.lastSequence)
-        {
-            /*
-             * LILYGO repeats the same FSD_ACTIVE sequence every 500 ms during
-             * its hold window.  These are heartbeats, not new trigger edges:
-             * count them for diagnostics but never extend or retrigger the
-             * diagnostic window.  A matching clear is also accepted so a
-             * sender may use the same sequence for its final ACTIVE=0 packet.
-             */
-            gStatus.duplicateCount++;
-            gStatus.lastPacketAtMs = now;
-            gStatus.lastReject = BleFsdRejectReason::None;
-            if (packet.active && gStatus.remoteActive)
-                return;
-            if (!packet.active && gStatus.remoteActive)
-            {
-                gStatus.remoteActive = false;
-                if (gStatus.state == BleFsdReceiverState::AwaitingClear)
-                    gStatus.state = BleFsdReceiverState::Idle;
-                setReason("remote_clear");
-                return;
-            }
-            reject(BleFsdRejectReason::DuplicateSequence);
-            return;
-        }
-        if (sequenceIsOlder(packet.sequence, gStatus.lastSequence))
-        {
-            reject(BleFsdRejectReason::OldSequence);
-            return;
-        }
-    }
-    if (gHaveSourceTimestamp && sequenceIsOlder(packet.sourceTimestampMs, gStatus.lastSourceTimestampMs))
-    {
-        reject(BleFsdRejectReason::InvalidTimestamp);
-        return;
-    }
-
-    const bool wasRemoteActive = gStatus.remoteActive;
-    gHaveSequence = true;
-    gHaveSourceTimestamp = true;
-    gStatus.lastSequence = packet.sequence;
-    gStatus.lastSourceTimestampMs = packet.sourceTimestampMs;
-    gStatus.lastPacketAtMs = now;
-    gStatus.acceptedPackets++;
-    gStatus.lastReject = BleFsdRejectReason::None;
-
-    if (!packet.active)
-    {
-        gStatus.remoteActive = false;
-        if (gStatus.state == BleFsdReceiverState::AwaitingClear)
-            gStatus.state = BleFsdReceiverState::Idle;
+    if (result.reject != BleFsdRejectReason::None)
+        setReason(bleFsdRejectReasonName(result.reject));
+    else if (result.event == BleFsdCoreEvent::WindowStarted)
+        setReason("test_active");
+    else if (!packet.active)
         setReason("remote_clear");
-        return;
-    }
-
-    gStatus.remoteActive = true;
-    if (wasRemoteActive || gStatus.state == BleFsdReceiverState::AwaitingClear)
-    {
-        if (gStatus.state == BleFsdReceiverState::AwaitingClear)
-            reject(BleFsdRejectReason::AwaitingClear);
-        return;
-    }
-    if (!gCanHealthy)
-    {
-        reject(BleFsdRejectReason::CanUnhealthy);
-        return;
-    }
-
-    // Diagnostic-only window: deliberately not connected to the CAN TX path.
-    const uint32_t windowMs = std::clamp(gConfig.testWindowMs, 1000UL, 60000UL);
-    gTestEndsAtMs = now + windowMs;
-    gStatus.testRemainingMs = windowMs;
-    gStatus.testWindows++;
-    gStatus.state = BleFsdReceiverState::TestActive;
-    setReason("test_active");
 }
+
+void startScan();
 
 #ifdef ESP_PLATFORM
 static uint8_t gOwnAddrType = BLE_OWN_ADDR_PUBLIC;
@@ -543,28 +457,30 @@ int gapEvent(struct ble_gap_event *event, void *)
         if (length > sizeof(data) ||
             os_mbuf_copydata(event->notify_rx.om, 0, length, data) != 0)
         {
-            reject(BleFsdRejectReason::InvalidLength);
+            recordReject(BleFsdRejectReason::InvalidLength);
             return 0;
         }
         BleFsdPacket packet{};
         BleFsdRejectReason reason = BleFsdRejectReason::None;
         if (!bleFsdParsePacket(data, length, packet, reason))
-            reject(reason);
+            recordReject(reason);
         else
             acceptPacket(packet);
         return 0;
     }
 
     case BLE_GAP_EVENT_DISCONNECT:
+    {
+        const uint32_t now = nowMs();
         gConnHandle = BLE_HS_CONN_HANDLE_NONE;
         gStatus.connected = false;
         gStatus.subscribed = false;
-        gStatus.lastDisconnectAtMs = nowMs();
+        gStatus.lastDisconnectAtMs = now;
         gStatus.disconnectCount++;
-        gStatus.remoteActive = false;
-        gHaveSourceTimestamp = false;
-        if (gStatus.state == BleFsdReceiverState::TestActive)
-            endTest("link_lost", false);
+        const BleFsdCoreResult reset = gCore.resetSession(gConfig.enabled, now);
+        syncCoreStatus(now);
+        if (reset.event == BleFsdCoreEvent::WindowStopped)
+            setReason("link_lost");
         else if (!gDiscoveryMode)
             setReason("disconnected");
         if (gDiscoveryMode)
@@ -576,6 +492,7 @@ int gapEvent(struct ble_gap_event *event, void *)
         }
         startScan();
         return 0;
+    }
 
     case BLE_GAP_EVENT_DISC_COMPLETE:
         gStatus.scanning = false;
@@ -603,14 +520,15 @@ int gapEvent(struct ble_gap_event *event, void *)
 
 void onReset(int)
 {
+    const uint32_t now = nowMs();
     gHostSynced = false;
     gStatus.connected = false;
     gStatus.subscribed = false;
     gStatus.scanning = false;
     gConnHandle = BLE_HS_CONN_HANDLE_NONE;
-    gStatus.remoteActive = false;
-    if (gStatus.state == BleFsdReceiverState::TestActive)
-        endTest("ble_reset", false);
+    gCore.resetSession(gConfig.enabled, now);
+    syncCoreStatus(now);
+    setReason("ble_reset");
 }
 
 void onSync()
@@ -630,6 +548,10 @@ void hostTask(void *)
     nimble_port_run();
     nimble_port_freertos_deinit();
 }
+#endif
+
+#ifndef ESP_PLATFORM
+void startScan() {}
 #endif
 
 bool ensureBleInitialized()
@@ -710,7 +632,10 @@ const char *bleFsdRejectReasonName(BleFsdRejectReason reason)
 void bleFsdReceiverStart(const BleFsdReceiverConfig &config)
 {
     gConfig = config;
-    gStatus.state = config.enabled ? BleFsdReceiverState::Idle : BleFsdReceiverState::Disabled;
+    const uint32_t now = nowMs();
+    gCore.setFallbackWindowMs(config.testWindowMs);
+    gCore.resetSession(config.enabled, now);
+    syncCoreStatus(now);
     setReason(config.enabled ? "starting" : "disabled");
     // Do not reserve Bluetooth controller/host memory when BLE RX is disabled.
     // Discovery and a later enable request initialize the stack lazily.
@@ -727,6 +652,8 @@ void bleFsdReceiverConfigure(const BleFsdReceiverConfig &config)
     const bool peerChanged =
         std::strcmp(gConfig.peerMac, config.peerMac) != 0;
     gConfig = config;
+    const uint32_t now = nowMs();
+    gCore.setFallbackWindowMs(config.testWindowMs);
     gDiscoveryMode = false;
     gDiscoveryStartPending = false;
     if (peerChanged)
@@ -740,10 +667,8 @@ void bleFsdReceiverConfigure(const BleFsdReceiverConfig &config)
     }
     if (!config.enabled)
     {
-        gStatus.state = BleFsdReceiverState::Disabled;
-        gStatus.remoteActive = false;
-        gStatus.testRemainingMs = 0;
-        gTestEndsAtMs = 0;
+        gCore.resetSession(false, now);
+        syncCoreStatus(now);
         setReason("disabled");
 #ifdef ESP_PLATFORM
         if (gStatus.scanning)
@@ -753,11 +678,10 @@ void bleFsdReceiverConfigure(const BleFsdReceiverConfig &config)
 #endif
         return;
     }
-    if (!wasEnabled)
+    if (!wasEnabled || peerChanged)
     {
-        gStatus.state = BleFsdReceiverState::Idle;
-        gHaveSequence = false;
-        gHaveSourceTimestamp = false;
+        gCore.resetSession(true, now);
+        syncCoreStatus(now);
     }
 #ifdef ESP_PLATFORM
     if (wasDiscovering && gStatus.scanning)
@@ -798,38 +722,26 @@ void bleFsdReceiverTick(bool canHealthy)
         gDiscoveryStartPending = false;
         setReason("discovery_done");
     }
-    if (gStatus.state == BleFsdReceiverState::TestActive)
-    {
-        if (!canHealthy)
-        {
-            endTest("can_unhealthy", true);
-            reject(BleFsdRejectReason::CanUnhealthy);
-        }
-        else if (static_cast<int32_t>(now - gTestEndsAtMs) >= 0)
-        {
-            endTest("test_complete", gStatus.remoteActive);
-        }
-        else
-        {
-            gStatus.testRemainingMs = gTestEndsAtMs - now;
-        }
-    }
+    const BleFsdCoreResult result = gCore.tick(canHealthy, now);
+    syncCoreStatus(now);
+    if (result.reject == BleFsdRejectReason::CanUnhealthy)
+        setReason("can_unhealthy");
+    else if (result.event == BleFsdCoreEvent::WindowStopped)
+        setReason("test_complete");
 }
 
 BleFsdReceiverStatus bleFsdReceiverGetStatus()
 {
     const uint32_t now = nowMs();
     BleFsdReceiverStatus snapshot = gStatus;
+    bleFsdApplyCoreSnapshot(gCore.snapshot(now), snapshot);
     snapshot.discoveryActive = gDiscoveryMode;
-    if (snapshot.state == BleFsdReceiverState::TestActive &&
-        static_cast<int32_t>(gTestEndsAtMs - now) > 0)
-        snapshot.testRemainingMs = gTestEndsAtMs - now;
     return snapshot;
 }
 
 bool bleFsdReceiverStartDiscovery(uint32_t durationMs)
 {
-    durationMs = std::clamp(durationMs, 1000UL, 30000UL);
+    durationMs = std::clamp<uint32_t>(durationMs, 1000U, 30000U);
     gDiscoveryMode = true;
     gDiscoveryEndsAtMs = nowMs() + durationMs;
     gDiscoveryStartPending = false;

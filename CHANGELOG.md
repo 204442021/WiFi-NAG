@@ -10,6 +10,32 @@
   uppercase `Vx.y.z` version tags.
 - Ensured manually triggered releases tag the exact workflow commit.
 
+## [V3.0.3] - 2026-08-01
+
+### Fixed
+
+- Reset BLE FSD sequence state on disconnect, BLE reset, receiver re-enable,
+  and peer changes so reconnects and sender restarts do not remain stuck on
+  `old_seq` or `duplicate_seq`.
+- Allowed a same-sequence heartbeat to retry after temporary CAN-health loss
+  instead of permanently consuming the activation.
+- Used the sender `holdMs` for the MODE_A window and made a matching clear
+  packet stop the receiver and torque windows immediately.
+- Retriggered MODE_A for newer sequences even while the receiver was already
+  active, and preserved pending triggers until the CAN output gate is enabled.
+
+### Added
+
+- Added native BLE receiver state-machine tests and exposed `remoteActive`,
+  accepted packet count, and disconnect count through `/ble_fsd`.
+
+### Validation
+
+- Native PlatformIO tests: 68 passed.
+- Python regression tests: 32 passed.
+- ESP32 firmware build and binary publication were intentionally not performed
+  for this source-only task.
+
 ## [V3.0.2] - 2026-07-31
 
 ### Changed
