@@ -12,9 +12,6 @@
 #endif
 
 #include "app.h"
-#if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
-#include "web/wifi_nag_ui_shell.h"
-#endif
 #include "drivers/twai_driver.h"
 
 #ifndef TWAI_TX_PIN
@@ -69,7 +66,7 @@ static void app_main_setup()
 
     appSetup<TWAIDriver>(std::make_unique<TWAIDriver>(twaiTx, twaiRx), "ESP32-S3 TWAI WIFI-NAG ready @ 500k");
 #ifdef ESP32_DASHBOARD
-    wifiNagDashboardSetup(appHandler.get(), appDriver.get());
+    mcpDashboardSetup(appHandler.get(), appDriver.get());
 #endif
 }
 

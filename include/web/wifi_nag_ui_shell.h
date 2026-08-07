@@ -2,6 +2,8 @@
 
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
 
+// Pure UI shell only. Route registration and BLE page composition are
+// intentionally left to the version-control integration branch.
 static const char WIFI_NAG_UI_SHELL[] PROGMEM = R"HTML(
 <!doctype html>
 <html lang="zh-CN" data-theme="light">
@@ -14,12 +16,12 @@ static const char WIFI_NAG_UI_SHELL[] PROGMEM = R"HTML(
 :root{
   --shell-bg:#f2f5f9;--shell-card:#ffffff;--shell-border:#dfe6ef;
   --shell-text:#1b2735;--shell-muted:#728094;--shell-blue:#3478f6;
-  --shell-blue-soft:#eaf2ff;--shell-danger:#d74646;--shell-shadow:0 10px 28px rgba(35,55,82,.09)
+  --shell-blue-soft:#eaf2ff;--shell-danger:#d74646;
 }
 html[data-theme="dark"]{
   --shell-bg:#11161d;--shell-card:#1b222c;--shell-border:#303b49;
   --shell-text:#f3f6fa;--shell-muted:#9ba8b8;--shell-blue:#72a7ff;
-  --shell-blue-soft:#1b3151;--shell-danger:#ff7474;--shell-shadow:0 12px 32px rgba(0,0,0,.28)
+  --shell-blue-soft:#1b3151;--shell-danger:#ff7474;
 }
 html,body{height:100%;margin:0;background:var(--shell-bg);color:var(--shell-text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
 body{display:flex;flex-direction:column;overflow:hidden}
@@ -137,7 +139,6 @@ body{display:flex;flex-direction:column;overflow:hidden}
     body.ui-shell #firmware-update-card>div:last-child{margin:0 16px 16px!important}
     body.ui-shell .ota-drop{border-radius:14px!important;background:var(--bg2)!important}
     body.ui-shell .sniff-input,body.ui-shell .sniff-btn,body.ui-shell .btn,body.ui-shell .hw-btn{border-radius:10px!important}
-    body.ui-shell #ota-reset-btn{display:none!important}
     body.ui-shell .warn-bar{margin:2px 14px 16px!important;border-radius:12px!important}
     body.ui-shell #config-card #config-hardware-section{border-top:0!important}
     body.ui-shell #config-card #config-hardware-section>.subsec-head{padding-top:0!important}
@@ -181,7 +182,10 @@ body{display:flex;flex-direction:column;overflow:hidden}
     if(!titleNode){titleNode=doc.createElement('div');titleNode.className='card-title';header.prepend(titleNode);}
     titleNode.innerHTML='<span class="ui-card-icon">'+cardIcon(kind)+'</span><span>'+title+'</span>';
     const chevron=doc.createElement('button');
-    chevron.type='button';chevron.className='ui-chevron';chevron.setAttribute('aria-label','展开或收起');chevron.textContent='⌄';
+    chevron.type='button';
+    chevron.className='ui-chevron';
+    chevron.setAttribute('aria-label','展开或收起');
+    chevron.textContent='⌄';
     header.appendChild(chevron);
     return header;
   }
@@ -192,57 +196,14 @@ body{display:flex;flex-direction:column;overflow:hidden}
       const header=card.querySelector(':scope > .card-hdr');
       if(!header||header.dataset.uiAccordion==='1')return;
       header.dataset.uiAccordion='1';
-      header.addEventListener('click',ev=>{
-        if(ev.target.closest('.sys-monitor input,.sys-monitor label'))return;
+      header.addEventListener('click',event=>{
+        if(event.target.closest('.sys-monitor input,.sys-monitor label'))return;
         accordionTouched=true;
         const shouldOpen=card.classList.contains('collapsed');
         cards.forEach(item=>item.classList.add('collapsed'));
         if(shouldOpen)card.classList.remove('collapsed');
       });
     });
-  }
-
-  function installPasswordlessOta(win,doc){
-    try{win.localStorage.removeItem('otaU');win.localStorage.removeItem('otaP');}catch(e){}
-    const reset=doc.getElementById('ota-reset-btn');if(reset)reset.remove();
-    win.uploadFirmware=function(){
-      const input=doc.getElementById('ota-file');
-      const file=input&&input.files&&input.files[0];
-      if(!file)return;
-      const progress=doc.getElementById('ota-progress');
-      const fill=doc.getElementById('ota-fill');
-      const status=doc.getElementById('ota-status');
-      const button=doc.getElementById('ota-upload-btn');
-      if(progress)progress.style.display='block';
-      if(button){button.disabled=true;button.textContent='刷写中…';}
-      const pad=value=>String(value).padStart(2,'0');
-      const now=new Date();
-      const stamp=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
-      const xhr=new win.XMLHttpRequest();
-      xhr.upload.onprogress=event=>{
-        if(!event.lengthComputable)return;
-        const percent=Math.round(event.loaded/event.total*100);
-        if(fill)fill.style.width=percent+'%';
-        if(status)status.textContent='上传中… '+percent+'%';
-      };
-      xhr.onload=()=>{
-        if(xhr.status===200){
-          if(status)status.textContent='完成，设备正在重启…';
-          if(fill)fill.style.width='100%';
-          setTimeout(()=>win.location.reload(),5000);
-        }else if(status){status.textContent='上传失败：'+xhr.status;status.style.color='var(--err)';}
-        if(button){button.disabled=false;button.textContent='刷写固件';}
-      };
-      xhr.onerror=()=>{
-        if(status){status.textContent='连接错误';status.style.color='var(--err)';}
-        if(button){button.disabled=false;button.textContent='刷写固件';}
-      };
-      xhr.open('POST','/update?ota_time='+encodeURIComponent(stamp),true);
-      xhr.setRequestHeader('Content-Type','application/octet-stream');
-      xhr.setRequestHeader('X-File-Name',file.name);
-      xhr.setRequestHeader('X-File-Size',String(file.size));
-      xhr.send(file);
-    };
   }
 
   function patchDashboard(){
@@ -266,7 +227,12 @@ body{display:flex;flex-direction:column;overflow:hidden}
     }catch(e){}
 
     let style=doc.getElementById('wifi-nag-shell-style');
-    if(!style){style=doc.createElement('style');style.id='wifi-nag-shell-style';style.textContent=iframePatchCss();doc.head.appendChild(style);}
+    if(!style){
+      style=doc.createElement('style');
+      style.id='wifi-nag-shell-style';
+      style.textContent=iframePatchCss();
+      doc.head.appendChild(style);
+    }
     doc.body.classList.remove('ui-car');
     doc.body.classList.add('ui-phone','wifi-nag','ui-shell');
 
@@ -286,12 +252,15 @@ body{display:flex;flex-direction:column;overflow:hidden}
     setSubsectionTitle(hotspot,'Wi-Fi 热点');
     setSubsectionTitle(internet,'Wi-Fi 上网');
     setSubsectionTitle(gateway,'SPA-AP 网关');
-    if(debug)setSubsectionTitle(debug,'调试日志');
+    if(debug)debug.style.display='none';
 
     let wifiCard=doc.getElementById('wifi-config-card');
-    if(!wifiCard){wifiCard=doc.createElement('div');wifiCard.id='wifi-config-card';wifiCard.className='card';}
+    if(!wifiCard){
+      wifiCard=doc.createElement('div');
+      wifiCard.id='wifi-config-card';
+      wifiCard.className='card';
+    }
     [hotspot,internet,gateway].forEach(section=>wifiCard.appendChild(section));
-    if(debug)system.appendChild(debug);
     if(status){
       status.classList.add('embedded-status-grid');
       const sysGrid=system.querySelector(':scope > .sys-grid');
@@ -310,13 +279,11 @@ body{display:flex;flex-direction:column;overflow:hidden}
     installAccordion(doc,cards);
     if(!accordionTouched)cards.forEach(card=>card.classList.add('collapsed'));
 
-    const apSsid=doc.getElementById('ap-ssid');
-    if(apSsid&&!apSsid.value)apSsid.value='T1CAN';
-    const apPass=doc.getElementById('ap-pass');
-    if(apPass)apPass.placeholder='默认密码：12345678（留空保持当前密码）';
-    installPasswordlessOta(win,doc);
-    doc.querySelectorAll('.subsec').forEach(sec=>{sec.classList.remove('collapsed');sec.querySelectorAll('.subsec-btn').forEach(el=>el.remove());});
-    doc.querySelectorAll('.card-min-btn').forEach(el=>el.remove());
+    doc.querySelectorAll('.subsec').forEach(section=>{
+      section.classList.remove('collapsed');
+      section.querySelectorAll('.subsec-btn').forEach(element=>element.remove());
+    });
+    doc.querySelectorAll('.card-min-btn').forEach(element=>element.remove());
   }
 
   frame.addEventListener('load',()=>{
@@ -333,20 +300,5 @@ body{display:flex;flex-direction:column;overflow:hidden}
 </body>
 </html>
 )HTML";
-
-static void handleWifiNagUiShell()
-{
-    server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-    server.sendHeader("Pragma", "no-cache");
-    server.send_P(200, "text/html", WIFI_NAG_UI_SHELL);
-}
-
-static void wifiNagDashboardSetup(CarManagerBase *handler, CanDriver *driver)
-{
-    // Register first: the compatibility WebServer resolves the earliest matching route.
-    server.on("/", HTTP_GET, handleWifiNagUiShell);
-    server.on("/legacy-dashboard", HTTP_GET, handleRoot);
-    mcpDashboardSetup(handler, driver);
-}
 
 #endif
