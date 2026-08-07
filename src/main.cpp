@@ -13,6 +13,9 @@
 
 #include "app.h"
 #include "drivers/twai_driver.h"
+#if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
+#include "ble/bridge_webui.h"
+#endif
 
 #ifndef TWAI_TX_PIN
 #define TWAI_TX_PIN GPIO_NUM_15
@@ -66,7 +69,13 @@ static void app_main_setup()
 
     appSetup<TWAIDriver>(std::make_unique<TWAIDriver>(twaiTx, twaiRx), "ESP32-S3 TWAI WIFI-NAG ready @ 500k");
 #ifdef ESP32_DASHBOARD
+#if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
+    bleBridgeRegisterDashboardRoutes();
+#endif
     mcpDashboardSetup(appHandler.get(), appDriver.get());
+#if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
+    bleBridgeAfterDashboardSetup();
+#endif
 #endif
 }
 
@@ -92,6 +101,9 @@ static bool app_main_loop()
 
 static void appCanShutdownHandler()
 {
+#if defined(BLE_BRIDGE)
+    bleBridgeClient.prepareForRestart();
+#endif
     appPrepareCanForRestart();
 }
 
