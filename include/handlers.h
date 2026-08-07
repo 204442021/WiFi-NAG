@@ -1,207 +1,91 @@
 #pragma once
 
 #include <algorithm>
-#include <cstdio>
-#include "can_frame_types.h"
-#include "drivers/can_driver.h"
-#include "can_helpers.h"
-#include "shared_types.h"
-#include "log_buffer.h"
+#include <cstdint>
 
-#ifndef NATIVE_BUILD
-#ifdef ESP_PLATFORM
-#include "platform/espidf_runtime.h"
-#else
-#include <Arduino.h>
-#endif
-#endif
+// Keep the proven V1.0.3 Nag codec/echo implementation intact and add only a
+// thin timing layer around it. The original blob is kept as handlers_base.h.
+#define NagHandler NagHandlerBase
+#include "handlers_base.h"
+#undef NagHandler
 
-inline LogRingBuffer logRing;
+inline constexpr uint8_t kNagSweepMinSeconds = 1;
+inline constexpr uint8_t kNagSweepMaxSeconds = 30;
+inline constexpr uint8_t kNagSweepDefaultMinSeconds = 5;
+inline constexpr uint8_t kNagSweepDefaultMaxSeconds = 8;
 
-static inline bool framePayloadChanged(const CanFrame &original, const CanFrame &modified)
+inline Shared<uint8_t> nagSweepMinSeconds{kNagSweepDefaultMinSeconds};
+inline Shared<uint8_t> nagSweepMaxSeconds{kNagSweepDefaultMaxSeconds};
+inline Shared<uint32_t> nagSweepConfigVersion{0};
+
+static inline uint8_t nagClampSweepSeconds(int value)
 {
-    if (original.id != modified.id || original.dlc != modified.dlc)
-        return true;
-
-    const uint8_t dlc = (original.dlc <= 8) ? original.dlc : 8;
-    for (uint8_t i = 0; i < dlc; ++i)
-    {
-        if (original.data[i] != modified.data[i])
-            return true;
-    }
-    return false;
+    if (value < kNagSweepMinSeconds)
+        return kNagSweepMinSeconds;
+    if (value > kNagSweepMaxSeconds)
+        return kNagSweepMaxSeconds;
+    return static_cast<uint8_t>(value);
 }
 
-struct CarManagerBase
+static inline void nagSetSweepRangeSeconds(int minSeconds, int maxSeconds)
 {
-    Shared<bool> enablePrint{false};
-    Shared<uint32_t> frameCount{0};
-    Shared<uint32_t> framesSent{0};
+    uint8_t minValue = nagClampSweepSeconds(minSeconds);
+    uint8_t maxValue = nagClampSweepSeconds(maxSeconds);
+    if (minValue > maxValue)
+        std::swap(minValue, maxValue);
 
-    void (*onFrame)(const CanFrame &) = nullptr;
+    if ((uint8_t)nagSweepMinSeconds == minValue &&
+        (uint8_t)nagSweepMaxSeconds == maxValue)
+        return;
 
-    virtual void handleMessage(CanFrame &frame, CanDriver &driver) = 0;
-    virtual const uint32_t *filterIds() const = 0;
-    virtual uint8_t filterIdCount() const = 0;
-    virtual ~CarManagerBase() = default;
-};
+    nagSweepMinSeconds = minValue;
+    nagSweepMaxSeconds = maxValue;
+    nagSweepConfigVersion++;
+}
+
+static inline uint8_t nagSweepMinSecondsValue()
+{
+    return (uint8_t)nagSweepMinSeconds;
+}
+
+static inline uint8_t nagSweepMaxSecondsValue()
+{
+    return (uint8_t)nagSweepMaxSeconds;
+}
 
 /**
- * NagHandler - Autosteer nag suppression (counter+1 echo method)
+ * Adds a configurable random write interval to the existing Nag handler.
  *
- * - Listens for CAN 880 (0x370) = EPAS3P_sysStatus
- * - Copies the real frame, writes a small torsionBarTorque echo, increments
- *   the low-nibble counter, and recalculates checksum byte 7.
- * - Echo transmission is gated by nagKillerRuntime, which the WebUI ties to
- *   the CAN Write switch for WIFI-NAG builds.
+ * Production behavior:
+ * - First real 0x370 after CAN Write is enabled is sent immediately.
+ * - Every completed write chooses a fresh random delay in the configured
+ *   1..30 second range (default 5..8 seconds).
+ * - Frames received while waiting are observed but never queued or replayed.
+ * - At the deadline, the current real frame is used as the echo template.
+ * - A keeps the original +1.80 Nm output.
+ * - A_V2 chooses a fresh pseudo-random torque endpoint on each actual write;
+ *   it no longer runs an independent fixed 2000 ms sweep in production.
  */
-struct NagHandler : public CarManagerBase
+struct NagHandler : public NagHandlerBase
 {
-    enum Mode : uint8_t
-    {
-        MODE_A = 0,
-        MODE_A_V2 = 4,
-    };
-
-    Shared<bool> nagKillerActive{true};
-    Shared<uint32_t> nagEchoCount{0};
-    Shared<uint32_t> nagOwnEchoSkipCount{0};
-    Shared<uint8_t> nagMode{MODE_A};
-    Shared<int16_t> av2MinCentiNm{150};
-    Shared<int16_t> av2MaxCentiNm{180};
-    Shared<int16_t> lastObservedCentiNm{0};
-    Shared<int16_t> lastInjectedCentiNm{0};
-
-    static constexpr uint32_t kAv2SweepPeriodMs = 2000;
-    static constexpr int16_t kTorqueMinCentiNm = -180;
-    static constexpr int16_t kTorqueMaxCentiNm = 180;
-
-    uint32_t modeStartMs = 0;
-    bool hasLastInjected = false;
-    uint16_t lastInjectedRaw = 0;
-    uint8_t lastInjectedCounter = 0;
-    uint8_t lastInjectedByte4 = 0;
-#ifdef NATIVE_BUILD
-    bool testClockEnabled = false;
-    uint32_t testNowMs = 0;
-#endif
-
-    const uint32_t *filterIds() const override
-    {
-        static constexpr uint32_t ids[] = {880};
-        return ids;
-    }
-
-    uint8_t filterIdCount() const override { return 1; }
-
-    static int16_t clampTorqueCentiNm(int16_t v)
-    {
-        if (v < kTorqueMinCentiNm)
-            return kTorqueMinCentiNm;
-        if (v > kTorqueMaxCentiNm)
-            return kTorqueMaxCentiNm;
-        return v;
-    }
-
-    static int16_t nmToCentiNm(float nm)
-    {
-        float centi = nm * 100.0f;
-        int16_t rounded = static_cast<int16_t>(centi >= 0.0f ? centi + 0.5f : centi - 0.5f);
-        return clampTorqueCentiNm(rounded);
-    }
-
-    static float centiNmToNm(int16_t centiNm)
-    {
-        return static_cast<float>(centiNm) / 100.0f;
-    }
-
-    static uint16_t centiNmToRaw(int16_t centiNm)
-    {
-        centiNm = clampTorqueCentiNm(centiNm);
-        return static_cast<uint16_t>(2050 + centiNm);
-    }
-
-    static int16_t rawToCentiNm(uint16_t raw)
-    {
-        return clampTorqueCentiNm(static_cast<int16_t>(raw) - 2050);
-    }
-
-    static uint16_t readTorqueRaw(const CanFrame &frame)
-    {
-        return static_cast<uint16_t>(((frame.data[2] & 0x0F) << 8) | frame.data[3]);
-    }
-
-    static void writeTorqueRaw(CanFrame &frame, uint16_t raw)
-    {
-        frame.data[2] = static_cast<uint8_t>((frame.data[2] & 0xF0) | ((raw >> 8) & 0x0F));
-        frame.data[3] = static_cast<uint8_t>(raw & 0xFF);
-    }
-
-    uint32_t nowMs() const
-    {
-#ifdef NATIVE_BUILD
-        return testClockEnabled ? testNowMs : 0;
-#else
-        return millis();
-#endif
-    }
+    bool writeGateWasOpen = false;
+    bool nextEchoScheduled = false;
+    uint32_t nextEchoAtMs = 0;
+    uint32_t lastSweepDelayMs = 0;
+    uint32_t intervalRandomSequence = 0;
+    uint32_t torqueRandomSequence = 0;
+    uint32_t appliedSweepConfigVersion = 0;
+    uint32_t appliedRuntimeGateVersion = 0;
 
 #ifdef NATIVE_BUILD
-    void setTestNowMs(uint32_t ms)
-    {
-        testClockEnabled = true;
-        testNowMs = ms;
-    }
+    // Legacy native tests retain their original per-frame behavior. Dedicated
+    // sweep tests explicitly enable the production timing layer.
+    bool testSweepTimingEnabled = false;
 #endif
 
-    static bool isSupportedMode(uint8_t mode)
+    static uint32_t randomWord(uint32_t value)
     {
-        return mode == MODE_A || mode == MODE_A_V2;
-    }
-
-    void setMode(uint8_t mode)
-    {
-        if (!isSupportedMode(mode))
-            mode = MODE_A;
-        if ((uint8_t)nagMode != mode)
-        {
-            nagMode = mode;
-            modeStartMs = nowMs();
-        }
-    }
-
-    void restartModeTimer()
-    {
-        modeStartMs = nowMs();
-    }
-
-    void setAv2RangeNm(float minNm, float maxNm)
-    {
-        setAv2RangeCentiNm(nmToCentiNm(minNm), nmToCentiNm(maxNm));
-    }
-
-    void setAv2RangeCentiNm(int16_t minCentiNm, int16_t maxCentiNm)
-    {
-        minCentiNm = clampTorqueCentiNm(minCentiNm);
-        maxCentiNm = clampTorqueCentiNm(maxCentiNm);
-        if (minCentiNm > maxCentiNm)
-            std::swap(minCentiNm, maxCentiNm);
-        av2MinCentiNm = minCentiNm;
-        av2MaxCentiNm = maxCentiNm;
-    }
-
-    int16_t av2MinCenti() const { return (int16_t)av2MinCentiNm; }
-    int16_t av2MaxCenti() const { return (int16_t)av2MaxCentiNm; }
-    float av2MinNm() const { return centiNmToNm(av2MinCenti()); }
-    float av2MaxNm() const { return centiNmToNm(av2MaxCenti()); }
-    int16_t lastObservedCenti() const { return (int16_t)lastObservedCentiNm; }
-    float lastObservedNm() const { return centiNmToNm(lastObservedCenti()); }
-    int16_t lastInjectedCenti() const { return (int16_t)lastInjectedCentiNm; }
-    float lastInjectedNm() const { return centiNmToNm(lastInjectedCenti()); }
-
-    static uint32_t av2RandomWord(uint32_t period)
-    {
-        uint32_t x = period + 0x9E3779B9u;
+        uint32_t x = value + 0x9E3779B9u;
         x ^= x >> 16;
         x *= 0x7FEB352Du;
         x ^= x >> 15;
@@ -210,48 +94,152 @@ struct NagHandler : public CarManagerBase
         return x;
     }
 
-    int16_t av2RandomEndpointCentiNm(uint32_t period) const
+    static uint32_t frameEntropy(const CanFrame &frame)
     {
-        const int16_t minNm = av2MinCenti();
-        const int16_t maxNm = av2MaxCenti();
-        const uint16_t span = static_cast<uint16_t>(maxNm - minNm);
-        if (span == 0)
-            return minNm;
-
-        return static_cast<int16_t>(minNm + static_cast<int16_t>(av2RandomWord(period) % (static_cast<uint32_t>(span) + 1)));
+        uint32_t hash = frame.id ^ (static_cast<uint32_t>(frame.dlc) << 24);
+        const uint8_t dlc = frame.dlc <= 8 ? frame.dlc : 8;
+        for (uint8_t i = 0; i < dlc; ++i)
+            hash = (hash * 16777619u) ^ frame.data[i];
+        return hash;
     }
 
-    int16_t randomSweepCentiNm(uint32_t elapsedMs) const
+    uint32_t nextRandom(uint32_t salt, uint32_t &sequence)
     {
-        const uint32_t phase = elapsedMs % kAv2SweepPeriodMs;
-        const uint32_t period = elapsedMs / kAv2SweepPeriodMs;
-        const int16_t start = av2RandomEndpointCentiNm(period);
-        const int16_t end = av2RandomEndpointCentiNm(period + 1);
-        const int32_t delta = static_cast<int32_t>(end) - static_cast<int32_t>(start);
-        return clampTorqueCentiNm(static_cast<int16_t>(static_cast<int32_t>(start) +
-                                                       (delta * static_cast<int32_t>(phase)) /
-                                                           static_cast<int32_t>(kAv2SweepPeriodMs)));
+        sequence++;
+        return randomWord(nowMs() ^ salt ^ (sequence * 0x85EBCA6Bu));
     }
 
-    int16_t targetTorqueCentiNm() const
+    bool sweepTimingActive() const
+    {
+#ifdef NATIVE_BUILD
+        return testSweepTimingEnabled;
+#else
+        return true;
+#endif
+    }
+
+    static bool deadlineReached(uint32_t now, uint32_t deadline)
+    {
+        return static_cast<int32_t>(now - deadline) >= 0;
+    }
+
+    void resetWriteSchedule()
+    {
+        writeGateWasOpen = false;
+        nextEchoScheduled = false;
+        nextEchoAtMs = 0;
+        lastSweepDelayMs = 0;
+        appliedSweepConfigVersion = (uint32_t)nagSweepConfigVersion;
+    }
+
+    void syncRuntimeGateVersion()
+    {
+        const uint32_t runtimeVersion = nagKillerRuntime.version();
+        if (appliedRuntimeGateVersion == runtimeVersion)
+            return;
+        resetWriteSchedule();
+        appliedRuntimeGateVersion = runtimeVersion;
+    }
+
+    void scheduleNextEcho(uint32_t now, const CanFrame &frame)
+    {
+        uint8_t minSeconds = nagSweepMinSecondsValue();
+        uint8_t maxSeconds = nagSweepMaxSecondsValue();
+        if (minSeconds > maxSeconds)
+            std::swap(minSeconds, maxSeconds);
+
+        const uint32_t minMs = static_cast<uint32_t>(minSeconds) * 1000u;
+        const uint32_t maxMs = static_cast<uint32_t>(maxSeconds) * 1000u;
+        const uint32_t span = maxMs - minMs;
+        const uint32_t word = nextRandom(frameEntropy(frame) ^ 0x4F1BBCDCu,
+                                         intervalRandomSequence);
+        lastSweepDelayMs = minMs + (span == 0 ? 0 : word % (span + 1u));
+        nextEchoAtMs = now + lastSweepDelayMs;
+        nextEchoScheduled = true;
+        appliedSweepConfigVersion = (uint32_t)nagSweepConfigVersion;
+    }
+
+    bool shouldSendNow(uint32_t now, const CanFrame &frame)
+    {
+        if (!writeGateWasOpen)
+        {
+            writeGateWasOpen = true;
+            appliedSweepConfigVersion = (uint32_t)nagSweepConfigVersion;
+            return true;
+        }
+
+        if (appliedSweepConfigVersion != (uint32_t)nagSweepConfigVersion)
+        {
+            scheduleNextEcho(now, frame);
+            return false;
+        }
+
+        if (!nextEchoScheduled)
+        {
+            scheduleNextEcho(now, frame);
+            return false;
+        }
+
+        return deadlineReached(now, nextEchoAtMs);
+    }
+
+    void prepareAv2TorqueForWrite(uint32_t now)
     {
         if ((uint8_t)nagMode != MODE_A_V2)
-            return kTorqueMaxCentiNm;
+            return;
 
-        return randomSweepCentiNm(nowMs() - modeStartMs);
+        // The base implementation returns a deterministic random endpoint at
+        // each 2000 ms period boundary. Point it at a new period for each real
+        // write, turning A_V2 into one fresh random torque per transmitted frame.
+        modeStartMs = now - (torqueRandomSequence * kAv2SweepPeriodMs);
+        torqueRandomSequence++;
     }
 
-    bool isOwnEcho(const CanFrame &frame) const
+    void setMode(uint8_t mode)
     {
-        if (!hasLastInjected)
-            return false;
-        return readTorqueRaw(frame) == lastInjectedRaw &&
-               (frame.data[6] & 0x0F) == lastInjectedCounter &&
-               frame.data[4] == lastInjectedByte4;
+        const uint8_t previous = (uint8_t)nagMode;
+        NagHandlerBase::setMode(mode);
+        if (previous != (uint8_t)nagMode)
+            torqueRandomSequence = 0;
     }
+
+    void restartModeTimer()
+    {
+        NagHandlerBase::restartModeTimer();
+        torqueRandomSequence = 0;
+    }
+
+    void setAv2RangeNm(float minNm, float maxNm)
+    {
+        NagHandlerBase::setAv2RangeNm(minNm, maxNm);
+        torqueRandomSequence = 0;
+    }
+
+    void setAv2RangeCentiNm(int16_t minCentiNm, int16_t maxCentiNm)
+    {
+        NagHandlerBase::setAv2RangeCentiNm(minCentiNm, maxCentiNm);
+        torqueRandomSequence = 0;
+    }
+
+#ifdef NATIVE_BUILD
+    void setTestSweepTimingEnabled(bool enabled)
+    {
+        testSweepTimingEnabled = enabled;
+        resetWriteSchedule();
+    }
+
+    uint32_t testLastSweepDelayMs() const { return lastSweepDelayMs; }
+    uint32_t testNextEchoAtMs() const { return nextEchoAtMs; }
+#endif
 
     void handleMessage(CanFrame &frame, CanDriver &driver) override
     {
+        if (!sweepTimingActive())
+        {
+            NagHandlerBase::handleMessage(frame, driver);
+            return;
+        }
+
         if (onFrame)
             onFrame(frame);
 
@@ -259,9 +247,13 @@ struct NagHandler : public CarManagerBase
             return;
 
         lastObservedCentiNm = rawToCentiNm(readTorqueRaw(frame));
+        syncRuntimeGateVersion();
 
         if (!nagKillerActive || !nagKillerRuntime)
+        {
+            resetWriteSchedule();
             return;
+        }
 
         if (isOwnEcho(frame))
         {
@@ -269,47 +261,20 @@ struct NagHandler : public CarManagerBase
             return;
         }
 
-        CanFrame echo = frame;
-        echo.id = 880;
-        echo.dlc = 8;
+        const uint32_t now = nowMs();
+        if (!shouldSendNow(now, frame))
+            return;
 
-        const int16_t torqueCentiNm = targetTorqueCentiNm();
-        const uint16_t torqueRaw = centiNmToRaw(torqueCentiNm);
-        writeTorqueRaw(echo, torqueRaw);
+        prepareAv2TorqueForWrite(now);
 
-        echo.data[4] = static_cast<uint8_t>((frame.data[4] & 0x3F) | 0x40);
+        // The base handler owns the proven frame mutation, counter, checksum,
+        // own-echo fingerprint and send path. Avoid counting this frame twice
+        // in the dashboard callback while delegating the actual write.
+        void (*savedOnFrame)(const CanFrame &) = onFrame;
+        onFrame = nullptr;
+        NagHandlerBase::handleMessage(frame, driver);
+        onFrame = savedOnFrame;
 
-        uint8_t cnt = (frame.data[6] & 0x0F);
-        cnt = (cnt + 1) & 0x0F;
-        echo.data[6] = (frame.data[6] & 0xF0) | cnt;
-
-        uint16_t sum = echo.data[0] + echo.data[1] + echo.data[2] + echo.data[3] + echo.data[4] + echo.data[5] + echo.data[6];
-        echo.data[7] = static_cast<uint8_t>((sum + 0x73) & 0xFF);
-
-        framesSent++;
-        nagEchoCount++;
-        lastInjectedCentiNm = torqueCentiNm;
-        lastInjectedRaw = torqueRaw;
-        lastInjectedCounter = cnt;
-        lastInjectedByte4 = echo.data[4];
-        hasLastInjected = true;
-        driver.send(echo);
-
-        if (enablePrint && (nagEchoCount % 500 == 1))
-        {
-            char buf[LogRingBuffer::kMaxMsgLen];
-            snprintf(buf, sizeof(buf), "NagHandler: echo=%u",
-                     (unsigned int)(uint32_t)nagEchoCount);
-            logRing.push(buf,
-#ifndef NATIVE_BUILD
-                         millis()
-#else
-                         0
-#endif
-            );
-#ifndef NATIVE_BUILD
-            Serial.println(buf);
-#endif
-        }
+        scheduleNextEcho(now, frame);
     }
 };
