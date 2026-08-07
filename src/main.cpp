@@ -15,6 +15,9 @@
 #include "drivers/twai_driver.h"
 #if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
 #include "ble/bridge_webui.h"
+#if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
+#include "web/wifi_nag_ui_shell.h"
+#endif
 #endif
 
 #ifndef TWAI_TX_PIN
@@ -45,6 +48,23 @@ static bool appTwaiGpioValid(gpio_num_t pin, bool tx)
 }
 #endif
 
+#if defined(ESP_PLATFORM) && defined(BLE_BRIDGE) && defined(ESP32_DASHBOARD)
+static void appHandleWifiNagUiShell()
+{
+    server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    server.sendHeader("Pragma", "no-cache");
+    server.send_P(200, "text/html; charset=utf-8", WIFI_NAG_UI_SHELL);
+}
+
+static void appRegisterIntegratedDashboardRoutes()
+{
+    // Register the composed routes before the BLE and legacy dashboard routes.
+    // The compatibility WebServer resolves the first exact route.
+    server.on("/", HTTP_GET, appHandleWifiNagUiShell);
+    server.on("/legacy-dashboard", HTTP_GET, bleBridgeHandleShell);
+}
+#endif
+
 static void app_main_setup()
 {
     gpio_num_t twaiTx = TWAI_TX_PIN;
@@ -70,6 +90,7 @@ static void app_main_setup()
     appSetup<TWAIDriver>(std::make_unique<TWAIDriver>(twaiTx, twaiRx), "ESP32-S3 TWAI WIFI-NAG ready @ 500k");
 #ifdef ESP32_DASHBOARD
 #if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
+    appRegisterIntegratedDashboardRoutes();
     bleBridgeRegisterDashboardRoutes();
 #endif
     mcpDashboardSetup(appHandler.get(), appDriver.get());
