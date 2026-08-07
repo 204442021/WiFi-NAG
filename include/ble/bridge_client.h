@@ -2,6 +2,10 @@
 
 #include <cstdint>
 
+#if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
+#include <esp_random.h>
+#endif
+
 #include "nag_state_controller.h"
 
 enum BleBridgeProtocolStatus : uint8_t
