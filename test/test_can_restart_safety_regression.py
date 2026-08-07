@@ -10,7 +10,9 @@ TWAI_DRIVER_FILE = ROOT / "include" / "drivers" / "twai_driver.h"
 APP_FILE = ROOT / "include" / "app.h"
 MAIN_FILE = ROOT / "src" / "main.cpp"
 SDKCONFIG_FILE = ROOT / "sdkconfig.defaults"
-WORKFLOW_FILE = ROOT / ".github" / "workflows" / "release-v1.0.2.yml"
+HISTORICAL_V1_0_2_WORKFLOW_FILE = (
+    ROOT / ".github" / "workflows" / "release-v1.0.2.yml"
+)
 
 
 class CanRestartSafetyRegressionTests(unittest.TestCase):
@@ -22,10 +24,14 @@ class CanRestartSafetyRegressionTests(unittest.TestCase):
         cls.app = APP_FILE.read_text(encoding="utf-8")
         cls.main = MAIN_FILE.read_text(encoding="utf-8")
         cls.sdkconfig = SDKCONFIG_FILE.read_text(encoding="utf-8")
-        cls.workflow = WORKFLOW_FILE.read_text(encoding="utf-8") if WORKFLOW_FILE.exists() else ""
+        cls.historical_workflow = (
+            HISTORICAL_V1_0_2_WORKFLOW_FILE.read_text(encoding="utf-8")
+            if HISTORICAL_V1_0_2_WORKFLOW_FILE.exists()
+            else ""
+        )
 
-    def test_v1_0_2_is_the_single_internal_version(self) -> None:
-        self.assertEqual(self.version, "V1.0.2")
+    def test_v1_0_3_is_the_single_internal_version(self) -> None:
+        self.assertEqual(self.version, "V1.0.3")
 
     def test_read_only_starts_the_hardware_controller_in_listen_only_mode(self) -> None:
         self.assertIn("TWAI_MODE_LISTEN_ONLY", self.twai)
@@ -63,14 +69,14 @@ class CanRestartSafetyRegressionTests(unittest.TestCase):
         self.assertIn("CONFIG_TWAI_ERRATA_FIX_LISTEN_ONLY_DOM=y", self.sdkconfig)
         self.assertIn("ESP_INTR_FLAG_IRAM", self.twai)
 
-    def test_release_workflow_builds_tests_and_uploads_the_ota_binary(self) -> None:
-        self.assertIn('branches: ["V1.0.2"]', self.workflow)
-        self.assertIn("python -m unittest discover", self.workflow)
-        self.assertIn("pio test -e native_nag", self.workflow)
-        self.assertIn("pio test -e native_twai", self.workflow)
-        self.assertIn("pio run -e wifi_nag_ESP32_S3_CAN", self.workflow)
-        self.assertIn("WIFI-NAG-V1.0.2-OTA.bin", self.workflow)
-        self.assertIn("gh release", self.workflow)
+    def test_historical_v1_0_2_release_workflow_is_preserved(self) -> None:
+        self.assertIn('branches: ["V1.0.2"]', self.historical_workflow)
+        self.assertIn("python -m unittest discover", self.historical_workflow)
+        self.assertIn("pio test -e native_nag", self.historical_workflow)
+        self.assertIn("pio test -e native_twai", self.historical_workflow)
+        self.assertIn("pio run -e wifi_nag_ESP32_S3_CAN", self.historical_workflow)
+        self.assertIn("WIFI-NAG-V1.0.2-OTA.bin", self.historical_workflow)
+        self.assertIn("gh release", self.historical_workflow)
 
 
 if __name__ == "__main__":

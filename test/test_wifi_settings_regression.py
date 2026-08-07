@@ -4,7 +4,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-UI_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.h"
+UI_BASE_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.base.h"
+UI_WRAPPER_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.h"
 DASH_FILE = ROOT / "include" / "web" / "mcp2515_dashboard.h"
 GATEWAY_FILE = ROOT / "include" / "web" / "dash_gateway.h"
 RUNTIME_FILE = ROOT / "src" / "espidf_runtime.cpp"
@@ -13,7 +14,8 @@ RUNTIME_FILE = ROOT / "src" / "espidf_runtime.cpp"
 class WifiNagRegressionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.ui = UI_FILE.read_text(encoding="utf-8")
+        cls.ui = UI_BASE_FILE.read_text(encoding="utf-8-sig")
+        cls.ui_wrapper = UI_WRAPPER_FILE.read_text(encoding="utf-8-sig")
         cls.dash = DASH_FILE.read_text(encoding="utf-8")
         cls.gateway = GATEWAY_FILE.read_text(encoding="utf-8")
         cls.runtime = RUNTIME_FILE.read_text(encoding="utf-8")
@@ -21,6 +23,16 @@ class WifiNagRegressionTests(unittest.TestCase):
     def assertHasUiId(self, element_id: str) -> None:
         pattern = rf'\bid=(?:"{re.escape(element_id)}"|{re.escape(element_id)}\b)'
         self.assertRegex(self.ui, pattern)
+
+    def test_generated_ui_wrapper_loads_real_base_page(self) -> None:
+        base_include = '#include "web/mcp2515_dashboard_ui.base.h"'
+        extension_include = '#include "web/nag_sweep_dashboard.h"'
+        self.assertEqual(self.ui_wrapper.count(base_include), 1)
+        self.assertIn(extension_include, self.ui_wrapper)
+        self.assertLess(
+            self.ui_wrapper.index(base_include),
+            self.ui_wrapper.index(extension_include),
+        )
 
     def test_wifi_ui_has_expected_fields(self) -> None:
         required_ids = [

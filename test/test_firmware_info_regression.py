@@ -5,24 +5,32 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_FILE = ROOT / "VERSION"
+RELEASE_NOTES_FILE = ROOT / "RELEASE_NOTES_V1.0.3.md"
 CMAKE_FILE = ROOT / "CMakeLists.txt"
 DASH_FILE = ROOT / "include" / "web" / "mcp2515_dashboard.h"
 UI_SOURCE_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.src.h"
-UI_GENERATED_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.h"
+UI_BASE_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.base.h"
+UI_WRAPPER_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.h"
 
 
 class FirmwareInfoRegressionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.version = VERSION_FILE.read_text(encoding="utf-8").strip()
+        cls.release_notes = RELEASE_NOTES_FILE.read_text(encoding="utf-8")
         cls.cmake = CMAKE_FILE.read_text(encoding="utf-8")
         cls.dash = DASH_FILE.read_text(encoding="utf-8")
         cls.ui_source = UI_SOURCE_FILE.read_text(encoding="utf-8-sig")
-        cls.ui_generated = UI_GENERATED_FILE.read_text(encoding="utf-8-sig")
+        cls.ui_base = UI_BASE_FILE.read_text(encoding="utf-8-sig")
+        cls.ui_wrapper = UI_WRAPPER_FILE.read_text(encoding="utf-8-sig")
 
-    def test_version_file_is_single_v1_0_2_source(self) -> None:
-        self.assertEqual(self.version, "V1.0.2")
+    def test_version_file_is_single_v1_0_3_source(self) -> None:
+        self.assertEqual(self.version, "V1.0.3")
         self.assertNotIn("3.0.0-beta.5", self.version)
+
+    def test_v1_0_3_release_notes_match_internal_version(self) -> None:
+        self.assertIn("# WIFI-NAG V1.0.3", self.release_notes)
+        self.assertIn("`V1.0.3`", self.release_notes)
 
     def test_espidf_internal_version_comes_from_version_file(self) -> None:
         self.assertRegex(
@@ -47,8 +55,18 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
         self.assertIn(persist_call, self.dash)
         self.assertLess(self.dash.index(success_guard), self.dash.index(persist_call))
 
+    def test_generated_ui_wrapper_loads_real_base_page(self) -> None:
+        base_include = '#include "web/mcp2515_dashboard_ui.base.h"'
+        extension_include = '#include "web/nag_sweep_dashboard.h"'
+        self.assertEqual(self.ui_wrapper.count(base_include), 1)
+        self.assertIn(extension_include, self.ui_wrapper)
+        self.assertLess(
+            self.ui_wrapper.index(base_include),
+            self.ui_wrapper.index(extension_include),
+        )
+
     def test_firmware_update_card_has_exactly_required_metadata_fields(self) -> None:
-        for label, ui in (("source", self.ui_source), ("generated", self.ui_generated)):
+        for label, ui in (("source", self.ui_source), ("base", self.ui_base)):
             with self.subTest(file=label):
                 for element_id in ("fw-version", "fw-partition", "fw-ota-time"):
                     self.assertRegex(ui, rf'\bid=(?:"{element_id}"|{element_id}\b)')
@@ -59,8 +77,11 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
                 self.assertIn("/update?ota_time=", ui)
 
     def test_ui_loads_firmware_metadata_without_enabling_live_monitor(self) -> None:
-        self.assertIn("async function loadFirmwareInfo()", self.ui_source)
-        self.assertIn("loadFirmwareInfo();", self.ui_source)
+        for label, ui in (("source", self.ui_source), ("base", self.ui_base)):
+            with self.subTest(file=label):
+                self.assertIn("async function loadFirmwareInfo()", ui)
+                self.assertIn("loadFirmwareInfo();", ui)
+
         function = re.search(
             r"async function loadFirmwareInfo\(\)\{(?P<body>.*?)\n\}",
             self.ui_source,
@@ -71,12 +92,21 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
         self.assertNotIn("systemStatusEnabled", function.group("body"))
 
     def test_old_repository_versions_are_not_left_in_runtime_code(self) -> None:
-        for path in [VERSION_FILE, CMAKE_FILE, DASH_FILE, UI_SOURCE_FILE, UI_GENERATED_FILE]:
+        runtime_files = [
+            VERSION_FILE,
+            CMAKE_FILE,
+            DASH_FILE,
+            UI_SOURCE_FILE,
+            UI_BASE_FILE,
+            UI_WRAPPER_FILE,
+        ]
+        for path in runtime_files:
             text = path.read_text(encoding="utf-8-sig")
             with self.subTest(path=path.as_posix()):
                 self.assertNotIn("3.0.0-beta.5", text)
                 self.assertNotIn("V1.0.0", text)
                 self.assertNotIn("V1.0.1", text)
+                self.assertNotIn("V1.0.2", text)
 
 
 if __name__ == "__main__":
