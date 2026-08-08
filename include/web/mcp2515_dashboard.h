@@ -829,6 +829,13 @@ static void handleRoot()
 #endif
 }
 
+static void handleLegacyDashboardRedirect()
+{
+    server.sendHeader("Location", "/", true);
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(302, "text/plain", "Moved");
+}
+
 static void handleStatus()
 {
     if (canOnline && millis() - lastFrameMs > 10000)
@@ -2274,6 +2281,8 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     ArduinoOTA.begin();
 
     server.on("/", HTTP_GET, handleRoot);
+    server.on("/dashboard", HTTP_GET, handleLegacyDashboardRedirect);
+    server.on("/legacy-dashboard", HTTP_GET, handleLegacyDashboardRedirect);
     server.on("/status", HTTP_GET, handleStatus);
     server.on("/config", HTTP_POST, handleConfig);
 #if defined(NAG_KILLER)
