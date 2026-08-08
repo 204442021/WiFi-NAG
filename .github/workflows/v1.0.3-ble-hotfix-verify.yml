@@ -6,11 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-
-concurrency:
-  group: v1.0.3-ble-dashboard-hotfix-${{ github.ref }}
-  cancel-in-progress: true
+  contents: write
 
 jobs:
   targeted-regression:
@@ -19,6 +15,59 @@ jobs:
     steps:
       - name: Checkout hotfix branch
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply minimal fail-open hotfix on GitHub branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("include/ble/bridge_webui.h")
+          text = path.read_text(encoding="utf-8")
+          old_marker = '''    const marker='<div class="subsec" id="wifi-hotspot-section"';'''
+          new_marker = r'''    const hotspotTag=/<div\b[^>]*\bid\s*=\s*(?:"wifi-hotspot-section"|'wifi-hotspot-section'|wifi-hotspot-section)(?=[\s>])[^>]*>/i;'''
+          old_block = '''    if(!html.includes(marker))throw new Error('BLE card insertion point missing');
+              html=html.replace(marker,card+marker);
+              document.open();document.write(html);document.close();'''
+          new_block = '''    const hotspot=hotspotTag.exec(html);
+              if(hotspot){
+                html=html.slice(0,hotspot.index)+card+html.slice(hotspot.index);
+              }else{
+                console.warn('BLE card insertion point missing; showing dashboard without BLE card');
+              }
+              document.open();document.write(html);document.close();'''
+
+          if old_marker not in text:
+              if new_marker not in text:
+                  raise SystemExit("expected BLE marker block not found")
+          else:
+              if text.count(old_marker) != 1:
+                  raise SystemExit("unexpected BLE marker occurrence count")
+              text = text.replace(old_marker, new_marker, 1)
+
+          if old_block not in text:
+              if new_block not in text:
+                  raise SystemExit("expected BLE insertion block not found")
+          else:
+              if text.count(old_block) != 1:
+                  raise SystemExit("unexpected BLE insertion block occurrence count")
+              text = text.replace(old_block, new_block, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          if git diff --quiet -- include/ble/bridge_webui.h; then
+            echo "Hotfix already present"
+          else
+            git config user.name "204442021"
+            git config user.email "130523484+204442021@users.noreply.github.com"
+            git add include/ble/bridge_webui.h
+            git commit -m "fix: fail open when BLE dashboard insertion is unavailable"
+            git push origin HEAD:V1.0.3-BLE后台热修复
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
