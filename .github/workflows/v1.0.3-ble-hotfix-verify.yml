@@ -26,4 +26,4 @@ jobs:
           python-version: "3.12"
 
       - name: Run BLE dashboard composition regression
-        run: python -m unittest test.test_ble_dashboard_composition_regression -v
+        run: python -m unittest discover -s test -p "test_ble_dashboard_composition_regression.py" -v
