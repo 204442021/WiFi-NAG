@@ -2,24 +2,13 @@
 
 #ifdef ESP_PLATFORM
 
-#include <cstdlib>
-#include <cstring>
 #include "handlers.h"
-#include "web/nag_sweep_ui_patch.h"
 
-// Extends the existing compatibility WebServer without changing its public
-// dashboard API.  It adds a small persisted sweep-range endpoint and appends a
-// gzip-compressed UI patch to the generated dashboard page.
+// Extends the compatibility WebServer with persisted sweep-range API routes.
 class NagSweepWebServer : public WebServer
 {
 public:
     explicit NagSweepWebServer(uint16_t port) : WebServer(port) {}
-
-    ~NagSweepWebServer()
-    {
-        if (patchedHtml_)
-            std::free(patchedHtml_);
-    }
 
     void begin()
     {
@@ -29,27 +18,10 @@ public:
         WebServer::begin();
     }
 
-    void sendRaw(int code, const char *type, const char *body, size_t len)
-    {
-        if (!body || !type || std::strcmp(type, "text/html") != 0 ||
-            NAG_SWEEP_UI_PATCH_GZ_LEN == 0 || !preparePatchedHtml(body, len))
-        {
-            WebServer::sendRaw(code, type, body, len);
-            return;
-        }
-
-        WebServer::sendRaw(code, type, reinterpret_cast<const char *>(patchedHtml_), patchedHtmlLen_);
-    }
-
 private:
     static constexpr const char *kPrefsNamespace = "ADunlock";
     static constexpr const char *kMinKey = "nag_sw_min";
     static constexpr const char *kMaxKey = "nag_sw_max";
-
-    uint8_t *patchedHtml_ = nullptr;
-    size_t patchedHtmlLen_ = 0;
-    const char *patchedSource_ = nullptr;
-    size_t patchedSourceLen_ = 0;
 
     void loadSweepPrefs()
     {
@@ -105,36 +77,6 @@ private:
         json += String((unsigned int)nagSweepMaxSecondsValue());
         json += "}";
         this->send(200, "application/json", json);
-    }
-
-    bool preparePatchedHtml(const char *body, size_t len)
-    {
-        if (patchedHtml_ && patchedSource_ == body && patchedSourceLen_ == len)
-            return true;
-
-        if (patchedHtml_)
-        {
-            std::free(patchedHtml_);
-            patchedHtml_ = nullptr;
-        }
-
-        const size_t combinedLen = len + NAG_SWEEP_UI_PATCH_GZ_LEN;
-        uint8_t *combined = static_cast<uint8_t *>(std::malloc(combinedLen));
-        if (!combined)
-        {
-            patchedHtmlLen_ = 0;
-            patchedSource_ = nullptr;
-            patchedSourceLen_ = 0;
-            return false;
-        }
-
-        std::memcpy(combined, body, len);
-        std::memcpy(combined + len, NAG_SWEEP_UI_PATCH_GZ, NAG_SWEEP_UI_PATCH_GZ_LEN);
-        patchedHtml_ = combined;
-        patchedHtmlLen_ = combinedLen;
-        patchedSource_ = body;
-        patchedSourceLen_ = len;
-        return true;
     }
 };
 

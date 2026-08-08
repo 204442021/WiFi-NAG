@@ -167,6 +167,11 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .nag-range-grid .sniff-btn{white-space:nowrap}
 .nag-torque-status{display:inline-flex;flex-wrap:wrap;gap:5px;margin-top:5px}
 .nag-status-pill{display:inline-flex;padding:2px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg2);color:var(--tx2);line-height:1.4}
+.nag-sweep-grid{display:grid;grid-template-columns:minmax(72px,1fr) minmax(72px,1fr) auto;gap:6px;width:300px;max-width:100%;align-items:end}
+.nag-sweep-field{display:flex;flex-direction:column;gap:3px}
+.nag-sweep-field span{font-size:10px;color:var(--tx3);text-align:center}
+.nag-sweep-field .sniff-input{text-align:center}
+.nag-sweep-grid .sniff-btn{white-space:nowrap}
 .gateway-profile-btn.active,.gateway-upstream-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
 /* Buttons */
 .btn-row{display:flex;gap:8px;margin-top:14px}
@@ -325,6 +330,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
   .card-min-btn{grid-column:3;grid-row:1}
   .setting-row{gap:10px}
   body.wifi-nag #can-write-row,
+  body.wifi-nag #nag-sweep-row,
   body.wifi-nag #nag-mode-row,
   body.wifi-nag #nag-av2-row{flex-direction:column;align-items:stretch}
   body.wifi-nag #can-write-row .tgl{align-self:flex-end;margin-left:0;margin-top:-4px}
@@ -333,6 +339,9 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
   .nag-range-grid{width:100%;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
   .nag-range-grid .sniff-btn{grid-column:1 / -1;min-height:40px}
   .nag-range-grid .sniff-input{min-height:40px;font-size:14px}
+  .nag-sweep-grid{width:100%;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+  .nag-sweep-grid .sniff-btn{grid-column:1 / -1;min-height:40px}
+  .nag-sweep-field .sniff-input{min-height:40px;font-size:14px}
 }
 </style>
 </head>
@@ -457,6 +466,17 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
           <div class="setting-desc">OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes. <span id="nag-echo-meta">echo: --</span></div>
         </div>
         <label class="tgl"><input type="checkbox" id="can-write-tgl" onchange="saveCanWrite()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+      </div>
+      <div class="setting-row nag-only" id="nag-sweep-row">
+        <div class="setting-info">
+          <div class="setting-name" id="nag-sweep-name">扫动时间</div>
+          <div class="setting-desc"><span id="nag-sweep-desc">每次写入后在范围内随机等待；可设置 1–30 秒，默认 5–8 秒。</span> <span class="nag-status-pill" id="nag-sweep-meta">当前：5–8 秒随机</span></div>
+        </div>
+        <div class="nag-sweep-grid">
+          <label class="nag-sweep-field"><span id="nag-sweep-min-label">最短（秒）</span><input class="sniff-input" id="nag-sweep-min" type="number" min="1" max="30" step="1" value="5" onchange="previewNagSweepRange()"></label>
+          <label class="nag-sweep-field"><span id="nag-sweep-max-label">最长（秒）</span><input class="sniff-input" id="nag-sweep-max" type="number" min="1" max="30" step="1" value="8" onchange="previewNagSweepRange()"></label>
+          <button type="button" class="sniff-btn" id="nag-sweep-save" onclick="saveNagSweepRange()">保存</button>
+        </div>
       </div>
       <div class="setting-row nag-only" id="nag-mode-row">
         <div class="setting-info">
@@ -806,6 +826,7 @@ let networkPerformanceMode=localStorage.getItem('netPerfMode')!=='0';
 let uiModeSetting=localStorage.getItem('uiMode')||'auto';
 let uiModeEffective='phone';
 const pollLocks={};
+const nagSweepState={minSec:5,maxSec:8,saving:false,message:'',messageOk:true};
 
 function normalizeUiMode(v){
   v=String(v||'auto').toLowerCase();
@@ -993,6 +1014,77 @@ async function runPoll(name,fn){
 
 function waitMs(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 
+function normalizeNagSweepRange(minSec,maxSec){
+  const clamp=(value,fallback)=>{
+    const parsed=parseInt(value,10);
+    return Math.max(1,Math.min(30,Number.isFinite(parsed)?parsed:fallback));
+  };
+  let min=clamp(minSec,5),max=clamp(maxSec,8);
+  if(min>max)[min,max]=[max,min];
+  return{minSec:min,maxSec:max};
+}
+function nagSweepText(cn,en){return dashLang==='zh'?cn:en;}
+function renderNagSweep(){
+  const min=$('nag-sweep-min'),max=$('nag-sweep-max'),meta=$('nag-sweep-meta'),save=$('nag-sweep-save');
+  if(!min||!max||!meta||!save)return;
+  setText('nag-sweep-name',nagSweepText('扫动时间','Sweep Time'));
+  setText('nag-sweep-desc',nagSweepText('每次写入后在范围内随机等待；可设置 1–30 秒，默认 5–8 秒。','After each write, wait a random time in this range. Adjustable 1–30 s; default 5–8 s.'));
+  setText('nag-sweep-min-label',nagSweepText('最短（秒）','Min (s)'));
+  setText('nag-sweep-max-label',nagSweepText('最长（秒）','Max (s)'));
+  if(document.activeElement!==min)min.value=String(nagSweepState.minSec);
+  if(document.activeElement!==max)max.value=String(nagSweepState.maxSec);
+  save.textContent=nagSweepState.saving?nagSweepText('保存中...','Saving...'):nagSweepText('保存','Save');
+  save.disabled=nagSweepState.saving;
+  meta.textContent=nagSweepState.message||(
+    nagSweepText('当前：','Current: ')+nagSweepState.minSec+'–'+nagSweepState.maxSec+nagSweepText(' 秒随机',' s random')
+  );
+  meta.style.color=nagSweepState.message?(nagSweepState.messageOk?'var(--ok)':'var(--err)'):'';
+}
+function previewNagSweepRange(){
+  const min=$('nag-sweep-min'),max=$('nag-sweep-max'),meta=$('nag-sweep-meta');
+  if(!min||!max||!meta)return;
+  const next=normalizeNagSweepRange(min.value,max.value);
+  min.value=String(next.minSec);max.value=String(next.maxSec);
+  meta.textContent=nagSweepText('待保存：','Pending: ')+next.minSec+'–'+next.maxSec+nagSweepText(' 秒',' s');
+  meta.style.color='';
+}
+async function loadNagSweepRange(){
+  try{
+    const response=await fetch('/api/nag-sweep',{cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const data=await response.json();
+    const next=normalizeNagSweepRange(data&&data.minSec,data&&data.maxSec);
+    nagSweepState.minSec=next.minSec;nagSweepState.maxSec=next.maxSec;nagSweepState.message='';
+  }catch(error){
+    nagSweepState.message=nagSweepText('扫动时间读取失败：','Sweep time load failed: ')+(error&&error.message?error.message:'network');
+    nagSweepState.messageOk=false;
+  }
+  renderNagSweep();
+}
+async function saveNagSweepRange(){
+  if(nagSweepState.saving)return;
+  const min=$('nag-sweep-min'),max=$('nag-sweep-max');
+  if(!min||!max)return;
+  const next=normalizeNagSweepRange(min.value,max.value);
+  nagSweepState.minSec=next.minSec;nagSweepState.maxSec=next.maxSec;
+  nagSweepState.saving=true;nagSweepState.message='';renderNagSweep();
+  try{
+    const body=new URLSearchParams();body.set('minSec',String(next.minSec));body.set('maxSec',String(next.maxSec));
+    const response=await fetch('/api/nag-sweep',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const data=await response.json();
+    const saved=normalizeNagSweepRange(data&&data.minSec,data&&data.maxSec);
+    nagSweepState.minSec=saved.minSec;nagSweepState.maxSec=saved.maxSec;
+    nagSweepState.message=nagSweepText('扫动时间已保存','Sweep time saved');nagSweepState.messageOk=true;
+  }catch(error){
+    nagSweepState.message=nagSweepText('扫动时间保存失败：','Sweep time save failed: ')+(error&&error.message?error.message:'network');
+    nagSweepState.messageOk=false;
+  }finally{
+    nagSweepState.saving=false;renderNagSweep();
+  }
+}
+function initNagSweepUi(){renderNagSweep();loadNagSweepRange();}
+
 function orderDashboardCards(){
   const stat=document.querySelector('.stat-grid');
   if(!stat||!stat.parentNode)return;
@@ -1172,6 +1264,7 @@ function toggleLanguage(){
   applyDashboardI18n(document.body);
   const t=document.documentElement.getAttribute('data-theme')||'dark';
   $('theme-btn').innerHTML=t==='dark'?'&#9788; '+trText('Light'):'&#9790; '+trText('Dark');
+  renderNagSweep();
 }
 function showSafetyNotice(){
   const m=$('safety-modal');

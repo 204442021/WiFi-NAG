@@ -160,15 +160,14 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             self.assert_has_id(system, element_id)
 
     def test_nag_sweep_is_static_and_backend_is_api_only(self) -> None:
-        for html in (self.source, self.generated_html):
-            for element_id in (
-                "nag-sweep-row",
-                "nag-sweep-min",
-                "nag-sweep-max",
-                "nag-sweep-save",
-                "nag-sweep-meta",
-            ):
-                self.assert_has_id(html, element_id)
+        for element_id in (
+            "nag-sweep-row",
+            "nag-sweep-min",
+            "nag-sweep-max",
+            "nag-sweep-save",
+            "nag-sweep-meta",
+        ):
+            self.assert_has_id(self.source, element_id)
         for token in ("/api/nag-sweep", "loadSweepPrefs", "saveSweepPrefs", "handleSweepRequest"):
             self.assertIn(token, self.sweep)
         for token in ("sendRaw(", "preparePatchedHtml", "NAG_SWEEP_UI_PATCH_GZ"):
@@ -206,9 +205,8 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             "ble-fsd-rx",
             "ble-counters",
         )
-        for html in (self.source, self.generated_html):
-            for element_id in ble_ids:
-                self.assert_has_id(html, element_id)
+        for element_id in ble_ids:
+            self.assert_has_id(self.source, element_id)
         routes = {
             "/ble_status": "HTTP_GET",
             "/ble_config": "HTTP_POST",

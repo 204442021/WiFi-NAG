@@ -23,8 +23,6 @@ import htmlmin
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "include" / "web" / "mcp2515_dashboard_ui.src.h"
 DST = ROOT / "include" / "web" / "mcp2515_dashboard_ui.base.h"
-PATCH_SRC = ROOT / "include" / "web" / "nag_sweep_ui_patch.src.html"
-PATCH_DST = ROOT / "include" / "web" / "nag_sweep_ui_patch.h"
 
 
 def terser_minify(code: str) -> str:
@@ -118,25 +116,3 @@ print(
     f"gzip: {raw_len} -> {gz_len} bytes ({100 * gz_len / raw_len:.1f}% of minified, "
     f"{100 * gz_len / before:.1f}% of original)"
 )
-
-
-if PATCH_SRC.exists():
-    patch_source = PATCH_SRC.read_bytes()
-    patch_gz = gzip.compress(patch_source, compresslevel=9, mtime=0)
-    patch_body = []
-    patch_body.append("#pragma once")
-    patch_body.append("")
-    patch_body.append("#include <stddef.h>")
-    patch_body.append("#include <stdint.h>")
-    patch_body.append("")
-    patch_body.append("// A second standards-compliant gzip member appended to the existing dashboard")
-    patch_body.append("// response. Browsers decode concatenated gzip members as one HTML stream, so")
-    patch_body.append("// this small script can extend the generated dashboard without hand-editing")
-    patch_body.append("// the generated 0.29 MB byte array.")
-    patch_body.append("static const uint8_t NAG_SWEEP_UI_PATCH_GZ[] = {")
-    patch_body.append("    " + hex_array(patch_gz))
-    patch_body.append("};")
-    patch_body.append(f"static constexpr size_t NAG_SWEEP_UI_PATCH_GZ_LEN = {len(patch_gz)};")
-    patch_body.append("")
-    PATCH_DST.write_text("\n".join(patch_body), encoding="utf-8")
-    print(f"patch gzip: {len(patch_source)} -> {len(patch_gz)} bytes")
