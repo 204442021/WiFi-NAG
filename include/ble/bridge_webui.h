@@ -17,7 +17,7 @@ static const char BLE_BRIDGE_SHELL[] PROGMEM = R"BLESH(<!doctype html>
     const response=await fetch('/dashboard',{cache:'no-store'});
     if(!response.ok)throw new Error('HTTP '+response.status);
     let html=await response.text();
-    const marker='<div class="subsec" id="wifi-hotspot-section"';
+    const hotspotTag=/<div\b[^>]*\bid\s*=\s*(?:"wifi-hotspot-section"|'wifi-hotspot-section'|wifi-hotspot-section)(?=[\s>])[^>]*>/i;
     const card=`
   <div class="subsec" id="ble-bridge-section" data-subkey="config-ble-bridge">
     <div class="subsec-head">
@@ -59,8 +59,12 @@ static const char BLE_BRIDGE_SHELL[] PROGMEM = R"BLESH(<!doctype html>
   </div>
   <script src="/ble_ui.js"><\/script>
 `;
-    if(!html.includes(marker))throw new Error('BLE card insertion point missing');
-    html=html.replace(marker,card+marker);
+    const hotspot=hotspotTag.exec(html);
+    if(hotspot){
+      html=html.slice(0,hotspot.index)+card+html.slice(hotspot.index);
+    }else{
+      console.warn('BLE card insertion point missing; showing dashboard without BLE card');
+    }
     document.open();document.write(html);document.close();
   }catch(error){document.getElementById('loading').textContent='页面加载失败：'+error.message;}
 })();
