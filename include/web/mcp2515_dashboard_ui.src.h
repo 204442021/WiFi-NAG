@@ -879,6 +879,7 @@ let uiModeEffective='phone';
 const pollLocks={};
 const nagSweepState={minSec:5,maxSec:8,saving:false,message:'',messageOk:true};
 let bleStatusTimer=null;
+let bleStatusLoading=false;
 
 function normalizeUiMode(v){
   v=String(v||'auto').toLowerCase();
@@ -1145,8 +1146,13 @@ function bleShortId(value){return value?('0x'+Number(value).toString(16).toUpper
 function bleGearName(value){return({0:'无',1:'D',2:'R'}[Number(value)]||('未知('+value+')'));}
 function bleDirectionName(value){return({2:'R',3:'D'}[Number(value)]||('无/未知('+value+')'));}
 async function bleLoadStatus(){
+  if(bleStatusLoading)return;
+  bleStatusLoading=true;
+  let timeout=null;
   try{
-    const response=await fetch('/ble_status',{cache:'no-store'});
+    const controller=new AbortController();
+    timeout=setTimeout(()=>controller.abort(),1500);
+    const response=await fetch('/ble_status',{cache:'no-store',signal:controller.signal});
     const data=await response.json();
     if(!response.ok||data.ok===false)throw new Error(data.error||('HTTP '+response.status));
     const enabled=bleElement('ble-enabled'),obstacle=bleElement('ble-obstacle');
@@ -1171,6 +1177,9 @@ async function bleLoadStatus(){
     if(pair)pair.disabled=!!data.peerDeviceId||!!data.pairing;if(unbind)unbind.disabled=!data.peerDeviceId;
   }catch(error){
     bleSetText('ble-card-meta','状态不可用');bleSetMessage(error&&error.message?error.message:'BLE 状态读取失败',false);
+  }finally{
+    if(timeout!==null)clearTimeout(timeout);
+    bleStatusLoading=false;
   }
 }
 async function bleSaveConfig(){

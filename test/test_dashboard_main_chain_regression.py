@@ -17,9 +17,12 @@ SOURCE_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.src.h"
 BASE_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.base.h"
 SWEEP_FILE = ROOT / "include" / "web" / "nag_sweep_dashboard.h"
 MINIFY_FILE = ROOT / "scripts" / "minify_dashboard.py"
+MINIFY_REQUIREMENTS_FILE = ROOT / "scripts" / "requirements-dashboard.txt"
+RUNTIME_HEADER_FILE = ROOT / "include" / "platform" / "espidf_runtime.h"
+RUNTIME_SOURCE_FILE = ROOT / "src" / "espidf_runtime.cpp"
 
 
-def generated_dashboard_html(base_text: str) -> str:
+def generated_dashboard_bytes(base_text: str) -> bytes:
     payload = re.search(
         r"static const uint8_t DASH_HTML_GZ\[\] PROGMEM = \{(?P<body>.*?)\};",
         base_text,
@@ -27,8 +30,14 @@ def generated_dashboard_html(base_text: str) -> str:
     )
     if payload is None:
         raise AssertionError("generated gzip payload not found")
-    data = bytes(int(value, 16) for value in re.findall(r"0x([0-9a-fA-F]{2})", payload.group("body")))
-    return gzip.decompress(data).decode("utf-8")
+    return bytes(
+        int(value, 16)
+        for value in re.findall(r"0x([0-9a-fA-F]{2})", payload.group("body"))
+    )
+
+
+def generated_dashboard_html(base_text: str) -> str:
+    return gzip.decompress(generated_dashboard_bytes(base_text)).decode("utf-8")
 
 
 def extract_element(html: str, element_id: str, tag: str = "section") -> str:
@@ -88,6 +97,8 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         cls.generated_html = generated_dashboard_html(cls.base)
         cls.sweep = SWEEP_FILE.read_text(encoding="utf-8")
         cls.minify = MINIFY_FILE.read_text(encoding="utf-8")
+        cls.runtime_header = RUNTIME_HEADER_FILE.read_text(encoding="utf-8")
+        cls.runtime_source = RUNTIME_SOURCE_FILE.read_text(encoding="utf-8")
 
     def assert_has_id(self, html: str, element_id: str) -> None:
         self.assertRegex(
@@ -101,9 +112,11 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         self.assertNotIn('server.on("/",', self.main)
         self.assertNotIn('server.on("/",', self.ble)
         self.assertIn("static void handleLegacyDashboardRedirect()", self.dash)
-        self.assertIn('server.sendHeader("Location", "/", true);', self.dash)
+        self.assertIn('server.sendHeader("Location", "/");', self.dash)
         self.assertIn('server.sendHeader("Cache-Control", "no-store");', self.dash)
         self.assertIn('server.send(302, "text/plain", "Moved");', self.dash)
+        self.assertIn('void sendHeader(const char *name, const char *value);', self.runtime_header)
+        self.assertIn('code == 302 ? "302 Found"', self.runtime_source)
         self.assertIn('server.on("/dashboard", HTTP_GET, handleLegacyDashboardRedirect);', self.dash)
         self.assertIn(
             'server.on("/legacy-dashboard", HTTP_GET, handleLegacyDashboardRedirect);',
@@ -221,6 +234,9 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             self.assertNotIn(token, self.ble)
         load = extract_javascript_function(self.source, "bleLoadStatus")
         self.assertIn("catch", load)
+        self.assertIn("finally", load)
+        self.assertIn("bleStatusLoading", load)
+        self.assertIn("AbortController", load)
         self.assertIn("ble-card-meta", load)
         self.assertNotIn("document.write", load)
         self.assertNotIn("document.body", load)
@@ -249,6 +265,14 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         self.assertLess(self.wrapper.index(base_include), self.wrapper.index(sweep_include))
         self.assertIn("--check", self.minify)
         self.assertIn("generated payload is stale", self.minify)
+        self.assertEqual(generated_dashboard_bytes(self.base)[9], 0xFF)
+        self.assertIn("compressed[9] = 0xFF", self.minify)
+
+        requirements = MINIFY_REQUIREMENTS_FILE.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(
+            requirements,
+            ["csscompressor==0.9.5", "htmlmin==0.1.12", "rjsmin==1.2.5"],
+        )
 
         before = BASE_FILE.read_bytes()
         before_mtime = BASE_FILE.stat().st_mtime_ns

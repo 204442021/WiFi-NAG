@@ -1027,7 +1027,8 @@ void WebServer::sendRaw(int code, const char *type, const char *body, size_t len
 {
     if (!currentReq_)
         return;
-    httpd_resp_set_status(currentReq_, code == 200 ? "200 OK" : code == 400 ? "400 Bad Request"
+    httpd_resp_set_status(currentReq_, code == 200 ? "200 OK" : code == 302 ? "302 Found"
+                                                            : code == 400   ? "400 Bad Request"
                                                             : code == 404   ? "404 Not Found"
                                                             : code == 500   ? "500 Internal Server Error"
                                                                             : "200 OK");

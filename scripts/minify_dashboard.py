@@ -57,7 +57,10 @@ def build_dashboard_header(source_text: str) -> tuple[str, int, int, int]:
         keep_pre=True,
     )
     raw_len = len(html)
-    compressed = gzip.compress(html.encode("utf-8"), compresslevel=9, mtime=0)
+    compressed = bytearray(gzip.compress(html.encode("utf-8"), compresslevel=9, mtime=0))
+    # RFC 1952 reserves 0xFF for an unknown originating OS. Normalize this
+    # byte because Python/zlib otherwise varies it across host platforms.
+    compressed[9] = 0xFF
     gz_len = len(compressed)
 
     lines = [

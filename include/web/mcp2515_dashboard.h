@@ -831,7 +831,7 @@ static void handleRoot()
 
 static void handleLegacyDashboardRedirect()
 {
-    server.sendHeader("Location", "/", true);
+    server.sendHeader("Location", "/");
     server.sendHeader("Cache-Control", "no-store");
     server.send(302, "text/plain", "Moved");
 }
