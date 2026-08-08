@@ -508,6 +508,45 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
     </div>
   </div>
 
+  <div class="subsec" id="ble-bridge-section" data-subkey="config-ble-bridge">
+    <div class="subsec-head">
+      <div class="subsec-title">BLE 联动 <span class="title-help" title="与 T2CAN-FSD 一对一绑定，转发 0x255/0x12B，并同步 NAG 权威状态。">i</span></div>
+      <div class="subsec-meta" id="ble-card-meta">未连接</div>
+    </div>
+    <div class="subsec-body">
+      <div class="info-box">BLE 为独立低优先级旁路。关闭或断线不会改变本地 NAG，也不会阻塞 0x370 快速路径。</div>
+      <div class="setting-row">
+        <div class="setting-info"><div class="setting-name">BLE 联动总开关</div><div class="setting-desc">关闭后停止扫描、连接和状态同步，本地 NAG 保持原状态。</div></div>
+        <label class="tgl"><input type="checkbox" id="ble-enabled" onchange="bleSaveConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info"><div class="setting-name">障碍物数据转发</div><div class="setting-desc">每 100 ms 发送最新 0x255 / 0x12B；不补发历史帧。</div></div>
+        <label class="tgl"><input type="checkbox" id="ble-obstacle" onchange="bleSaveConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+      </div>
+      <div class="btn-row">
+        <button class="sniff-btn" id="ble-pair-btn" onclick="bleStartPairing()">开始配对（120 秒）</button>
+        <button class="sniff-btn" id="ble-unbind-btn" onclick="bleUnbind()">解除绑定</button>
+        <button class="sniff-btn" onclick="bleLoadStatus()">刷新</button>
+      </div>
+      <div id="ble-action-msg" class="setting-desc" style="margin-top:8px"></div>
+      <div class="sys-grid" style="margin-top:12px">
+        <div class="sys-item"><div class="sys-lbl">FSD 设备</div><div class="sys-val" id="ble-device-state">--</div></div>
+        <div class="sys-item"><div class="sys-lbl">协议状态</div><div class="sys-val" id="ble-protocol">--</div></div>
+        <div class="sys-item"><div class="sys-lbl">本机 / 对端 ID</div><div class="sys-val" id="ble-peer-id">--</div></div>
+        <div class="sys-item"><div class="sys-lbl">RSSI / 最后通信</div><div class="sys-val" id="ble-radio">--</div></div>
+        <div class="sys-item"><div class="sys-lbl">NAG 配置</div><div class="sys-val" id="ble-nag-config">--</div></div>
+        <div class="sys-item"><div class="sys-lbl">NAG 运行</div><div class="sys-val" id="ble-nag-runtime">--</div></div>
+        <div class="sys-item"><div class="sys-lbl">FSD 同步</div><div class="sys-val" id="ble-nag-sync">--</div></div>
+        <div class="sys-item"><div class="sys-lbl">Revision / 命令</div><div class="sys-val" id="ble-nag-revision">--</div></div>
+        <div class="sys-item"><div class="sys-lbl">0x255</div><div class="sys-val" id="ble-255">--</div></div>
+        <div class="sys-item"><div class="sys-lbl">0x12B</div><div class="sys-val" id="ble-12b">--</div></div>
+        <div class="sys-item"><div class="sys-lbl">当前方向摘要</div><div class="sys-val" id="ble-summary">--</div></div>
+        <div class="sys-item"><div class="sys-lbl">FSD 接收 / 最后发送</div><div class="sys-val" id="ble-fsd-rx">--</div></div>
+        <div class="sys-item sys-wide"><div class="sys-lbl">诊断计数</div><div class="sys-val" id="ble-counters">--</div></div>
+      </div>
+    </div>
+  </div>
+
   <div class="subsec" id="wifi-hotspot-section" data-subkey="config-wifi-hotspot">
     <div class="subsec-head">
       <div class="subsec-title">WiFi Hotspot <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" data-help-target="ap-info" title="Configure the device hotspot name, password and visibility. Saved in NVS.">i</span></div>
@@ -827,6 +866,7 @@ let uiModeSetting=localStorage.getItem('uiMode')||'auto';
 let uiModeEffective='phone';
 const pollLocks={};
 const nagSweepState={minSec:5,maxSec:8,saving:false,message:'',messageOk:true};
+let bleStatusTimer=null;
 
 function normalizeUiMode(v){
   v=String(v||'auto').toLowerCase();
@@ -1084,6 +1124,74 @@ async function saveNagSweepRange(){
   }
 }
 function initNagSweepUi(){renderNagSweep();loadNagSweepRange();}
+
+function bleElement(id){return document.getElementById(id);}
+function bleSetText(id,value){const el=bleElement(id);if(el)el.textContent=value;}
+function bleSetMessage(message,ok){
+  const el=bleElement('ble-action-msg');if(!el)return;
+  el.textContent=message||'';el.style.color=ok?'var(--ok)':'var(--err)';
+}
+function bleAge(value){return value===null||value===undefined?'--':(value+' ms');}
+function bleShortId(value){return value?('0x'+Number(value).toString(16).toUpperCase().padStart(8,'0')):'未绑定';}
+function bleGearName(value){return({0:'无',1:'D',2:'R'}[Number(value)]||('未知('+value+')'));}
+function bleDirectionName(value){return({2:'R',3:'D'}[Number(value)]||('无/未知('+value+')'));}
+async function bleLoadStatus(){
+  try{
+    const response=await fetch('/ble_status',{cache:'no-store'});
+    const data=await response.json();
+    if(!response.ok||data.ok===false)throw new Error(data.error||('HTTP '+response.status));
+    const enabled=bleElement('ble-enabled'),obstacle=bleElement('ble-obstacle');
+    if(enabled)enabled.checked=!!data.enabled;if(obstacle)obstacle.checked=!!data.obstacleForwarding;
+    const device=data.pairing?'配对中 '+Math.ceil((data.pairingRemainingMs||0)/1000)+'s':(data.bridgeReady?'已连接':(data.connected?'握手中':(data.connecting?'连接中':(data.scanning?'扫描中':'离线'))));
+    bleSetText('ble-card-meta',device);
+    bleSetText('ble-device-state',device+(data.bonded?' · 已绑定':'')+(data.lastDisconnectReason?' · 原因 '+data.lastDisconnectReason:''));
+    bleSetText('ble-protocol',data.protocolName+' · '+(data.subscribed?'Notify 已订阅':'Notify 未订阅'));
+    bleSetText('ble-peer-id',bleShortId(data.deviceId)+' / '+bleShortId(data.peerDeviceId));
+    bleSetText('ble-radio',(data.rssi>-127?data.rssi+' dBm':'--')+' / '+bleAge(data.lastPacketAgeMs));
+    bleSetText('ble-nag-config',data.nagConfigured?'已开启':'已关闭');
+    bleSetText('ble-nag-runtime',data.nagRuntime?'有效':'暂不可用');
+    bleSetText('ble-nag-sync',data.bridgeReady?'已同步':(data.connected?'等待同步':'离线'));
+    const command=data.hasLastRemoteCommand?('#'+data.lastRemoteCommandId+' '+(data.lastRemoteDesired?'远程开启':'远程关闭')):'无';
+    bleSetText('ble-nag-revision',data.nagRevision+' / '+command+' / '+data.lastCommandResultName);
+    bleSetText('ble-255',(data.fresh255?'新鲜':'过期')+' · '+bleAge(data.last255AgeMs)+' · DLC '+(data.dlc255Valid?'4':'异常'));
+    bleSetText('ble-12b',(data.fresh12B?'新鲜':'过期')+' · '+bleAge(data.last12BAgeMs)+' · DLC '+(data.dlc12BValid?'4':'异常'));
+    bleSetText('ble-summary','建议 '+bleGearName(data.suggestedGear)+' / 方向 '+bleDirectionName(data.torqueDirection)+' / Party CAN '+(data.partyCanAlive?'在线':'过期'));
+    bleSetText('ble-fsd-rx',(data.bridgeReady?'正常':'未确认')+' / '+bleAge(data.lastSendAgeMs));
+    bleSetText('ble-counters','obstacle '+data.obstacleTxCount+'/'+data.obstacleTxFailCount+' · state '+data.stateReportCount+' · reconnect '+data.reconnectCount+' · disconnect '+data.disconnectCount+' · CRC '+data.crcFailCount+' · bad '+(data.badLengthCount+data.badMagicCount+data.badVersionCount+data.unknownTypeCount)+' · conflict '+data.revisionConflictCount+' · duplicate '+data.duplicateCommandCount);
+    const pair=bleElement('ble-pair-btn'),unbind=bleElement('ble-unbind-btn');
+    if(pair)pair.disabled=!!data.peerDeviceId||!!data.pairing;if(unbind)unbind.disabled=!data.peerDeviceId;
+  }catch(error){
+    bleSetText('ble-card-meta','状态不可用');bleSetMessage(error&&error.message?error.message:'BLE 状态读取失败',false);
+  }
+}
+async function bleSaveConfig(){
+  try{
+    const enabled=bleElement('ble-enabled'),obstacle=bleElement('ble-obstacle');
+    const body='enabled='+(enabled&&enabled.checked?'1':'0')+'&obstacle='+(obstacle&&obstacle.checked?'1':'0');
+    const response=await fetch('/ble_config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
+    const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'保存失败');
+    bleSetMessage('BLE 配置已保存',true);bleLoadStatus();
+  }catch(error){bleSetMessage(error&&error.message?error.message:'保存失败',false);}
+}
+async function bleStartPairing(){
+  try{
+    const response=await fetch('/ble_pair',{method:'POST'});const data=await response.json();
+    if(!response.ok||!data.ok)throw new Error(data.error||'无法开始配对');
+    bleSetMessage('已开启 120 秒配对窗口',true);bleLoadStatus();
+  }catch(error){bleSetMessage(error&&error.message?error.message:'无法开始配对',false);}
+}
+async function bleUnbind(){
+  if(!confirm('确认解除 FSD 一对一绑定？解除后需重新配对。'))return;
+  try{
+    const response=await fetch('/ble_unbind',{method:'POST'});const data=await response.json();
+    if(!response.ok||!data.ok)throw new Error(data.error||'解除失败');
+    bleSetMessage('已提交解除绑定请求',true);setTimeout(bleLoadStatus,300);
+  }catch(error){bleSetMessage(error&&error.message?error.message:'解除失败',false);}
+}
+function initBleBridgeUi(){
+  bleLoadStatus();
+  if(bleStatusTimer===null)bleStatusTimer=setInterval(()=>{if(!document.hidden)bleLoadStatus();},2000);
+}
 
 function orderDashboardCards(){
   const stat=document.querySelector('.stat-grid');
