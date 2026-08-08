@@ -14,6 +14,8 @@ HOTSPOT_TAG = re.compile(
     re.IGNORECASE,
 )
 
+EXPECTED_JS_LOCATOR = r'''const hotspotTag=/<div\b[^>]*\bid\s*=\s*(?:"wifi-hotspot-section"|'wifi-hotspot-section'|wifi-hotspot-section)(?=[\s>])[^>]*>/i;'''
+
 
 class BleDashboardCompositionRegressionTests(unittest.TestCase):
     @classmethod
@@ -37,8 +39,14 @@ class BleDashboardCompositionRegressionTests(unittest.TestCase):
             with self.subTest(html=html):
                 self.assertIsNotNone(HOTSPOT_TAG.search(html))
 
-    def test_ble_shell_uses_attribute_tolerant_hotspot_locator(self) -> None:
-        self.assertIn("const hotspotTag=/<div\\b[^>]*\\bid\\s*=", self.ble_webui)
+    def test_ble_shell_uses_runtime_valid_javascript_locator(self) -> None:
+        locator_lines = [
+            line.strip()
+            for line in self.ble_webui.splitlines()
+            if "const hotspotTag=" in line
+        ]
+        self.assertEqual(locator_lines, [EXPECTED_JS_LOCATOR])
+        self.assertNotIn(r"const hotspotTag=/<div\\b", self.ble_webui)
         self.assertIn("const hotspot=hotspotTag.exec(html);", self.ble_webui)
         self.assertIn(
             "html.slice(0,hotspot.index)+card+html.slice(hotspot.index)",
