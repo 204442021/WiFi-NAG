@@ -23,3 +23,7 @@
 2. 全新安装或需要清除全部设置时，使用 `WIFI-NAG-V1.0.4-FACTORY-16MB.bin` 从地址 `0x0` 写入。
 3. 完整线刷会清除 NVS、Wi-Fi、BLE 绑定和历史设置；刷写前请确认文件 SHA256。
 4. 设备重启后，确认后台固件版本显示为 `V1.0.4`。
+
+## 默认本地凭据
+
+仓库当前未配置发布用 GitHub Actions Secrets，因此官方通用固件沿用项目示例默认值：热点 `EVtools`、密码 `changeme`、OTA 用户 `admin`、OTA 密码 `changeme`。首次连接后请立即在后台修改热点和 OTA 凭据；自行构建时可通过 `platformio_profile.h` 写入私有值。
