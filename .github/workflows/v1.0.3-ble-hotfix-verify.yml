@@ -1,0 +1,29 @@
+name: V1.0.3 BLE Dashboard Hotfix Verify
+
+on:
+  push:
+    branches: ["V1.0.3-BLE后台热修复"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v1.0.3-ble-dashboard-hotfix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  targeted-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run BLE dashboard composition regression
+        run: python -m unittest test.test_ble_dashboard_composition_regression -v
