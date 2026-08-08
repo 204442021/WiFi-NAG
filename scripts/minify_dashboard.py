@@ -1,118 +1,125 @@
 #!/usr/bin/env python3
-"""Minify + gzip embedded dashboard HTML.
+"""Build or verify the single embedded WiFi-NAG dashboard payload."""
 
-Reads source HTML from mcp2515_dashboard_ui.src.h, minifies HTML/CSS/JS,
-gzips the result, and writes mcp2515_dashboard_ui.base.h with both:
-  - DASH_HTML[]   (raw minified HTML, for native builds and debugging)
-  - DASH_HTML_GZ[] / DASH_HTML_GZ_LEN  (gzip-compressed for HTTP send)
+from __future__ import annotations
 
-mcp2515_dashboard_ui.h is a stable integration wrapper and must not be
-regenerated directly.
-"""
+import argparse
 import gzip
 import re
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
-import rjsmin
 import csscompressor
 import htmlmin
+import rjsmin
+
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "include" / "web" / "mcp2515_dashboard_ui.src.h"
 DST = ROOT / "include" / "web" / "mcp2515_dashboard_ui.base.h"
 
 
-def terser_minify(code: str) -> str:
-    terser = shutil.which("terser")
-    if not terser:
-        return rjsmin.jsmin(code)
-    proc = subprocess.run(
-        [terser, "--compress", "--ecma", "2020"],
-        input=code,
-        text=True,
-        capture_output=True,
-    )
-    if proc.returncode != 0:
-        print(f"warn: terser failed: {proc.stderr}", file=sys.stderr)
-        return rjsmin.jsmin(code)
-    return proc.stdout
-
-
 def minify_blocks(html: str, tag: str, fn) -> str:
     pattern = re.compile(rf"(<{tag}\b[^>]*>)(.*?)(</{tag}>)", re.DOTALL | re.IGNORECASE)
 
-    def repl(match):
+    def replace(match: re.Match[str]) -> str:
         try:
             return match.group(1) + fn(match.group(2)) + match.group(3)
         except Exception as exc:
             print(f"warn: {tag} minify failed: {exc}", file=sys.stderr)
             return match.group(0)
 
-    return pattern.sub(repl, html)
-
-
-text = SRC.read_text(encoding="utf-8") if SRC.exists() else DST.read_text(encoding="utf-8")
-m = re.search(r'R"HTML\((.*)\)HTML";', text, re.DOTALL)
-if not m:
-    print("no HTML payload found", file=sys.stderr)
-    sys.exit(1)
-
-html = m.group(1)
-before = len(html)
-
-html = minify_blocks(html, "style", csscompressor.compress)
-html = minify_blocks(html, "script", terser_minify)
-html = htmlmin.minify(
-    html,
-    remove_comments=True,
-    remove_empty_space=True,
-    remove_all_empty_space=True,
-    reduce_boolean_attributes=True,
-    keep_pre=True,
-)
-
-raw_len = len(html)
-gz = gzip.compress(html.encode("utf-8"), compresslevel=9, mtime=0)
-gz_len = len(gz)
+    return pattern.sub(replace, html)
 
 
 def hex_array(data: bytes, width: int = 16) -> str:
-    out = []
-    for i in range(0, len(data), width):
-        chunk = data[i : i + width]
-        out.append(",".join(f"0x{b:02x}" for b in chunk))
-    return ",\n    ".join(out)
+    rows = []
+    for index in range(0, len(data), width):
+        rows.append(",".join(f"0x{value:02x}" for value in data[index : index + width]))
+    return ",\n    ".join(rows)
 
 
-body = []
-body.append("#pragma once")
-body.append("#ifdef ESP_PLATFORM")
-body.append('#include "platform/espidf_runtime.h"')
-body.append("#else")
-body.append("#include <Arduino.h>")
-body.append("#endif")
-body.append("#include <stddef.h>")
-body.append("#include <stdint.h>")
-body.append("")
-body.append("#ifndef ESP_PLATFORM")
-body.append('static const char DASH_HTML[] PROGMEM = R"HTML(' + html + ')HTML";')
-body.append("#endif")
-body.append("")
-body.append("static const uint8_t DASH_HTML_GZ[] PROGMEM = {")
-body.append("    " + hex_array(gz))
-body.append("};")
-body.append(f"static constexpr size_t DASH_HTML_GZ_LEN = {gz_len};")
-body.append("")
+def build_dashboard_header(source_text: str) -> tuple[str, int, int, int]:
+    match = re.search(r'R"HTML\((.*)\)HTML";', source_text, re.DOTALL)
+    if match is None:
+        raise ValueError("no HTML payload found")
 
-DST.write_text("\n".join(body), encoding="utf-8")
+    html = match.group(1)
+    before = len(html)
+    html = minify_blocks(html, "style", csscompressor.compress)
+    html = minify_blocks(html, "script", rjsmin.jsmin)
+    html = htmlmin.minify(
+        html,
+        remove_comments=True,
+        remove_empty_space=True,
+        remove_all_empty_space=True,
+        reduce_boolean_attributes=True,
+        keep_pre=True,
+    )
+    raw_len = len(html)
+    compressed = gzip.compress(html.encode("utf-8"), compresslevel=9, mtime=0)
+    gz_len = len(compressed)
 
-print(
-    f"html: {before} -> {raw_len} bytes minified ({100 * raw_len / before:.1f}%)"
-)
-print(
-    f"gzip: {raw_len} -> {gz_len} bytes ({100 * gz_len / raw_len:.1f}% of minified, "
-    f"{100 * gz_len / before:.1f}% of original)"
-)
+    lines = [
+        "#pragma once",
+        "#ifdef ESP_PLATFORM",
+        '#include "platform/espidf_runtime.h"',
+        "#else",
+        "#include <Arduino.h>",
+        "#endif",
+        "#include <stddef.h>",
+        "#include <stdint.h>",
+        "",
+        "#ifndef ESP_PLATFORM",
+        'static const char DASH_HTML[] PROGMEM = R"HTML(' + html + ')HTML";',
+        "#endif",
+        "",
+        "static const uint8_t DASH_HTML_GZ[] PROGMEM = {",
+        "    " + hex_array(compressed),
+        "};",
+        f"static constexpr size_t DASH_HTML_GZ_LEN = {gz_len};",
+        "",
+    ]
+    return "\n".join(lines), before, raw_len, gz_len
+
+
+def print_sizes(before: int, raw_len: int, gz_len: int) -> None:
+    print(f"html: {before} -> {raw_len} bytes minified ({100 * raw_len / before:.1f}%)")
+    print(
+        f"gzip: {raw_len} -> {gz_len} bytes "
+        f"({100 * gz_len / raw_len:.1f}% of minified, {100 * gz_len / before:.1f}% of original)"
+    )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="verify that mcp2515_dashboard_ui.base.h matches the source without writing",
+    )
+    args = parser.parse_args()
+
+    try:
+        expected, before, raw_len, gz_len = build_dashboard_header(
+            SRC.read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    if args.check:
+        if not DST.exists() or DST.read_text(encoding="utf-8") != expected:
+            print("generated payload is stale", file=sys.stderr)
+            return 1
+        print_sizes(before, raw_len, gz_len)
+        print("generated payload is current")
+        return 0
+
+    DST.write_text(expected, encoding="utf-8")
+    print_sizes(before, raw_len, gz_len)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
