@@ -14,7 +14,7 @@ concurrency:
 
 env:
   RELEASE_VERSION: V1.0.3
-  RELEASE_TARGET: 06c66b0083265397342ffd44bde0f0015f9f7b7b
+  RELEASE_TARGET: 0ad09a7c03be5c5d6e752b54381b073b867c65ca
   BUILD_ENV: wifi_nag_ESP32_S3_CAN
 
 jobs:
@@ -123,7 +123,7 @@ jobs:
       - name: Upload verified firmware bundle
         uses: actions/upload-artifact@v4
         with:
-          name: WIFI-NAG-V1.0.3-Firmware
+          name: WIFI-NAG-V1.0.3-Firmware-Corrected
           path: |
             ${{ steps.images.outputs.ota }}
             ${{ steps.images.outputs.factory }}
@@ -133,7 +133,27 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish GitHub Release
+      - name: Move V1.0.3 tag to corrected source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: V1.0.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            gh api --method PATCH \
+              "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" \
+              -f sha="$RELEASE_TARGET" \
+              -F force=true >/tmp/tag-update.json
+          else
+            gh api --method POST \
+              "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$TAG" \
+              -f sha="$RELEASE_TARGET" >/tmp/tag-update.json
+          fi
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')" = "$RELEASE_TARGET"
+
+      - name: Publish corrected GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: V1.0.3
@@ -150,6 +170,7 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${assets[@]}" --clobber
             gh release edit "$TAG" \
+              --target "$RELEASE_TARGET" \
               --title "WIFI-NAG V1.0.3" \
               --notes-file "${{ steps.images.outputs.release_notes }}" \
               --latest
@@ -168,19 +189,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
-          test "$(git rev-list -n 1 "$TAG")" = "$RELEASE_TARGET"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')" = "$RELEASE_TARGET"
           gh release view "$TAG" --json tagName,name,isDraft,isPrerelease,assets > /tmp/release.json
+          rm -rf /tmp/release-assets
+          mkdir -p /tmp/release-assets
+          gh release download "$TAG" --dir /tmp/release-assets --clobber
+
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
-          data = json.loads(Path("/tmp/release.json").read_text(encoding="utf-8"))
-          assert data["tagName"] == "V1.0.3"
-          assert data["name"] == "WIFI-NAG V1.0.3"
-          assert not data["isDraft"]
-          assert not data["isPrerelease"]
-          names = {asset["name"] for asset in data["assets"]}
+          release = json.loads(Path("/tmp/release.json").read_text(encoding="utf-8"))
+          assert release["tagName"] == "V1.0.3"
+          assert release["name"] == "WIFI-NAG V1.0.3"
+          assert not release["isDraft"]
+          assert not release["isPrerelease"]
+
+          names = {asset["name"] for asset in release["assets"]}
           required = {
               "WIFI-NAG-V1.0.3-OTA.bin",
               "WIFI-NAG-V1.0.3-FACTORY-16MB.bin",
@@ -190,5 +216,18 @@ jobs:
           }
           missing = required - names
           assert not missing, f"missing release assets: {sorted(missing)}"
-          print(json.dumps(data, ensure_ascii=False, indent=2))
+
+          assets = Path("/tmp/release-assets")
+          manifest = json.loads(
+              (assets / "WIFI-NAG-V1.0.3-MANIFEST.json").read_text(encoding="utf-8")
+          )
+          assert manifest["version"] == "V1.0.3"
+          assert manifest["source_sha"] == os.environ["RELEASE_TARGET"]
+          assert manifest["build_environment"] == os.environ["BUILD_ENV"]
+          assert (assets / "WIFI-NAG-V1.0.3-FACTORY-16MB.bin").stat().st_size == 16777216
+          print(json.dumps({"release": release, "manifest": manifest}, ensure_ascii=False, indent=2))
           PY
+
+          cd /tmp/release-assets
+          sha256sum -c WIFI-NAG-V1.0.3-SHA256SUMS.txt
+          python -m esptool --chip esp32s3 image_info WIFI-NAG-V1.0.3-OTA.bin
