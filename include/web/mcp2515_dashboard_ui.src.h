@@ -11,7 +11,7 @@ static const char DASH_HTML[] PROGMEM = R"HTML(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<title>ev-open-can-tools</title>
+<title>WiFi-NAG</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 [data-theme="dark"]{
@@ -36,11 +36,18 @@ static const char DASH_HTML[] PROGMEM = R"HTML(
 }
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  min-height:100vh;max-width:480px;margin:0 auto;font-size:14px;line-height:1.5;
+  min-height:100vh;width:100%;margin:0;font-size:14px;line-height:1.5;
   transition:background .2s,color .2s}
-@media (min-width:700px){
-  body{width:90vw;max-width:1180px}
-}
+#wifi-nag-main{width:min(100%,920px);margin:0 auto;padding:20px 0 36px}
+.shell-header{min-height:88px;padding:18px 22px 14px;display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--bg);border-bottom:1px solid var(--bd)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand-mark{width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:0 0 42px;background:linear-gradient(145deg,#4c91ff,#2867db);color:#fff;font-size:19px;font-weight:900;box-shadow:0 8px 18px rgba(52,120,246,.24)}
+.brand-copy{min-width:0}.brand-title{font-size:22px;font-weight:850;line-height:1.15;letter-spacing:.1px;white-space:nowrap}
+.brand-sub{margin-top:4px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shell-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.shell-btn{min-height:38px;padding:8px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx);font:700 12px inherit;cursor:pointer;box-shadow:0 2px 8px rgba(35,55,82,.04)}
+.shell-btn:active{transform:translateY(1px)}.shell-btn.theme{color:var(--acc);border-color:var(--accBd);background:var(--accBg)}
+.shell-btn.reboot{color:var(--err)}
 
 /* Header */
 .hdr{padding:20px 16px 0;display:flex;flex-direction:column;gap:4px}
@@ -108,6 +115,32 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .card.collapsed{padding-bottom:12px}
 .card.collapsed .card-hdr{margin-bottom:0}
 .card.collapsed>:not(.card-hdr){display:none !important}
+body.ui-shell .card.ui-main-card{margin:0 14px 14px;padding:0;border:1px solid var(--bd);border-radius:17px;background:var(--card);box-shadow:0 10px 28px rgba(0,0,0,.12);overflow:hidden}
+body.ui-shell .ui-main-card>.card-hdr{min-height:72px;margin:0;padding:14px 17px;display:grid;grid-template-columns:minmax(0,1fr) auto 28px;gap:10px;align-items:center;cursor:pointer;border-bottom:1px solid transparent;background:var(--card)}
+body.ui-shell .ui-main-card:not(.collapsed)>.card-hdr{border-bottom-color:var(--bd)}
+body.ui-shell .ui-main-card>.card-hdr .card-title{display:flex;align-items:center;gap:11px;min-width:0;font-size:17px;font-weight:800;letter-spacing:0;text-transform:none;color:var(--tx)}
+.ui-card-icon{width:38px;height:38px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 38px;border:1px solid transparent}
+.ui-card-icon svg{width:20px;height:20px;display:block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+[data-ui-kind="nag"] .ui-card-icon{color:#12a56f;background:rgba(18,165,111,.1);border-color:rgba(18,165,111,.18)}
+[data-ui-kind="wifi"] .ui-card-icon{color:#3478f6;background:rgba(52,120,246,.1);border-color:rgba(52,120,246,.18)}
+[data-ui-kind="system"] .ui-card-icon{color:#7c63e6;background:rgba(124,99,230,.1);border-color:rgba(124,99,230,.18)}
+[data-ui-kind="firmware"] .ui-card-icon{color:#e09025;background:rgba(224,144,37,.11);border-color:rgba(224,144,37,.2)}
+body.ui-shell .ui-main-card>.card-hdr .card-meta{font-size:11px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px}
+.ui-chevron{width:28px;height:28px;border:0;background:transparent;color:var(--tx3);font-size:18px;line-height:1;transition:transform .18s ease;cursor:pointer}
+.ui-main-card:not(.collapsed) .ui-chevron{transform:rotate(180deg)}
+body.ui-shell .ui-main-card.collapsed>:not(.card-hdr){display:none !important}
+body.ui-shell .card-min-btn,body.ui-shell .subsec-btn{display:none !important}
+body.ui-shell .subsec{margin:12px 16px;padding:15px;border:1px solid var(--bd);border-radius:14px;background:var(--bg2)}
+body.ui-shell .subsec:first-of-type{margin-top:16px}body.ui-shell .subsec:last-child{margin-bottom:16px}
+body.ui-shell .subsec-head{margin:0 0 12px;padding:0 0 10px;border-bottom:1px solid var(--bd);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+body.ui-shell .subsec-title{font-size:15px;font-weight:750;color:var(--tx);word-break:normal}
+body.ui-shell .subsec-meta{font-size:10px;color:var(--tx3);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.ui-shell .subsec.collapsed .subsec-body{display:block}
+body.ui-shell #status-panel{margin:16px;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+body.ui-shell #status-panel .stat,body.ui-shell #status-panel>.btn{border-radius:12px;background:var(--bg2);border:1px solid var(--bd);box-shadow:none}
+body.ui-shell #system-card>.sys-grid{margin:0 16px 16px}
+body.ui-shell #firmware-update-card>.sys-grid{margin:16px 16px 12px}
+body.ui-shell #firmware-update-card>.firmware-body{margin:0 16px 16px}
 .subsec{margin-top:14px;padding-top:12px;border-top:1px solid var(--bd)}
 .subsec:first-child{margin-top:0;padding-top:0;border-top:none}
 .subsec-head{display:grid;grid-template-columns:minmax(110px,1fr) auto auto;align-items:center;column-gap:8px;margin-bottom:8px}
@@ -342,116 +375,40 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
   .nag-sweep-grid{width:100%;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
   .nag-sweep-grid .sniff-btn{grid-column:1 / -1;min-height:40px}
   .nag-sweep-field .sniff-input{min-height:40px;font-size:14px}
+  .shell-header{min-height:76px;padding:14px 12px 10px}.brand-mark{width:36px;height:36px;flex-basis:36px;border-radius:11px;font-size:16px}.brand-title{font-size:19px}.brand-sub{display:none}.shell-btn{min-height:36px;padding:7px 9px;font-size:11px}
+  #wifi-nag-main{padding-top:12px}
+  body.ui-shell .card.ui-main-card{margin-left:10px;margin-right:10px;border-radius:15px}
+  body.ui-shell .ui-main-card>.card-hdr{min-height:64px;padding:12px 13px;grid-template-columns:minmax(0,1fr) auto 24px}
+  body.ui-shell .ui-main-card>.card-hdr .card-title{font-size:15px;gap:9px}.ui-card-icon{width:34px;height:34px;flex-basis:34px;border-radius:10px}.ui-card-icon svg{width:18px;height:18px}
+  body.ui-shell .ui-main-card>.card-hdr .card-meta:not(.sys-monitor){display:none}.sys-monitor span{display:none}
+  body.ui-shell .subsec{margin:10px 11px;padding:13px}body.ui-shell #status-panel{margin:12px;grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.ui-shell #system-card>.sys-grid,body.ui-shell #firmware-update-card>.sys-grid{margin-left:11px;margin-right:11px}
+  body.ui-shell #firmware-update-card>.firmware-body{margin-left:11px;margin-right:11px}
 }
 </style>
 </head>
-<body>
-
-<nav class="car-side" aria-label="Car quick navigation">
-  <div class="car-side-title">EVtools</div>
-  <div class="car-side-sub" id="car-side-mode">Auto UI</div>
-  <button class="car-nav-btn" onclick="scrollCarSection('status-panel')"><span class="car-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 13h4l2-6 4 10 2-4h4"/></svg></span><span>状态显示</span></button>
-  <button class="car-nav-btn nag-nav-only" onclick="scrollCarSection('config-hardware-section')"><span class="car-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"/><path d="M9 12l2 2 4-5"/></svg></span><span>NAG KILLER</span></button>
-  <button class="car-nav-btn" onclick="scrollCarSection('wifi-hotspot-section')"><span class="car-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5a11 11 0 0 1 14 0"/><path d="M8.5 16a6 6 0 0 1 7 0"/><path d="M12 19h.01"/></svg></span><span>WIFI设置</span></button>
-  <button class="car-nav-btn" onclick="scrollCarSection('gateway-section')"><span class="car-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h10"/><path d="M4 17h7"/><path d="M17 15l3 3"/><path d="M20 15l-3 3"/></svg></span><span>DNS过滤</span></button>
-  <button class="car-nav-btn" onclick="scrollCarSection('system-card')"><span class="car-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M4.6 7.5l2.6 1.5"/><path d="M16.8 15l2.6 1.5"/><path d="M19.4 7.5L16.8 9"/><path d="M7.2 15l-2.6 1.5"/><circle cx="12" cy="12" r="4"/></svg></span><span>系统状态</span></button>
-</nav>
-
-<div class="hdr">
-  <div class="hdr-top">
-    <div class="hdr-left">
-      <div class="hdr-title">EVtools WIFI-NAG</div>
-      <span class="hw-badge" id="hw-badge">WIFI-NAG</span>
+<body class="wifi-nag ui-phone ui-shell">
+<header class="shell-header" id="wifi-nag-header">
+  <div class="brand">
+    <div class="brand-mark">W</div>
+    <div class="brand-copy">
+      <div class="brand-title">WiFi-NAG</div>
+      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">Waiting for CAN frames</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
     </div>
-    <button class="theme-btn" onclick="toggleLanguage()" id="lang-btn">中文</button>
-    <button class="theme-btn" onclick="toggleTheme()" id="theme-btn">&#9788; Light</button>
   </div>
-  <div class="hdr-status">
-    <span class="sdot dot-off" id="dot"></span>
-    <span id="hdr-desc">Waiting for CAN frames</span>
+  <div class="shell-actions">
+    <button class="shell-btn" id="lang-btn" type="button" onclick="toggleLanguage()">中文</button>
+    <button class="shell-btn theme" id="theme-btn" type="button" onclick="toggleTheme()">夜间模式</button>
+    <button class="shell-btn reboot" id="reboot-btn" type="button" onclick="reboot()">重启</button>
   </div>
-</div>
+</header>
 
-<div class="ui-mode-strip" id="ui-mode-strip">
-  <span class="ui-mode-label">UI Mode</span>
-  <div class="ui-mode-buttons">
-    <button type="button" class="ui-mode-btn" data-ui-mode="auto" onclick="setUiMode('auto',true)">Auto</button>
-    <button type="button" class="ui-mode-btn" data-ui-mode="car" onclick="setUiMode('car',true)">Car</button>
-    <button type="button" class="ui-mode-btn" data-ui-mode="phone" onclick="setUiMode('phone',true)">Phone</button>
-  </div>
-  <span class="ui-mode-detected" id="ui-mode-detected">Detected: Phone</span>
-</div>
-
-<div class="fps-bar"><div class="fps-fill" id="fps-fill"></div></div>
-
-<div class="stat-grid" id="status-panel">
-  <div class="stat can-only"><div class="stat-lbl">CAN Bus</div><div class="stat-val" id="s-can">Offline</div></div>
-  <div class="stat can-only"><div class="stat-lbl" id="s-inj-lbl">CAN TX</div><div class="stat-val v-dim" id="s-inj">--</div></div>
-  <div class="stat can-only"><div class="stat-lbl" title="Frames received per second / total RX">CAN Frames</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
-  <div class="stat can-only"><div class="stat-lbl">RX</div><div class="stat-val v-acc" id="s-rx">0</div></div>
-  <div class="stat can-only"><div class="stat-lbl">TX</div><div class="stat-val v-acc" id="s-tx">0</div></div>
-  <div class="stat can-only"><div class="stat-lbl">TX Errors</div><div class="stat-val v-dim" id="s-txerr">0</div></div>
-  <div class="stat"><div class="stat-lbl">Uptime</div><div class="stat-val v-dim" id="s-up">0s</div></div>
-  <button class="btn can-only" id="btn-can-toggle" onclick="toggleCanWriteTopButton()">CAN Write On</button>
-  <button class="btn btn-reboot" onclick="reboot()">Reboot</button>
-</div>
-
-<div style="height:12px"></div>
-
-<div class="card" id="system-card">
-  <div class="card-hdr">
-    <div class="card-title">System Status <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Hardware and runtime health reported by the ESP32 firmware.">i</span></div>
-    <div class="card-meta sys-monitor"><span id="sys-summary">Monitoring off</span><label class="tgl" title="Enable live hardware status sampling"><input type="checkbox" id="sys-monitor-tgl" onchange="toggleSystemMonitor()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label></div>
-  </div>
-  <div class="sys-grid">
-    <div class="sys-item"><div class="sys-lbl">Chip</div><div class="sys-val" id="sys-chip">--</div></div>
-    <div class="sys-item"><div class="sys-lbl">CPU</div><div class="sys-val" id="sys-cpu">--</div></div>
-    <div class="sys-item sys-wide"><div class="sys-lbl">Clock / Bus</div><div class="sys-val" id="sys-clocks">--</div></div>
-    <div class="sys-item sys-wide">
-      <div class="sys-lbl">CPU Load</div><div class="sys-val" id="sys-cpu-load">--</div>
-      <div class="sys-bar"><div class="sys-fill" id="sys-cpu0-fill"></div></div>
-      <div class="sys-bar" style="margin-top:4px"><div class="sys-fill" id="sys-cpu1-fill"></div></div>
-    </div>
-    <div class="sys-item"><div class="sys-lbl">Temperature</div><div class="sys-val" id="sys-temp">--</div></div>
-    <div class="sys-item"><div class="sys-lbl">Reset</div><div class="sys-val" id="sys-reset">--</div></div>
-    <div class="sys-item sys-wide"><div class="sys-lbl">Board Specs</div><div class="sys-val" id="sys-board">--</div></div>
-    <div class="sys-item"><div class="sys-lbl">Uptime / Core</div><div class="sys-val" id="sys-runtime">--</div></div>
-    <div class="sys-item"><div class="sys-lbl">Tasks</div><div class="sys-val" id="sys-tasks">--</div></div>
-    <div class="sys-item sys-wide">
-      <div class="sys-lbl">Heap RAM</div><div class="sys-val" id="sys-heap">--</div>
-      <div class="sys-bar"><div class="sys-fill" id="sys-heap-fill"></div></div>
-    </div>
-    <div class="sys-item sys-wide">
-      <div class="sys-lbl">Internal RAM</div><div class="sys-val" id="sys-internal">--</div>
-      <div class="sys-bar"><div class="sys-fill" id="sys-internal-fill"></div></div>
-    </div>
-    <div class="sys-item"><div class="sys-lbl">Largest Block</div><div class="sys-val" id="sys-largest">--</div></div>
-    <div class="sys-item"><div class="sys-lbl">Min Free Heap</div><div class="sys-val" id="sys-minheap">--</div></div>
-    <div class="sys-item sys-wide">
-      <div class="sys-lbl">PSRAM</div><div class="sys-val" id="sys-psram">--</div>
-      <div class="sys-bar"><div class="sys-fill" id="sys-psram-fill"></div></div>
-    </div>
-    <div class="sys-item sys-wide">
-      <div class="sys-lbl">Flash / App</div><div class="sys-val" id="sys-flash">--</div>
-      <div class="sys-bar"><div class="sys-fill" id="sys-app-fill"></div></div>
-    </div>
-    <div class="sys-item sys-wide">
-      <div class="sys-lbl">SPIFFS</div><div class="sys-val" id="sys-spiffs">--</div>
-      <div class="sys-bar"><div class="sys-fill" id="sys-spiffs-fill"></div></div>
-    </div>
-    <div class="sys-item"><div class="sys-lbl">WiFi RSSI</div><div class="sys-val" id="sys-rssi">--</div></div>
-    <div class="sys-item"><div class="sys-lbl">WiFi Mode</div><div class="sys-val" id="sys-wifi-mode">--</div></div>
-    <div class="sys-item"><div class="sys-lbl">AP Clients</div><div class="sys-val" id="sys-apclients">--</div></div>
-    <div class="sys-item"><div class="sys-lbl">Bluetooth LE</div><div class="sys-val" id="sys-ble">--</div></div>
-    <div class="sys-item sys-wide"><div class="sys-lbl">Wireless</div><div class="sys-val" id="sys-wireless">--</div></div>
-    <div class="sys-item sys-wide"><div class="sys-lbl">MAC / Firmware</div><div class="sys-val" id="sys-fw">--</div></div>
-  </div>
-</div>
-
-<div class="card" id="config-card">
-  <div class="card-hdr">
-    <div class="card-title">Configuration <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Device settings for Nag, WiFi, DNS and logging.">i</span></div>
-    <div class="card-meta">Device settings</div>
+<main id="wifi-nag-main">
+<section class="card ui-main-card collapsed" id="config-card" data-ui-kind="nag">
+  <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
+    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"/><path d="M9 12l2 2 4-5"/></svg></span><span>NAG 配置</span></div>
+    <div class="card-meta">NAG / CAN / BLE</div>
+    <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
   </div>
 
   <div class="subsec" id="config-hardware-section" data-subkey="config-hardware">
@@ -546,7 +503,14 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       </div>
     </div>
   </div>
+</section>
 
+<section class="card ui-main-card collapsed" id="wifi-config-card" data-ui-kind="wifi">
+  <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
+    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.5 10.5a12 12 0 0 1 15 0"/><path d="M8 14a7 7 0 0 1 8 0"/><path d="M12 18h.01"/></svg></span><span>Wi-Fi 配置</span></div>
+    <div class="card-meta">热点 · 上网 · 网关</div>
+    <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
+  </div>
   <div class="subsec" id="wifi-hotspot-section" data-subkey="config-wifi-hotspot">
     <div class="subsec-head">
       <div class="subsec-title">WiFi Hotspot <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" data-help-target="ap-info" title="Configure the device hotspot name, password and visibility. Saved in NVS.">i</span></div>
@@ -706,8 +670,54 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       </div>
     </div>
   </div>
+</section>
 
-  <div class="subsec" data-subkey="config-dashboard-log" style="margin-top:14px">
+<section class="card ui-main-card collapsed" id="system-card" data-ui-kind="system">
+  <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
+    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9L7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></span><span>系统状态</span></div>
+    <div class="card-meta sys-monitor"><span id="sys-summary">Monitoring off</span><label class="tgl" title="Enable live hardware status sampling"><input type="checkbox" id="sys-monitor-tgl" onchange="toggleSystemMonitor()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label></div>
+    <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
+  </div>
+  <div class="stat-grid" id="status-panel">
+    <div class="stat can-only"><div class="stat-lbl">CAN Bus</div><div class="stat-val" id="s-can">Offline</div></div>
+    <div class="stat can-only"><div class="stat-lbl" id="s-inj-lbl">CAN TX</div><div class="stat-val v-dim" id="s-inj">--</div></div>
+    <div class="stat can-only"><div class="stat-lbl" title="Frames received per second / total RX">CAN Frames</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
+    <div class="stat can-only"><div class="stat-lbl">RX</div><div class="stat-val v-acc" id="s-rx">0</div></div>
+    <div class="stat can-only"><div class="stat-lbl">TX</div><div class="stat-val v-acc" id="s-tx">0</div></div>
+    <div class="stat can-only"><div class="stat-lbl">TX Errors</div><div class="stat-val v-dim" id="s-txerr">0</div></div>
+    <div class="stat"><div class="stat-lbl">Uptime</div><div class="stat-val v-dim" id="s-up">0s</div></div>
+    <button class="btn can-only" id="btn-can-toggle" onclick="toggleCanWriteTopButton()">CAN Write On</button>
+  </div>
+  <div class="sys-grid">
+    <div class="sys-item"><div class="sys-lbl">Chip</div><div class="sys-val" id="sys-chip">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">CPU</div><div class="sys-val" id="sys-cpu">--</div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">Clock / Bus</div><div class="sys-val" id="sys-clocks">--</div></div>
+    <div class="sys-item sys-wide">
+      <div class="sys-lbl">CPU Load</div><div class="sys-val" id="sys-cpu-load">--</div>
+      <div class="sys-bar"><div class="sys-fill" id="sys-cpu0-fill"></div></div>
+      <div class="sys-bar" style="margin-top:4px"><div class="sys-fill" id="sys-cpu1-fill"></div></div>
+    </div>
+    <div class="sys-item"><div class="sys-lbl">Temperature</div><div class="sys-val" id="sys-temp">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">Reset</div><div class="sys-val" id="sys-reset">--</div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">Board Specs</div><div class="sys-val" id="sys-board">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">Uptime / Core</div><div class="sys-val" id="sys-runtime">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">Tasks</div><div class="sys-val" id="sys-tasks">--</div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">Heap RAM</div><div class="sys-val" id="sys-heap">--</div><div class="sys-bar"><div class="sys-fill" id="sys-heap-fill"></div></div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">Internal RAM</div><div class="sys-val" id="sys-internal">--</div><div class="sys-bar"><div class="sys-fill" id="sys-internal-fill"></div></div></div>
+    <div class="sys-item"><div class="sys-lbl">Largest Block</div><div class="sys-val" id="sys-largest">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">Min Free Heap</div><div class="sys-val" id="sys-minheap">--</div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">PSRAM</div><div class="sys-val" id="sys-psram">--</div><div class="sys-bar"><div class="sys-fill" id="sys-psram-fill"></div></div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">Flash / App</div><div class="sys-val" id="sys-flash">--</div><div class="sys-bar"><div class="sys-fill" id="sys-app-fill"></div></div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">SPIFFS</div><div class="sys-val" id="sys-spiffs">--</div><div class="sys-bar"><div class="sys-fill" id="sys-spiffs-fill"></div></div></div>
+    <div class="sys-item"><div class="sys-lbl">WiFi RSSI</div><div class="sys-val" id="sys-rssi">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">WiFi Mode</div><div class="sys-val" id="sys-wifi-mode">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">AP Clients</div><div class="sys-val" id="sys-apclients">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">Bluetooth LE</div><div class="sys-val" id="sys-ble">--</div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">Wireless</div><div class="sys-val" id="sys-wireless">--</div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">MAC / Firmware</div><div class="sys-val" id="sys-fw">--</div></div>
+  </div>
+
+  <div class="subsec" id="debug-log-section" data-subkey="config-dashboard-log" style="margin-top:14px">
     <div class="subsec-head">
       <div class="subsec-title">Debug Log <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Shows recent WebUI and firmware log lines.">i</span></div>
       <div class="subsec-meta">Recent debug output</div>
@@ -724,19 +734,20 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       <div class="log-box" id="log">Waiting...</div>
     </div>
   </div>
-</div>
+</section>
 
-<div class="card" id="firmware-update-card">
-  <div class="card-hdr">
-    <div class="card-title">Firmware Update <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Manual firmware upload only. Select a local .bin and flash it to the device.">i</span></div>
+<section class="card ui-main-card collapsed" id="firmware-update-card" data-ui-kind="firmware">
+  <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
+    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M5 19h14"/></svg></span><span>固件更新</span></div>
     <div class="card-meta" id="fw-ver">Manual OTA</div>
+    <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
   </div>
   <div class="sys-grid" style="margin:4px 0 12px">
     <div class="sys-item"><div class="sys-lbl">Firmware Version</div><div class="sys-val" id="fw-version">--</div></div>
     <div class="sys-item"><div class="sys-lbl">Current Partition</div><div class="sys-val" id="fw-partition">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">OTA Upload Time</div><div class="sys-val" id="fw-ota-time">--</div></div>
   </div>
-  <div style="margin-top:4px">
+  <div class="firmware-body" style="margin-top:4px">
     <div class="ota-drop" id="ota-drop" onclick="$('ota-file').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
       <input type="file" id="ota-file" accept=".bin" onchange="fileSelected(this.files[0])">
       <div class="ota-icon">&#8679;</div>
@@ -754,7 +765,8 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       Current build path: <span style="color:var(--acc);font-family:monospace">.pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin</span>
     </div>
   </div>
-</div>
+</section>
+</main>
 <div class="warn-bar">CAN bus writes affect vehicle behavior. Remove device immediately if unexpected behavior occurs. Not affiliated with any vehicle manufacturer.</div>
 
 <div class="modal-backdrop" id="safety-modal">
@@ -859,7 +871,7 @@ let dashboardInitialLoaded=false;
 let dashboardPollStopped=false;
 let systemStatusTimer=null;
 let systemStatusEnabled=false;
-let wifiNagInitialUiApplied=false;
+let wifiNagAccordionTouched=false;
 let dashboardStaIp='';
 let networkPerformanceMode=localStorage.getItem('netPerfMode')!=='0';
 let uiModeSetting=localStorage.getItem('uiMode')||'auto';
@@ -898,6 +910,7 @@ function isCarUiActive(){
 }
 function setCollapsedPanel(el,collapsed,persist){
   if(!el)return;
+  if(el.classList&&el.classList.contains('ui-main-card')){setMainCardExpanded(el,!collapsed);return;}
   el.classList.toggle('collapsed',!!collapsed);
   const btn=el.querySelector('.card-min-btn,.subsec-btn');
   if(btn)btn.textContent=trText(collapsed?'Show':'Hide');
@@ -921,15 +934,11 @@ function updateUiModeUi(){
   const side=$('car-side-mode');if(side){side.textContent=trText(uiModeSetting==='auto'?'Auto':'Manual')+' / '+trText(uiModeEffective==='car'?'Car':'Phone');}
 }
 function applyWifiNagMode(){
-  document.body.classList.add('wifi-nag');
-  const title=document.querySelector('.hdr-title');if(title)title.textContent='EVtools WIFI-NAG';
+  document.body.classList.add('wifi-nag','ui-shell','ui-phone');
+  document.body.classList.remove('ui-car');
+  const title=document.querySelector('.brand-title');if(title)title.textContent='WiFi-NAG';
   setText('hw-badge','WIFI-NAG');
   setText('s-inj-lbl','CAN Write');
-  if(!wifiNagInitialUiApplied){
-    wifiNagInitialUiApplied=true;
-    setCollapsedPanel($('system-card'),false,false);
-    expandWifiNagDefaults();
-  }
 }
 function applyUiMode(){
   uiModeSetting=normalizeUiMode(uiModeSetting);
@@ -1191,6 +1200,34 @@ async function bleUnbind(){
 function initBleBridgeUi(){
   bleLoadStatus();
   if(bleStatusTimer===null)bleStatusTimer=setInterval(()=>{if(!document.hidden)bleLoadStatus();},2000);
+}
+
+function setMainCardExpanded(card,expanded){
+  if(!card)return;
+  card.classList.toggle('collapsed',!expanded);
+  const header=card.querySelector(':scope > .card-hdr');
+  if(header)header.setAttribute('aria-expanded',expanded?'true':'false');
+}
+function initWifiNagAccordion(){
+  const cards=Array.from(document.querySelectorAll('.ui-main-card'));
+  cards.forEach(card=>{
+    setMainCardExpanded(card,false);
+    const header=card.querySelector(':scope > .card-hdr');
+    if(!header||header.dataset.uiAccordion==='1')return;
+    header.dataset.uiAccordion='1';
+    const toggle=event=>{
+      if(event.target&&event.target.closest&&event.target.closest('.sys-monitor'))return;
+      wifiNagAccordionTouched=true;
+      const expand=card.classList.contains('collapsed');
+      cards.forEach(item=>setMainCardExpanded(item,false));
+      if(expand)setMainCardExpanded(card,true);
+    };
+    header.addEventListener('click',toggle);
+    header.addEventListener('keydown',event=>{
+      if(event.key!=='Enter'&&event.key!==' ')return;
+      event.preventDefault();toggle(event);
+    });
+  });
 }
 
 function orderDashboardCards(){
@@ -2340,20 +2377,15 @@ async function clearGatewayBlocked(){
     loadGatewayStatus();
   }catch(e){}
 }
-applyUiMode();
+applyWifiNagMode();
 startDashboardPolling();
-window.addEventListener('resize',()=>{
-  const prev=uiModeEffective;
-  applyUiMode();
-  if(prev!==uiModeEffective)startDashboardPolling();
-});
 document.addEventListener('visibilitychange',()=>{
   if(!dashboardVisible())return;
   poll();loadFirmwareInfo();loadWifiStatus();loadApStatus();loadGatewayStatus();
   if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
   pollLog();
 });
-orderDashboardCards();initCardMinimizers();initSubsectionMinimizers();if(isCarUiActive())expandCarEssentials();initSystemMonitor();loadFirmwareInfo();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();poll();
+initWifiNagAccordion();initNagSweepUi();initBleBridgeUi();initSystemMonitor();loadFirmwareInfo();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();poll();
 </script>
 </body>
 </html>
