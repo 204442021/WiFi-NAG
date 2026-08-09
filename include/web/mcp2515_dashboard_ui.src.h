@@ -477,7 +477,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
         <label class="tgl"><input type="checkbox" id="ble-enabled" onchange="bleSaveConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
       <div class="setting-row">
-        <div class="setting-info"><div class="setting-name">障碍物数据转发</div><div class="setting-desc">每 100 ms 发送最新 0x255 / 0x12B；不补发历史帧。</div></div>
+        <div class="setting-info"><div class="setting-name">障碍物数据转发</div><div class="setting-desc">每 50 ms 发送最新 0x255 / 0x12B；不补发历史帧。</div></div>
         <label class="tgl"><input type="checkbox" id="ble-obstacle" onchange="bleSaveConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
       <div class="btn-row">

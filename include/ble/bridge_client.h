@@ -8,6 +8,30 @@
 
 #include "nag_state_controller.h"
 
+namespace BleBridgeTiming
+{
+static constexpr uint32_t kObstacleStatePeriodMs = 50;
+static constexpr uint32_t kBridgeServicePollMs = 20;
+
+inline bool obstacleStateDue(uint32_t nowMs, uint32_t lastObstacleMs)
+{
+    return nowMs - lastObstacleMs >= kObstacleStatePeriodMs;
+}
+
+inline uint32_t nextObstacleServiceDelayMs(uint32_t nowMs,
+                                           uint32_t lastObstacleMs,
+                                           bool forwardingEnabled)
+{
+    if (!forwardingEnabled)
+        return kBridgeServicePollMs;
+    const uint32_t elapsed = nowMs - lastObstacleMs;
+    if (elapsed >= kObstacleStatePeriodMs)
+        return kBridgeServicePollMs;
+    const uint32_t remaining = kObstacleStatePeriodMs - elapsed;
+    return remaining < kBridgeServicePollMs ? remaining : kBridgeServicePollMs;
+}
+} // namespace BleBridgeTiming
+
 enum BleBridgeProtocolStatus : uint8_t
 {
     BLE_BRIDGE_PROTOCOL_DISABLED = 0,

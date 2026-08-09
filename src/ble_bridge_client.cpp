@@ -29,7 +29,6 @@ constexpr uint32_t kFreshMs = 300;
 constexpr uint32_t kAliveMs = 1000;
 constexpr uint32_t kHelloMs = 1000;
 constexpr uint32_t kHandshakeMs = 5000;
-constexpr uint32_t kObstacleMs = 100;
 constexpr uint32_t kStateMs = 1000;
 constexpr uint32_t kScanMs = 5000;
 constexpr uint32_t kBackoff[] = {500, 1000, 2000, 5000};
@@ -297,7 +296,8 @@ return true;
 bool sendObstacle()
 {
 ObstacleCanView snapshot;
-obstacleCanSnapshot.read(snapshot);
+if (!obstacleCanSnapshot.read(snapshot))
+return false;
 const uint32_t now = millis();
 const uint32_t age255 = snapshot.has255 ? now - snapshot.last255RxMs : UINT32_MAX;
 const uint32_t age12b = snapshot.has12B ? now - snapshot.last12BRxMs : UINT32_MAX;
@@ -633,21 +633,14 @@ const NagStateView state = nagStateController.view();
 if (static_cast<bool>(g.forceState) || state.reportGeneration != static_cast<uint32_t>(g.lastStateGen) ||
 now - static_cast<uint32_t>(g.lastState) >= kStateMs)
 {
-if (sendNag(state.reportGeneration == static_cast<uint32_t>(g.lastStateGen)))
-{
-vTaskDelay(pdMS_TO_TICKS(20));
-continue;
+sendNag(state.reportGeneration == static_cast<uint32_t>(g.lastStateGen));
 }
-}
-if (static_cast<bool>(g.obstacle) && now - static_cast<uint32_t>(g.lastObstacle) >= kObstacleMs)
-{
-if (sendObstacle())
-{
-vTaskDelay(pdMS_TO_TICKS(20));
-continue;
-}
-}
-vTaskDelay(pdMS_TO_TICKS(20));
+if (static_cast<bool>(g.obstacle) &&
+BleBridgeTiming::obstacleStateDue(millis(), static_cast<uint32_t>(g.lastObstacle)))
+sendObstacle();
+const uint32_t serviceDelayMs = BleBridgeTiming::nextObstacleServiceDelayMs(
+millis(), static_cast<uint32_t>(g.lastObstacle), static_cast<bool>(g.obstacle));
+vTaskDelay(pdMS_TO_TICKS(serviceDelayMs));
 }
 }
 }

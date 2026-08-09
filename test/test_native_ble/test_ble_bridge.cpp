@@ -1,5 +1,6 @@
 #include <unity.h>
 
+#include "ble/bridge_client.h"
 #include "ble/bridge_protocol.h"
 #include "can_frame_types.h"
 #include "nag_state_controller.h"
@@ -57,6 +58,32 @@ void test_ble_packet_rejects_crc_corruption()
     TEST_ASSERT_EQUAL_UINT8(BleBridgeProtocol::DECODE_BAD_CRC,
                             BleBridgeProtocol::validate(packet.bytes,
                                                         BleBridgeProtocol::kPacketSize));
+}
+
+void test_periodic_obstacle_contract_is_50ms_and_not_query()
+{
+    TEST_ASSERT_EQUAL_UINT32(50, BleBridgeTiming::kObstacleStatePeriodMs);
+    TEST_ASSERT_EQUAL_UINT32(20, BleBridgeTiming::kBridgeServicePollMs);
+    TEST_ASSERT_TRUE(BleBridgeTiming::kObstacleStatePeriodMs !=
+                     BleBridgeTiming::kBridgeServicePollMs);
+
+    uint32_t nowMs = BleBridgeTiming::nextObstacleServiceDelayMs(0, 0, true);
+    TEST_ASSERT_EQUAL_UINT32(20, nowMs);
+    nowMs += BleBridgeTiming::nextObstacleServiceDelayMs(nowMs, 0, true);
+    TEST_ASSERT_EQUAL_UINT32(40, nowMs);
+    nowMs += BleBridgeTiming::nextObstacleServiceDelayMs(nowMs, 0, true);
+    TEST_ASSERT_EQUAL_UINT32(50, nowMs);
+    TEST_ASSERT_EQUAL_UINT32(
+        10, BleBridgeTiming::nextObstacleServiceDelayMs(40, 0, true));
+    TEST_ASSERT_FALSE(BleBridgeTiming::obstacleStateDue(49, 0));
+    TEST_ASSERT_TRUE(BleBridgeTiming::obstacleStateDue(50, 0));
+
+    const BleBridgeProtocol::Packet packet = BleBridgeProtocol::makePacket(
+        BleBridgeProtocol::MSG_OBSTACLE_STATE, 0, 9);
+    TEST_ASSERT_EQUAL_HEX8(BleBridgeProtocol::MSG_OBSTACLE_STATE,
+                           packet.bytes[2]);
+    TEST_ASSERT_EQUAL_UINT8(0, packet.bytes[3]);
+    TEST_ASSERT_FALSE(BleBridgeProtocol::isKnownMessageType(0x12));
 }
 
 void test_obstacle_snapshot_keeps_latest_255_and_12b()
@@ -184,6 +211,7 @@ int main()
     UNITY_BEGIN();
     RUN_TEST(test_ble_packet_crc_round_trip);
     RUN_TEST(test_ble_packet_rejects_crc_corruption);
+    RUN_TEST(test_periodic_obstacle_contract_is_50ms_and_not_query);
     RUN_TEST(test_obstacle_snapshot_keeps_latest_255_and_12b);
     RUN_TEST(test_obstacle_snapshot_marks_wrong_dlc_invalid_without_stale_payload);
     RUN_TEST(test_nag_controller_increments_revision_once_for_real_change);
