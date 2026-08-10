@@ -15,7 +15,6 @@ DASH_FILE = ROOT / "include" / "web" / "mcp2515_dashboard.h"
 WRAPPER_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.h"
 SOURCE_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.src.h"
 BASE_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.base.h"
-SWEEP_FILE = ROOT / "include" / "web" / "nag_sweep_dashboard.h"
 MINIFY_FILE = ROOT / "scripts" / "minify_dashboard.py"
 MINIFY_REQUIREMENTS_FILE = ROOT / "scripts" / "requirements-dashboard.txt"
 RUNTIME_HEADER_FILE = ROOT / "include" / "platform" / "espidf_runtime.h"
@@ -95,7 +94,6 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         cls.source = SOURCE_FILE.read_text(encoding="utf-8-sig")
         cls.base = BASE_FILE.read_text(encoding="utf-8-sig")
         cls.generated_html = generated_dashboard_html(cls.base)
-        cls.sweep = SWEEP_FILE.read_text(encoding="utf-8")
         cls.minify = MINIFY_FILE.read_text(encoding="utf-8")
         cls.runtime_header = RUNTIME_HEADER_FILE.read_text(encoding="utf-8")
         cls.runtime_source = RUNTIME_SOURCE_FILE.read_text(encoding="utf-8")
@@ -124,7 +122,7 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         )
 
     def test_runtime_page_composition_is_removed(self) -> None:
-        combined = "\n".join((self.main, self.ble, self.source, self.sweep, self.minify))
+        combined = "\n".join((self.main, self.ble, self.source, self.minify))
         for token in (
             "<iframe",
             "fetch('/dashboard')",
@@ -145,7 +143,6 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             "wifi-nag-header",
             "config-card",
             "config-hardware-section",
-            "nag-sweep-row",
             "ble-card",
             "ble-bridge-section",
             "obstacle-shift-card",
@@ -193,28 +190,18 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         for element_id in ("status-panel", "debug-log-section"):
             self.assert_has_id(system, element_id)
 
-    def test_nag_sweep_is_static_and_backend_is_api_only(self) -> None:
-        for element_id in (
+    def test_retired_nag_send_interval_has_no_ui_or_api(self) -> None:
+        combined = "\n".join((self.source, self.generated_html, self.wrapper, self.dash))
+        for token in (
             "nag-sweep-row",
             "nag-sweep-min",
             "nag-sweep-max",
             "nag-sweep-save",
-            "nag-sweep-meta",
+            "/api/nag-sweep",
+            "NagSweepWebServer",
+            "initNagSweepUi",
         ):
-            self.assert_has_id(self.source, element_id)
-        for token in ("/api/nag-sweep", "loadSweepPrefs", "saveSweepPrefs", "handleSweepRequest"):
-            self.assertIn(token, self.sweep)
-        for token in ("sendRaw(", "preparePatchedHtml", "NAG_SWEEP_UI_PATCH_GZ"):
-            self.assertNotIn(token, self.sweep)
-        load = extract_javascript_function(self.source, "loadNagSweepRange")
-        save = extract_javascript_function(self.source, "saveNagSweepRange")
-        self.assertIn("catch", load)
-        self.assertIn("catch", save)
-        self.assertIn("finally", save)
-        for function in (load, save):
-            self.assertNotIn("document.write", function)
-            self.assertNotIn("document.body", function)
-            self.assertNotIn("location.reload", function)
+            self.assertNotIn(token, combined)
 
     def test_ble_is_static_and_backend_is_api_only(self) -> None:
         ble_ids = (
@@ -293,7 +280,7 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         self.assertNotIn('class="car-side"', self.source)
         self.assertNotIn('id="ui-mode-strip"', self.source)
         initializer = (
-            "initWifiNagAccordion();initNagSweepUi();initBleBridgeUi();"
+            "initWifiNagAccordion();initBleBridgeUi();"
             "initSystemMonitor();loadFirmwareInfo();loadGatewayDnsCached();"
             "loadGatewayDns(true);loadGatewayStatus();poll();"
         )
@@ -306,10 +293,8 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
 
     def test_generated_wrapper_and_payload_are_current(self) -> None:
         base_include = '#include "web/mcp2515_dashboard_ui.base.h"'
-        sweep_include = '#include "web/nag_sweep_dashboard.h"'
         self.assertEqual(self.wrapper.count(base_include), 1)
-        self.assertIn(sweep_include, self.wrapper)
-        self.assertLess(self.wrapper.index(base_include), self.wrapper.index(sweep_include))
+        self.assertNotIn("nag_sweep_dashboard.h", self.wrapper)
         self.assertIn("--check", self.minify)
         self.assertIn("generated payload is stale", self.minify)
         self.assertEqual(generated_dashboard_bytes(self.base)[9], 0xFF)
