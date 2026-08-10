@@ -39,10 +39,14 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
         app = (ROOT / "include/app.h").read_text(encoding="utf-8")
         self.assertIn("obstacleShiftController.tick", app)
         self.assertIn("obstacleShiftController.observeFrame", app)
-        self.assertRegex(
-            app,
-            r"brakeAfterRead\.sequence\s*==\s*brakeBeforeRead\.sequence",
-        )
+        self.assertIn("obstacleShiftManualRequests.generation()", app)
+        self.assertNotIn("pressEstablishedBeforeRead", app)
+
+    def test_manual_request_mailbox_is_generation_based(self):
+        self.assertIn("class ObstacleShiftManualRequestMailbox", self.header)
+        self.assertIn("uint32_t request()", self.header)
+        self.assertIn("uint32_t generation() const", self.header)
+        self.assertIn("obstacleShiftManualRequests", self.header)
 
     def test_twai_rejects_extended_and_remote_frames_before_business_logic(self):
         twai = (ROOT / "include/drivers/twai_driver.h").read_text(encoding="utf-8")
@@ -78,10 +82,26 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
             "shiftLatched",
             "virtualParkTxCount",
             "virtualParkTxFailCount",
+            "shiftTriggerSource",
+            "manualRequestReady",
+            "manualRequestReason",
+            "automaticWindowCount",
+            "manualWindowCount",
         ):
             self.assertIn(token, bridge)
         self.assertIn('bleBridgeArgEnabled("shift"', bridge)
         self.assertIn("setObstacleShiftEnabled", bridge)
+
+    def test_manual_route_only_queues_request_for_can_loop(self):
+        bridge = (ROOT / "include/ble/bridge_webui.h").read_text(encoding="utf-8")
+        self.assertIn('server.on("/ble_shift_manual", HTTP_POST', bridge)
+        self.assertIn("bleBridgeHandleManualShift", bridge)
+        self.assertIn("obstacleShiftManualRequests.request()", bridge)
+        handler_start = bridge.index("static void bleBridgeHandleManualShift")
+        handler_end = bridge.index("\nstatic ", handler_start + 1)
+        handler = bridge[handler_start:handler_end]
+        self.assertNotIn("appDriver->send", handler)
+        self.assertNotIn("obstacleShiftController.observeFrame", handler)
 
     def test_dashboard_posts_and_renders_obstacle_shift_status(self):
         source = (ROOT / "include/web/mcp2515_dashboard_ui.src.h").read_text(

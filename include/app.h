@@ -252,6 +252,7 @@ static bool appLoop()
         static_cast<bool>(obstacleShiftFeatureEnabled),
         appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
             !Update.isRunning() && !appCanRestartPreparing,
+        obstacleShiftManualRequests.generation(),
     };
     const uint32_t shiftNowMs = millis();
     obstacleShiftController.tick(brakeView, shiftRuntime, shiftNowMs);
@@ -291,6 +292,8 @@ static bool appLoop()
         shiftRuntime.canWriteReady =
             appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
             !Update.isRunning() && !appCanRestartPreparing;
+        shiftRuntime.manualRequestGeneration =
+            obstacleShiftManualRequests.generation();
         const uint32_t beforeReadMs = millis();
         obstacleShiftController.tick(brakeBeforeRead,
                                      shiftRuntime,
@@ -310,27 +313,14 @@ static bool appLoop()
         shiftRuntime.canWriteReady =
             appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
             !Update.isRunning() && !appCanRestartPreparing;
+        shiftRuntime.manualRequestGeneration =
+            obstacleShiftManualRequests.generation();
         const uint32_t afterReadMs = millis();
-        const bool pressEstablishedBeforeRead =
-            brakeBeforeRead.linkReady &&
-            brakeBeforeRead.capabilitySupported &&
-            brakeBeforeRead.hasState &&
-            brakeBeforeRead.data.brakePressed &&
-            afterReadMs - brakeBeforeRead.lastRxMs <=
-                ObstacleShiftController::kBrakeFreshMs &&
-            brakeAfterRead.linkReady &&
-            brakeAfterRead.capabilitySupported &&
-            brakeAfterRead.hasState &&
-            brakeAfterRead.data.brakePressed &&
-            brakeAfterRead.sessionGeneration ==
-                brakeBeforeRead.sessionGeneration &&
-            brakeAfterRead.sequence == brakeBeforeRead.sequence;
         obstacleShiftController.observeFrame(frame,
                                              brakeAfterRead,
                                              shiftRuntime,
                                              afterReadMs,
-                                             *appDriver,
-                                             pressEstablishedBeforeRead);
+                                             *appDriver);
 #endif
 #if !(defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD) && defined(DASH_RGB_STATUS_LED))
         digitalWrite(PIN_LED, LOW);

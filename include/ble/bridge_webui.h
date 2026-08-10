@@ -60,7 +60,7 @@ static const char *bleBridgeShiftReasonName(ObstacleShiftReason reason)
     case SHIFT_REASON_NONE: return "无";
     case SHIFT_REASON_WAIT_RELEASE: return "等待释放";
     case SHIFT_REASON_ACTIVE: return "正在发送";
-    case SHIFT_REASON_WINDOW_COMPLETE: return "500 ms 窗口完成";
+    case SHIFT_REASON_WINDOW_COMPLETE: return "1000 ms 窗口完成";
     case SHIFT_REASON_BRAKE_STALE: return "刹车数据超时";
     case SHIFT_REASON_RELEASE_UNCONFIRMED: return "释放未确认";
     case SHIFT_REASON_SESSION_CHANGED: return "BLE 会话变化";
@@ -72,7 +72,18 @@ static const char *bleBridgeShiftReasonName(ObstacleShiftReason reason)
     case SHIFT_REASON_GEAR_NOT_DR: return "真实挡位非 D/R";
     case SHIFT_REASON_MOVING: return "车辆未确认静止";
     case SHIFT_REASON_TX_FAILED: return "虚拟 P 发送失败";
+    case SHIFT_REASON_BUSY: return "虚拟 P 窗口忙";
     default: return "未知";
+    }
+}
+
+static const char *bleBridgeShiftTriggerName(ObstacleShiftTriggerSource source)
+{
+    switch (source)
+    {
+    case SHIFT_TRIGGER_AUTOMATIC_BRAKE: return "自动刹车";
+    case SHIFT_TRIGGER_MANUAL_BUTTON: return "手动按钮";
+    default: return "无";
     }
 }
 
@@ -218,6 +229,7 @@ static void bleBridgeHandleStatus()
     BLE_JSON_BOOL("hasReal118", shift.hasReal118);
     BLE_JSON_BOOL("virtualParkActive", shift.virtualParkActive);
     BLE_JSON_BOOL("shiftLatched", shift.latched);
+    BLE_JSON_BOOL("manualRequestReady", shift.manualRequestReady);
 #undef BLE_JSON_BOOL
     json += ",\"pairingRemainingMs\":" + String(diagnostics.pairingRemainingMs);
     json += ",\"deviceId\":" + String(diagnostics.deviceId);
@@ -266,6 +278,10 @@ static void bleBridgeHandleStatus()
     json += ",\"shiftStateName\":\"" + String(bleBridgeShiftStateName(shift.state)) + "\"";
     json += ",\"shiftReason\":" + String(static_cast<unsigned>(shift.reason));
     json += ",\"shiftReasonName\":\"" + String(bleBridgeShiftReasonName(shift.reason)) + "\"";
+    json += ",\"shiftTriggerSource\":" + String(static_cast<unsigned>(shift.triggerSource));
+    json += ",\"shiftTriggerSourceName\":\"" + String(bleBridgeShiftTriggerName(shift.triggerSource)) + "\"";
+    json += ",\"manualRequestReason\":" + String(static_cast<unsigned>(shift.manualRequestReason));
+    json += ",\"manualRequestReasonName\":\"" + String(bleBridgeShiftReasonName(shift.manualRequestReason)) + "\"";
     json += ",\"brakeSessionGeneration\":" + String(brake.sessionGeneration);
     json += ",\"brakeSequence\":" + String(brake.sequence);
     json += ",\"brakeRealGear\":" + String(static_cast<unsigned>(brake.data.realGear));
@@ -281,6 +297,8 @@ static void bleBridgeHandleStatus()
     json += ",\"real118RxCount\":" + String(shift.real118RxCount);
     json += ",\"virtualParkTxCount\":" + String(shift.virtualParkTxCount);
     json += ",\"virtualParkTxFailCount\":" + String(shift.virtualParkTxFailCount);
+    json += ",\"automaticWindowCount\":" + String(shift.automaticWindowCount);
+    json += ",\"manualWindowCount\":" + String(shift.manualWindowCount);
     json += "}";
     server.send(200, "application/json", json);
 }
@@ -302,6 +320,27 @@ static void bleBridgeHandleConfig()
         bleBridgeArgEnabled("shift", bleBridgeClient.obstacleShiftEnabled()),
         true);
     server.send(200, "application/json", "{\"ok\":true}");
+}
+
+static void bleBridgeHandleManualShift()
+{
+    const ObstacleShiftView shift = obstacleShiftController.view(millis());
+    if (!shift.manualRequestReady)
+    {
+        String json = "{\"ok\":false,\"error\":\"manual shift unavailable\",\"reason\":";
+        json += String(static_cast<unsigned>(shift.manualRequestReason));
+        json += ",\"reasonName\":\"";
+        json += bleBridgeShiftReasonName(shift.manualRequestReason);
+        json += "\"}";
+        server.send(409, "application/json", json);
+        return;
+    }
+
+    const uint32_t generation = obstacleShiftManualRequests.request();
+    String json = "{\"ok\":true,\"queued\":true,\"generation\":";
+    json += String(generation);
+    json += "}";
+    server.send(202, "application/json", json);
 }
 
 static void bleBridgeHandlePair()
@@ -362,6 +401,7 @@ static void bleBridgeRegisterApiRoutes()
 {
     server.on("/ble_status", HTTP_GET, bleBridgeHandleStatus);
     server.on("/ble_config", HTTP_POST, bleBridgeHandleConfig);
+    server.on("/ble_shift_manual", HTTP_POST, bleBridgeHandleManualShift);
     server.on("/ble_pair", HTTP_POST, bleBridgeHandlePair);
     server.on("/ble_unbind", HTTP_POST, bleBridgeHandleUnbind);
     server.on("/config", HTTP_POST, bleBridgeHandleUnifiedConfig);
