@@ -231,9 +231,9 @@ void test_sequence_classification_accepts_gaps_and_rejects_old_packets()
                             BleBridgeProtocol::classifySequence(0, UINT32_MAX, true));
 }
 
-void test_obstacle_shift_feature_defaults_enabled()
+void test_obstacle_shift_feature_defaults_disabled()
 {
-    TEST_ASSERT_TRUE(static_cast<bool>(obstacleShiftFeatureEnabled));
+    TEST_ASSERT_FALSE(static_cast<bool>(obstacleShiftFeatureEnabled));
 }
 
 void test_brake_mailbox_starts_new_session_without_reusing_old_state()
@@ -421,7 +421,7 @@ int main()
     RUN_TEST(test_sequence_comparison_is_global_and_wrap_safe);
     RUN_TEST(test_required_capabilities_keep_brake_state_optional);
     RUN_TEST(test_sequence_classification_accepts_gaps_and_rejects_old_packets);
-    RUN_TEST(test_obstacle_shift_feature_defaults_enabled);
+    RUN_TEST(test_obstacle_shift_feature_defaults_disabled);
     RUN_TEST(test_brake_mailbox_starts_new_session_without_reusing_old_state);
     RUN_TEST(test_periodic_obstacle_contract_is_50ms_and_not_query);
     RUN_TEST(test_obstacle_snapshot_keeps_latest_255_and_12b);
