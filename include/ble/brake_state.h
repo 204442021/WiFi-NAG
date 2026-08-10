@@ -23,21 +23,19 @@ enum BrakeRealGear : uint8_t
 
 enum BrakeStateReason : uint8_t
 {
-    BRAKE_REASON_IDLE = 0x00,
-    BRAKE_REASON_ACTIVE = 0x01,
-    BRAKE_REASON_RELEASE_CONFIRMED = 0x02,
-    BRAKE_REASON_STALE = 0x03,
-    BRAKE_REASON_CONFLICT = 0x04,
-    BRAKE_REASON_FALLBACK = 0x05,
-    BRAKE_REASON_HOLD_PENDING = 0x06,
-    BRAKE_REASON_GEAR_UNKNOWN = 0x07,
-    BRAKE_REASON_GEAR_STALE = 0x08,
-    BRAKE_REASON_GEAR_NOT_DR = 0x09,
-    BRAKE_REASON_SPEED_UNKNOWN = 0x0A,
-    BRAKE_REASON_SPEED_STALE = 0x0B,
-    BRAKE_REASON_MOVING = 0x0C,
-    BRAKE_REASON_DISABLED = 0x0D,
-    BRAKE_REASON_SESSION_RESYNC = 0x0E,
+    BRAKE_REASON_ACTIVE = 0,
+    BRAKE_REASON_RELEASE_CONFIRMED = 1,
+    BRAKE_REASON_STALE = 2,
+    BRAKE_REASON_CONFLICT = 3,
+    BRAKE_REASON_FALLBACK = 4,
+    BRAKE_REASON_HOLD_PENDING = 5,
+    BRAKE_REASON_GEAR_STALE = 6,
+    BRAKE_REASON_GEAR_NOT_DR = 7,
+    BRAKE_REASON_SPEED_STALE = 8,
+    BRAKE_REASON_MOVING = 9,
+    BRAKE_REASON_DISABLED = 10,
+    BRAKE_REASON_SESSION_RESYNC = 11,
+    BRAKE_REASON_UNKNOWN = 0xFF,
 };
 
 struct BrakeStateData
@@ -63,9 +61,9 @@ struct BrakeStateData
     bool senderEnabled = false;
     bool normalRuntime = false;
     uint8_t gearSource = 0;
-    BrakeStateReason reason = BRAKE_REASON_IDLE;
+    BrakeStateReason reason = BRAKE_REASON_UNKNOWN;
     uint16_t brakeHoldMs = 0;
-    uint16_t speedDeciKph = 0;
+    int16_t speedDeciKph = 0;
 };
 
 inline bool decodeBrakeStatePayload(const uint8_t *payload, BrakeStateData &out)
@@ -104,13 +102,18 @@ inline bool decodeBrakeStatePayload(const uint8_t *payload, BrakeStateData &out)
     decoded.gearSource = payload[4];
     decoded.reason = static_cast<BrakeStateReason>(payload[5]);
     decoded.brakeHoldMs = BleBridgeProtocol::readLe16(payload + 6);
-    decoded.speedDeciKph = BleBridgeProtocol::readLe16(payload + 8);
+    decoded.speedDeciKph = static_cast<int16_t>(
+        BleBridgeProtocol::readLe16(payload + 8));
 
     if (decoded.brakeHoldReady && decoded.brakeHoldMs < 150U)
         return false;
-    if (decoded.stationaryConfirmed &&
-        (!decoded.speedFresh || decoded.speedDeciKph > 2U))
-        return false;
+    if (decoded.stationaryConfirmed)
+    {
+        const int32_t speed = static_cast<int32_t>(decoded.speedDeciKph);
+        const int32_t magnitude = speed < 0 ? -speed : speed;
+        if (!decoded.speedFresh || magnitude > 2)
+            return false;
+    }
     if (decoded.gearFresh &&
         (decoded.realGear == BRAKE_GEAR_UNKNOWN || decoded.gearSource == 0U))
         return false;
@@ -123,12 +126,13 @@ inline bool decodeBrakeStatePayload(const uint8_t *payload, BrakeStateData &out)
         return false;
     if (!decoded.brakePressed && decoded.reason == BRAKE_REASON_ACTIVE)
         return false;
+    const bool confirmedReleaseReason =
+        decoded.reason == BRAKE_REASON_RELEASE_CONFIRMED ||
+        decoded.reason == BRAKE_REASON_SESSION_RESYNC;
     if (decoded.releaseConfirmed &&
-        (decoded.reason != BRAKE_REASON_RELEASE_CONFIRMED ||
-         !decoded.releaseTail))
+        (!confirmedReleaseReason || !decoded.releaseTail))
         return false;
-    if (!decoded.releaseConfirmed &&
-        decoded.reason == BRAKE_REASON_RELEASE_CONFIRMED)
+    if (!decoded.releaseConfirmed && confirmedReleaseReason)
         return false;
     if (decoded.releaseConfirmed &&
         !(decoded.physicalKnown && decoded.physicalFresh &&

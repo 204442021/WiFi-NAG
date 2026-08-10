@@ -92,21 +92,18 @@ static const char *bleBridgeBrakeReasonName(BrakeStateReason reason)
 {
     switch (reason)
     {
-    case BRAKE_REASON_IDLE: return "空闲";
     case BRAKE_REASON_ACTIVE: return "制动有效";
     case BRAKE_REASON_RELEASE_CONFIRMED: return "释放已确认";
     case BRAKE_REASON_STALE: return "数据超时";
     case BRAKE_REASON_CONFLICT: return "双源冲突";
     case BRAKE_REASON_FALLBACK: return "降级来源";
     case BRAKE_REASON_HOLD_PENDING: return "等待保持";
-    case BRAKE_REASON_GEAR_UNKNOWN: return "挡位未知";
-    case BRAKE_REASON_GEAR_STALE: return "挡位超时";
+    case BRAKE_REASON_GEAR_STALE: return "挡位未知或超时";
     case BRAKE_REASON_GEAR_NOT_DR: return "挡位非 D/R";
-    case BRAKE_REASON_SPEED_UNKNOWN: return "车速未知";
-    case BRAKE_REASON_SPEED_STALE: return "车速超时";
+    case BRAKE_REASON_SPEED_STALE: return "车速未知或超时";
     case BRAKE_REASON_MOVING: return "车辆移动中";
     case BRAKE_REASON_DISABLED: return "发送端已关闭";
-    case BRAKE_REASON_SESSION_RESYNC: return "会话重新同步";
+    case BRAKE_REASON_SESSION_RESYNC: return "会话同步并确认释放";
     default: return "未知";
     }
 }

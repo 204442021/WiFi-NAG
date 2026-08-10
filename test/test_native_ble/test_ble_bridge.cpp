@@ -72,7 +72,7 @@ void test_brake_state_contract_and_capabilities()
 void test_brake_state_active_payload_decodes()
 {
     const uint8_t payload[10] = {0x01, 0xFD, 0xDC, 0x37, 0x01,
-                                 0x01, 0x96, 0x00, 0x00, 0x00};
+                                 0x00, 0x96, 0x00, 0x00, 0x00};
     BrakeStateData state;
     TEST_ASSERT_TRUE(decodeBrakeStatePayload(payload, state));
     TEST_ASSERT_TRUE(state.brakePressed);
@@ -85,17 +85,37 @@ void test_brake_state_active_payload_decodes()
 void test_brake_state_release_payload_decodes()
 {
     const uint8_t payload[10] = {0x01, 0x6E, 0xDC, 0x39, 0x01,
-                                 0x02, 0x00, 0x00, 0x00, 0x00};
+                                 0x01, 0x00, 0x00, 0x00, 0x00};
     BrakeStateData state;
     TEST_ASSERT_TRUE(decodeBrakeStatePayload(payload, state));
     TEST_ASSERT_FALSE(state.brakePressed);
     TEST_ASSERT_TRUE(state.releaseConfirmed);
 }
 
+void test_brake_state_session_resync_release_payload_decodes()
+{
+    const uint8_t payload[10] = {0x01, 0x6E, 0xDC, 0x39, 0x01,
+                                 0x0B, 0x00, 0x00, 0x00, 0x00};
+    BrakeStateData state;
+    TEST_ASSERT_TRUE(decodeBrakeStatePayload(payload, state));
+    TEST_ASSERT_FALSE(state.brakePressed);
+    TEST_ASSERT_TRUE(state.releaseConfirmed);
+    TEST_ASSERT_EQUAL_UINT8(BRAKE_REASON_SESSION_RESYNC, state.reason);
+}
+
+void test_brake_state_stationary_negative_tolerance_decodes_as_signed()
+{
+    const uint8_t payload[10] = {0x01, 0xFD, 0xDC, 0x37, 0x01,
+                                 0x00, 0x96, 0x00, 0xFF, 0xFF};
+    BrakeStateData state;
+    TEST_ASSERT_TRUE(decodeBrakeStatePayload(payload, state));
+    TEST_ASSERT_EQUAL_INT16(-1, state.speedDeciKph);
+}
+
 void test_brake_state_rejects_contradictory_release()
 {
     const uint8_t payload[10] = {0x01, 0xFF, 0xDC, 0x3F, 0x01,
-                                 0x02, 0x96, 0x00, 0x00, 0x00};
+                                 0x01, 0x96, 0x00, 0x00, 0x00};
     BrakeStateData state;
     TEST_ASSERT_FALSE(decodeBrakeStatePayload(payload, state));
 }
@@ -103,7 +123,7 @@ void test_brake_state_rejects_contradictory_release()
 void test_brake_state_rejects_active_with_short_hold_or_moving_speed()
 {
     uint8_t payload[10] = {0x01, 0xFD, 0xDC, 0x37, 0x01,
-                           0x01, 0x95, 0x00, 0x00, 0x00};
+                           0x00, 0x95, 0x00, 0x00, 0x00};
     BrakeStateData state;
     TEST_ASSERT_FALSE(decodeBrakeStatePayload(payload, state));
 
@@ -115,7 +135,7 @@ void test_brake_state_rejects_active_with_short_hold_or_moving_speed()
 void test_brake_state_rejects_reason_tail_and_gear_source_conflicts()
 {
     uint8_t active[10] = {0x01, 0xFD, 0xDC, 0x37, 0x01,
-                          0x01, 0x96, 0x00, 0x00, 0x00};
+                          0x00, 0x96, 0x00, 0x00, 0x00};
     BrakeStateData state;
 
     active[5] = BRAKE_REASON_MOVING;
@@ -170,7 +190,7 @@ void test_mailbox_rejects_publish_after_session_end()
     mailbox.beginSession(0x1234, true, 10);
     mailbox.endSession();
     const uint8_t payload[10] = {0x01, 0xFD, 0xDC, 0x37, 0x01,
-                                 0x01, 0x96, 0x00, 0x00, 0x00};
+                                 0x00, 0x96, 0x00, 0x00, 0x00};
     TEST_ASSERT_FALSE(mailbox.publish(payload, 1, 20));
     BrakeStateView view;
     TEST_ASSERT_TRUE(mailbox.read(view));
@@ -221,7 +241,7 @@ void test_brake_mailbox_starts_new_session_without_reusing_old_state()
     BrakeStateMailbox mailbox;
     mailbox.beginSession(0x1234, true, 100);
     const uint8_t payload[10] = {0x01, 0xFD, 0xDC, 0x37, 0x01,
-                                 0x01, 0x96, 0x00, 0x00, 0x00};
+                                 0x00, 0x96, 0x00, 0x00, 0x00};
     TEST_ASSERT_TRUE(mailbox.publish(payload, 44, 120));
 
     BrakeStateView before;
@@ -391,6 +411,8 @@ int main()
     RUN_TEST(test_brake_state_contract_and_capabilities);
     RUN_TEST(test_brake_state_active_payload_decodes);
     RUN_TEST(test_brake_state_release_payload_decodes);
+    RUN_TEST(test_brake_state_session_resync_release_payload_decodes);
+    RUN_TEST(test_brake_state_stationary_negative_tolerance_decodes_as_signed);
     RUN_TEST(test_brake_state_rejects_contradictory_release);
     RUN_TEST(test_brake_state_rejects_active_with_short_hold_or_moving_speed);
     RUN_TEST(test_brake_state_rejects_reason_tail_and_gear_source_conflicts);
