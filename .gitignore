@@ -250,6 +250,7 @@ sdkconfig.*
 .claude
 managed_components/
 dependencies.lock
+.worktrees/
 
 # Embedded upstream clone (kept for reference, not part of this fork)
 ev-open-can-tools-repo/
