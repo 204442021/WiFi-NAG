@@ -109,17 +109,29 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
         )
         self.assertIn("shift:bleElement('shift-enabled').checked?'1':'0'", source)
         for token in (
+            "shift-manual-btn",
+            "bleManualShift",
+            "fetch('/ble_shift_manual'",
             "data.shiftEnabled",
             "data.shiftStateName",
-            "data.brakePressed",
+            "data.physicalPressed",
             "data.brakeStateAgeMs",
-            "data.releaseConfirmed",
-            "data.real118AgeMs",
+            "data.manualRequestReady",
+            "data.manualRequestReasonName",
+            "data.shiftTriggerSourceName",
             "data.virtualParkActive",
             "data.shiftLatched",
             "data.shiftReasonName",
+            "data.automaticWindowCount",
+            "data.manualWindowCount",
         ):
             self.assertIn(token, source)
+
+        self.assertIn("手动虚拟 P（1 秒）", source)
+        self.assertIn("T2CAN", source)
+        self.assertIn("1000 ms", source)
+        self.assertNotIn("双源刹车确认且车辆静止", source)
+        self.assertNotIn("最长维持 500 ms", source)
 
 
 if __name__ == "__main__":

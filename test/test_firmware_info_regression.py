@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_FILE = ROOT / "VERSION"
-RELEASE_NOTES_FILE = ROOT / "RELEASE_NOTES_V1.0.5.md"
+RELEASE_NOTES_FILE = ROOT / "RELEASE_NOTES_V1.0.6.md"
 CMAKE_FILE = ROOT / "CMakeLists.txt"
 DASH_FILE = ROOT / "include" / "web" / "mcp2515_dashboard.h"
 UI_SOURCE_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.src.h"
@@ -24,13 +24,15 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
         cls.ui_base = UI_BASE_FILE.read_text(encoding="utf-8-sig")
         cls.ui_wrapper = UI_WRAPPER_FILE.read_text(encoding="utf-8-sig")
 
-    def test_version_file_is_single_v1_0_5_source(self) -> None:
-        self.assertEqual(self.version, "V1.0.5")
+    def test_version_file_is_single_v1_0_6_source(self) -> None:
+        self.assertEqual(self.version, "V1.0.6")
         self.assertNotIn("3.0.0-beta.5", self.version)
 
-    def test_v1_0_5_release_notes_match_internal_version(self) -> None:
-        self.assertIn("# WIFI-NAG V1.0.5", self.release_notes)
-        self.assertIn("`V1.0.5`", self.release_notes)
+    def test_v1_0_6_release_notes_match_internal_version(self) -> None:
+        self.assertIn("# WIFI-NAG V1.0.6", self.release_notes)
+        self.assertIn("`V1.0.6`", self.release_notes)
+        self.assertIn("1000 ms", self.release_notes)
+        self.assertIn("手动", self.release_notes)
 
     def test_espidf_internal_version_comes_from_version_file(self) -> None:
         self.assertRegex(
@@ -109,6 +111,7 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
                 self.assertNotIn("V1.0.2", text)
                 self.assertNotIn("V1.0.3", text)
                 self.assertNotIn("V1.0.4", text)
+                self.assertNotIn("V1.0.5", text)
 
 
 if __name__ == "__main__":

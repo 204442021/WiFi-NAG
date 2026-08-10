@@ -522,20 +522,24 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
     <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
   </div>
   <div class="subsec-body">
-    <div class="info-box"><strong>测试功能：</strong>台架/封闭场地验证完成前，不能作为道路安全功能使用。真实挡位 D/R、双源刹车确认且车辆静止时，复制每一帧新鲜的原车 0x118，改为 P 后在同一总线发送，最长维持 500 ms。原车帧仍会存在，不固定重放或补发历史帧。</div>
+    <div class="info-box"><strong>测试功能：</strong>台架/封闭场地验证完成前，不能作为道路安全功能使用。自动模式在 T2CAN 物理刹车已踩下、T2CAN 车速确认静止且 T2CAN 挡位为 D/R 时触发；手动按钮不要求踩刹车，但仍要求 T2CAN 车速静止且挡位为 D/R。触发后只复制实时收到且校验有效的原车 0x118，改为 P 后在同一总线发送，单次窗口最长 1000 ms；T2CAN 已为 P/N、挡位或车速未知/超时、CAN 不可写时均不发送。</div>
     <div class="setting-row">
-      <div class="setting-info"><div class="setting-name">D/R 挡启用换挡</div><div class="setting-desc">首次默认开启；关闭后立即停止并等待下一次明确释放。</div></div>
+      <div class="setting-info"><div class="setting-name">刹车自动触发</div><div class="setting-desc">首次默认开启；关闭只停用自动触发，手动按钮仍可按安全门单次触发。</div></div>
       <label class="tgl"><input type="checkbox" id="shift-enabled" onchange="bleSaveConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+    </div>
+    <div class="setting-row">
+      <div class="setting-info"><div class="setting-name">手动虚拟 P</div><div class="setting-desc" id="shift-manual-ready">等待 T2CAN 静止与 D/R 挡确认</div></div>
+      <button class="sniff-btn" id="shift-manual-btn" type="button" onclick="bleManualShift()" disabled>手动虚拟 P（1 秒）</button>
     </div>
     <div id="shift-action-msg" class="setting-desc" style="margin-top:8px"></div>
     <div class="sys-grid" style="margin-top:12px">
       <div class="sys-item"><div class="sys-lbl">状态机</div><div class="sys-val" id="shift-state">--</div></div>
-      <div class="sys-item"><div class="sys-lbl">刹车</div><div class="sys-val" id="shift-brake">--</div></div>
-      <div class="sys-item"><div class="sys-lbl">释放确认</div><div class="sys-val" id="shift-release">--</div></div>
-      <div class="sys-item"><div class="sys-lbl">双源状态</div><div class="sys-val" id="shift-source">--</div></div>
-      <div class="sys-item"><div class="sys-lbl">真实挡位</div><div class="sys-val" id="shift-gear">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">T2CAN 物理刹车</div><div class="sys-val" id="shift-brake">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">自动重触发</div><div class="sys-val" id="shift-release">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">触发来源</div><div class="sys-val" id="shift-source">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">T2CAN 挡位</div><div class="sys-val" id="shift-gear">--</div></div>
       <div class="sys-item"><div class="sys-lbl">车辆状态</div><div class="sys-val" id="shift-speed">--</div></div>
-      <div class="sys-item"><div class="sys-lbl">0x118</div><div class="sys-val" id="shift-118">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">0x118 实时模板</div><div class="sys-val" id="shift-118">--</div></div>
       <div class="sys-item"><div class="sys-lbl">虚拟 P</div><div class="sys-val" id="shift-virtual-p">--</div></div>
       <div class="sys-item"><div class="sys-lbl">锁存</div><div class="sys-val" id="shift-latch">--</div></div>
       <div class="sys-item"><div class="sys-lbl">原因</div><div class="sys-val" id="shift-reason">--</div></div>
@@ -928,6 +932,7 @@ const pollLocks={};
 const nagSweepState={minSec:5,maxSec:8,saving:false,message:'',messageOk:true};
 let bleStatusTimer=null;
 let bleStatusLoading=false;
+let bleManualBusy=false;
 
 function normalizeUiMode(v){
   v=String(v||'auto').toLowerCase();
@@ -1226,21 +1231,23 @@ async function bleLoadStatus(){
     bleSetText('ble-summary','建议 '+bleGearName(data.suggestedGear)+' / 方向 '+bleDirectionName(data.torqueDirection)+' / Party CAN '+(data.partyCanAlive?'在线':'过期'));
     bleSetText('ble-fsd-rx',(data.bridgeReady?'正常':'未确认')+' / '+bleAge(data.lastSendAgeMs));
     bleSetText('ble-counters','obstacle '+data.obstacleTxCount+'/'+data.obstacleTxFailCount+' · state '+data.stateReportCount+' · reconnect '+data.reconnectCount+' · disconnect '+data.disconnectCount+' · CRC '+data.crcFailCount+' · bad '+(data.badLengthCount+data.badMagicCount+data.badVersionCount+data.unknownTypeCount)+' · conflict '+data.revisionConflictCount+' · duplicate '+data.duplicateCommandCount);
-    const sourceState=(data.physicalKnown&&data.physicalFresh?(data.physicalPressed?'物理已踩':'物理释放'):'物理无效')+' / '+(data.systemKnown&&data.systemFresh?(data.systemPressed?'系统已踩':'系统释放'):'系统无效');
     const speedText=data.speedFresh?((Number(data.speedDeciKph||0)/10).toFixed(1)+' km/h'):'车速无效';
     bleSetText('shift-card-meta',data.shiftStateName||'不可用');
     bleSetText('shift-state',data.shiftStateName||'--');
-    bleSetText('shift-brake',(data.brakePressed?'已踩下':'未踩下')+' · '+bleAge(data.brakeStateAgeMs));
-    bleSetText('shift-release',data.releaseConfirmed?'已确认':'未确认');
-    bleSetText('shift-source',sourceState+' · '+(data.sourcesAgree?'一致':'未确认一致'));
-    bleSetText('shift-gear',(data.real118GearName||'未知')+' / T2CAN '+(data.brakeRealGearName||'未知'));
+    bleSetText('shift-brake',(data.physicalKnown&&data.physicalFresh?(data.physicalPressed?'已踩下':'已释放'):'无效')+' · '+bleAge(data.brakeStateAgeMs));
+    bleSetText('shift-release',data.physicalKnown&&data.physicalFresh&&!data.physicalPressed?'已释放，可重新自动触发':(data.shiftLatched?'等待物理释放':'未确认释放'));
+    bleSetText('shift-source',data.shiftTriggerSourceName||'无');
+    bleSetText('shift-gear',(data.brakeRealGearName||'未知')+' · '+(data.gearFresh?'新鲜':'无效/超时'));
     bleSetText('shift-speed',speedText+' · '+(data.stationaryConfirmed?'静止已确认':'静止未确认'));
-    bleSetText('shift-118',(data.real118GearName||'未知')+' · '+bleAge(data.real118AgeMs));
+    bleSetText('shift-118',(data.hasReal118?'校验有效':'尚未收到')+' · '+bleAge(data.real118AgeMs));
     bleSetText('shift-virtual-p',data.virtualParkActive?('发送中 · '+data.virtualParkRemainingMs+' ms'):'未发送');
     bleSetText('shift-latch',data.shiftLatched?'已锁存':'未锁存');
     bleSetText('shift-reason',(data.shiftReasonName||'--')+' / '+(data.senderReasonName||'--'));
-    bleSetText('shift-counters','0x118 RX '+data.real118RxCount+' · P TX '+data.virtualParkTxCount+' · TX fail '+data.virtualParkTxFailCount+' · Brake bad '+data.badBrakeStateCount+' · Seq old '+data.duplicateOrOldSequenceCount+' / gap '+data.sequenceGapCount);
+    bleSetText('shift-counters','0x118 RX '+data.real118RxCount+' · P TX '+data.virtualParkTxCount+' · TX fail '+data.virtualParkTxFailCount+' · Auto windows '+data.automaticWindowCount+' · Manual windows '+data.manualWindowCount+' · Brake bad '+data.badBrakeStateCount+' · Seq old '+data.duplicateOrOldSequenceCount+' / gap '+data.sequenceGapCount);
     bleSetShiftMessage(data.shiftEnabled?'功能已开启':'功能已关闭',!!data.shiftEnabled);
+    const manual=bleElement('shift-manual-btn');
+    if(manual){manual.disabled=bleManualBusy||!data.manualRequestReady||!!data.virtualParkActive;manual.title=data.manualRequestReady?'T2CAN 静止且为 D/R，可单次触发 1000 ms':(data.manualRequestReasonName||'当前不可手动触发');}
+    bleSetText('shift-manual-ready',data.manualRequestReady?'已就绪：无需踩刹车，点击后单次发送 1000 ms':('不可用：'+(data.manualRequestReasonName||'等待 T2CAN 状态')));
     const pair=bleElement('ble-pair-btn'),unbind=bleElement('ble-unbind-btn');
     if(pair)pair.disabled=!!data.peerDeviceId||!!data.pairing;if(unbind)unbind.disabled=!data.peerDeviceId;
   }catch(error){
@@ -1258,6 +1265,17 @@ async function bleSaveConfig(){
     const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'保存失败');
     bleSetMessage('BLE 配置已保存',true);bleSetShiftMessage('换挡配置已保存',true);bleLoadStatus();
   }catch(error){bleSetMessage(error&&error.message?error.message:'保存失败',false);bleSetShiftMessage(error&&error.message?error.message:'保存失败',false);}
+}
+async function bleManualShift(){
+  const button=bleElement('shift-manual-btn');
+  if(bleManualBusy||!button||button.disabled)return;
+  bleManualBusy=true;button.disabled=true;bleSetShiftMessage('正在提交手动虚拟 P 请求…',true);
+  try{
+    const response=await fetch('/ble_shift_manual',{method:'POST'});const data=await response.json();
+    if(!response.ok||!data.ok)throw new Error(data.reasonName||data.error||'手动触发失败');
+    bleSetShiftMessage('手动虚拟 P 已排队，窗口最长 1000 ms',true);
+  }catch(error){bleSetShiftMessage(error&&error.message?error.message:'手动触发失败',false);}
+  finally{await waitMs(250);bleManualBusy=false;bleLoadStatus();}
 }
 async function bleStartPairing(){
   try{

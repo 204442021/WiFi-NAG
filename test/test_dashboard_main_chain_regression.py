@@ -150,6 +150,8 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             "ble-bridge-section",
             "obstacle-shift-card",
             "shift-enabled",
+            "shift-manual-btn",
+            "shift-manual-ready",
             "shift-card-meta",
             "shift-state",
             "shift-brake",
@@ -239,6 +241,8 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             "ble-counters",
             "obstacle-shift-card",
             "shift-enabled",
+            "shift-manual-btn",
+            "shift-manual-ready",
             "shift-card-meta",
             "shift-state",
             "shift-brake",
@@ -258,6 +262,7 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         routes = {
             "/ble_status": "HTTP_GET",
             "/ble_config": "HTTP_POST",
+            "/ble_shift_manual": "HTTP_POST",
             "/ble_pair": "HTTP_POST",
             "/ble_unbind": "HTTP_POST",
             "/config": "HTTP_POST",
@@ -276,6 +281,10 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         self.assertNotIn("document.write", load)
         self.assertNotIn("document.body", load)
         self.assertNotIn("location.reload", load)
+        manual = extract_javascript_function(self.source, "bleManualShift")
+        self.assertIn("/ble_shift_manual", manual)
+        self.assertIn("method:'POST'", manual)
+        self.assertIn("finally", manual)
 
     def test_static_main_cards_use_native_accordion(self) -> None:
         self.assertIn('<body class="wifi-nag ui-phone ui-shell">', self.source)
