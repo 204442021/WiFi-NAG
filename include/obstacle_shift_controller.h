@@ -196,7 +196,8 @@ public:
                       const BrakeStateView &brake,
                       const ObstacleShiftRuntimeInputs &runtime,
                       uint32_t nowMs,
-                      CanDriver &driver)
+                      CanDriver &driver,
+                      bool allowStartFromFrame = true)
     {
         tick(brake, runtime, nowMs);
         if (isOwnEcho(frame, nowMs) || !validReal118(frame))
@@ -232,6 +233,13 @@ public:
             return;
         }
 
+        const bool starting = state_ == OBSTACLE_SHIFT_ARMED;
+        if (starting && !allowStartFromFrame)
+        {
+            publish(brake, runtime, nowMs);
+            return;
+        }
+
         CanFrame virtualPark;
         if (!makeVirtualParkFrame(frame, virtualPark))
         {
@@ -239,7 +247,6 @@ public:
             return;
         }
 
-        const bool starting = state_ == OBSTACLE_SHIFT_ARMED;
         if (!driver.send(virtualPark))
         {
             virtualParkTxFailCount_++;

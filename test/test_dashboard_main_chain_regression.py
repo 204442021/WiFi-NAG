@@ -299,6 +299,11 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         )
         self.assertIn(initializer, re.sub(r"\s+", "", self.source))
 
+    def test_obstacle_shift_is_marked_test_only_before_device_validation(self) -> None:
+        shift = extract_element(self.source, "obstacle-shift-card")
+        self.assertIn("测试功能", shift)
+        self.assertIn("不能作为道路安全功能", shift)
+
     def test_generated_wrapper_and_payload_are_current(self) -> None:
         base_include = '#include "web/mcp2515_dashboard_ui.base.h"'
         sweep_include = '#include "web/nag_sweep_dashboard.h"'

@@ -364,6 +364,35 @@ g.lastObstacle = 0;
 void handlePacket(const uint8_t *data)
 {
 const uint32_t sequence = BleBridgeProtocol::readLe32(data + 4);
+const bool helloSessionBoundary =
+    BleBridgeProtocol::isHelloSessionBoundary(data[2]);
+if (helloSessionBoundary)
+{
+const uint8_t *helloBody = data + BleBridgeProtocol::kPayloadOffset;
+const uint32_t incomingBootId = BleBridgeProtocol::readLe32(helloBody + 4);
+const BleBridgeProtocol::HelloAckDisposition helloDisposition =
+    BleBridgeProtocol::classifyHelloAck(
+        incomingBootId,
+        static_cast<uint32_t>(g.peerBoot),
+        static_cast<bool>(g.ready),
+        sequence,
+        static_cast<uint32_t>(g.lastRxSeq),
+        static_cast<bool>(g.haveRxSeq));
+if (helloDisposition == BleBridgeProtocol::HELLO_DUPLICATE_OR_OLD)
+{
+g.duplicateOrOld = static_cast<uint32_t>(g.duplicateOrOld) + 1U;
+return;
+}
+const bool replacingReadySession = static_cast<bool>(g.ready);
+g.ready = false;
+if (replacingReadySession)
+brakeStateMailbox.endSession();
+g.haveRxSeq = true;
+g.lastRxSeq = sequence;
+g.lastPacket = millis();
+acceptHello(data);
+return;
+}
 const BleBridgeProtocol::SequenceDisposition disposition =
     BleBridgeProtocol::classifySequence(
         sequence,
@@ -379,12 +408,6 @@ g.seqGap = static_cast<uint32_t>(g.seqGap) + 1U;
 g.haveRxSeq = true;
 g.lastRxSeq = sequence;
 g.lastPacket = millis();
-if (data[2] == BleBridgeProtocol::MSG_HELLO_ACK)
-{
-if (!static_cast<bool>(g.ready))
-acceptHello(data);
-return;
-}
 if (!static_cast<bool>(g.ready))
 return;
 if (data[2] == BleBridgeProtocol::MSG_QUERY_NAG)

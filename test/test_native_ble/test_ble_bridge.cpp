@@ -100,6 +100,84 @@ void test_brake_state_rejects_contradictory_release()
     TEST_ASSERT_FALSE(decodeBrakeStatePayload(payload, state));
 }
 
+void test_brake_state_rejects_active_with_short_hold_or_moving_speed()
+{
+    uint8_t payload[10] = {0x01, 0xFD, 0xDC, 0x37, 0x01,
+                           0x01, 0x95, 0x00, 0x00, 0x00};
+    BrakeStateData state;
+    TEST_ASSERT_FALSE(decodeBrakeStatePayload(payload, state));
+
+    payload[6] = 0x96;
+    payload[8] = 0x03;
+    TEST_ASSERT_FALSE(decodeBrakeStatePayload(payload, state));
+}
+
+void test_brake_state_rejects_reason_tail_and_gear_source_conflicts()
+{
+    uint8_t active[10] = {0x01, 0xFD, 0xDC, 0x37, 0x01,
+                          0x01, 0x96, 0x00, 0x00, 0x00};
+    BrakeStateData state;
+
+    active[5] = BRAKE_REASON_MOVING;
+    TEST_ASSERT_FALSE(decodeBrakeStatePayload(active, state));
+    active[5] = BRAKE_REASON_ACTIVE;
+    active[3] |= 0x08U;
+    TEST_ASSERT_FALSE(decodeBrakeStatePayload(active, state));
+    active[3] &= static_cast<uint8_t>(~0x08U);
+    active[4] = 0;
+    TEST_ASSERT_FALSE(decodeBrakeStatePayload(active, state));
+
+    uint8_t released[10] = {0x01, 0x6E, 0xDC, 0x39, 0x01,
+                            0x00, 0x00, 0x00, 0x00, 0x00};
+    TEST_ASSERT_FALSE(decodeBrakeStatePayload(released, state));
+    released[5] = BRAKE_REASON_RELEASE_CONFIRMED;
+    released[3] &= static_cast<uint8_t>(~0x08U);
+    TEST_ASSERT_FALSE(decodeBrakeStatePayload(released, state));
+}
+
+void test_hello_ack_classification_protects_ready_session_sequence()
+{
+    TEST_ASSERT_TRUE(BleBridgeProtocol::isHelloSessionBoundary(
+        BleBridgeProtocol::MSG_HELLO_ACK));
+    TEST_ASSERT_FALSE(BleBridgeProtocol::isHelloSessionBoundary(
+        BleBridgeProtocol::MSG_BRAKE_STATE));
+
+    TEST_ASSERT_EQUAL_UINT8(
+        BleBridgeProtocol::HELLO_DUPLICATE_OR_OLD,
+        BleBridgeProtocol::classifyHelloAck(0x1234, 0x1234, true,
+                                            100, 100, true));
+    TEST_ASSERT_EQUAL_UINT8(
+        BleBridgeProtocol::HELLO_DUPLICATE_OR_OLD,
+        BleBridgeProtocol::classifyHelloAck(0x1234, 0x1234, true,
+                                            99, 100, true));
+    TEST_ASSERT_EQUAL_UINT8(
+        BleBridgeProtocol::HELLO_NEW_SESSION,
+        BleBridgeProtocol::classifyHelloAck(0x1234, 0x1234, true,
+                                            101, 100, true));
+    TEST_ASSERT_EQUAL_UINT8(
+        BleBridgeProtocol::HELLO_NEW_SESSION,
+        BleBridgeProtocol::classifyHelloAck(0x5678, 0x1234, true,
+                                            1, 100, true));
+    TEST_ASSERT_EQUAL_UINT8(
+        BleBridgeProtocol::HELLO_NEW_SESSION,
+        BleBridgeProtocol::classifyHelloAck(0x1234, 0, false,
+                                            1, 100, true));
+}
+
+void test_mailbox_rejects_publish_after_session_end()
+{
+    BrakeStateMailbox mailbox;
+    mailbox.beginSession(0x1234, true, 10);
+    mailbox.endSession();
+    const uint8_t payload[10] = {0x01, 0xFD, 0xDC, 0x37, 0x01,
+                                 0x01, 0x96, 0x00, 0x00, 0x00};
+    TEST_ASSERT_FALSE(mailbox.publish(payload, 1, 20));
+    BrakeStateView view;
+    TEST_ASSERT_TRUE(mailbox.read(view));
+    TEST_ASSERT_FALSE(view.linkReady);
+    TEST_ASSERT_FALSE(view.hasState);
+}
+
 void test_sequence_comparison_is_global_and_wrap_safe()
 {
     TEST_ASSERT_TRUE(BleBridgeProtocol::isSequenceNewer(11, 10));
@@ -314,6 +392,10 @@ int main()
     RUN_TEST(test_brake_state_active_payload_decodes);
     RUN_TEST(test_brake_state_release_payload_decodes);
     RUN_TEST(test_brake_state_rejects_contradictory_release);
+    RUN_TEST(test_brake_state_rejects_active_with_short_hold_or_moving_speed);
+    RUN_TEST(test_brake_state_rejects_reason_tail_and_gear_source_conflicts);
+    RUN_TEST(test_hello_ack_classification_protects_ready_session_sequence);
+    RUN_TEST(test_mailbox_rejects_publish_after_session_end);
     RUN_TEST(test_sequence_comparison_is_global_and_wrap_safe);
     RUN_TEST(test_required_capabilities_keep_brake_state_optional);
     RUN_TEST(test_sequence_classification_accepts_gaps_and_rejects_old_packets);

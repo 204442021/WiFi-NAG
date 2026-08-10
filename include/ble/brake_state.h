@@ -2,6 +2,13 @@
 
 #include <cstdint>
 
+#ifdef NATIVE_BUILD
+#include <mutex>
+#else
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
+#endif
+
 #include "ble/bridge_protocol.h"
 #include "shared_types.h"
 
@@ -99,7 +106,29 @@ inline bool decodeBrakeStatePayload(const uint8_t *payload, BrakeStateData &out)
     decoded.brakeHoldMs = BleBridgeProtocol::readLe16(payload + 6);
     decoded.speedDeciKph = BleBridgeProtocol::readLe16(payload + 8);
 
+    if (decoded.brakeHoldReady && decoded.brakeHoldMs < 150U)
+        return false;
+    if (decoded.stationaryConfirmed &&
+        (!decoded.speedFresh || decoded.speedDeciKph > 2U))
+        return false;
+    if (decoded.gearFresh &&
+        (decoded.realGear == BRAKE_GEAR_UNKNOWN || decoded.gearSource == 0U))
+        return false;
+    if (decoded.realGear == BRAKE_GEAR_UNKNOWN && decoded.gearSource != 0U)
+        return false;
     if (decoded.releaseConfirmed && decoded.brakePressed)
+        return false;
+    if (decoded.brakePressed &&
+        (decoded.reason != BRAKE_REASON_ACTIVE || decoded.releaseTail))
+        return false;
+    if (!decoded.brakePressed && decoded.reason == BRAKE_REASON_ACTIVE)
+        return false;
+    if (decoded.releaseConfirmed &&
+        (decoded.reason != BRAKE_REASON_RELEASE_CONFIRMED ||
+         !decoded.releaseTail))
+        return false;
+    if (!decoded.releaseConfirmed &&
+        decoded.reason == BRAKE_REASON_RELEASE_CONFIRMED)
         return false;
     if (decoded.releaseConfirmed &&
         !(decoded.physicalKnown && decoded.physicalFresh &&
@@ -142,6 +171,7 @@ public:
     void beginSession(uint32_t peerBootId, bool supported, uint32_t nowMs)
     {
         (void)nowMs;
+        lockWriter();
         const uint32_t start = static_cast<uint32_t>(version_);
         version_ = start + 1U;
         sessionGeneration_ = static_cast<uint32_t>(sessionGeneration_) + 1U;
@@ -153,12 +183,17 @@ public:
         capabilitySupported_ = supported;
         hasState_ = false;
         version_ = start + 2U;
+        unlockWriter();
     }
 
     void endSession()
     {
+        lockWriter();
         if (!static_cast<bool>(linkReady_) && !static_cast<bool>(hasState_))
+        {
+            unlockWriter();
             return;
+        }
 
         const uint32_t start = static_cast<uint32_t>(version_);
         version_ = start + 1U;
@@ -171,16 +206,22 @@ public:
         capabilitySupported_ = false;
         hasState_ = false;
         version_ = start + 2U;
+        unlockWriter();
     }
 
     bool publish(const uint8_t payload[10], uint32_t sequence, uint32_t nowMs)
     {
         BrakeStateData decoded;
-        if (!static_cast<bool>(linkReady_) ||
-            !static_cast<bool>(capabilitySupported_) ||
-            !decodeBrakeStatePayload(payload, decoded))
+        if (!decodeBrakeStatePayload(payload, decoded))
             return false;
 
+        lockWriter();
+        if (!static_cast<bool>(linkReady_) ||
+            !static_cast<bool>(capabilitySupported_))
+        {
+            unlockWriter();
+            return false;
+        }
         const uint32_t start = static_cast<uint32_t>(version_);
         version_ = start + 1U;
         payload0_ = pack4(payload);
@@ -191,6 +232,7 @@ public:
         lastRxMs_ = nowMs;
         hasState_ = true;
         version_ = start + 2U;
+        unlockWriter();
         return true;
     }
 
@@ -233,6 +275,7 @@ public:
 #ifdef NATIVE_BUILD
     void reset()
     {
+        lockWriter();
         const uint32_t start = static_cast<uint32_t>(version_);
         version_ = start + 1U;
         sessionGeneration_ = 0;
@@ -244,10 +287,29 @@ public:
         capabilitySupported_ = false;
         hasState_ = false;
         version_ = start + 2U;
+        unlockWriter();
     }
 #endif
 
 private:
+    void lockWriter()
+    {
+#ifdef NATIVE_BUILD
+        writerMutex_.lock();
+#else
+        portENTER_CRITICAL(&writerMux_);
+#endif
+    }
+
+    void unlockWriter()
+    {
+#ifdef NATIVE_BUILD
+        writerMutex_.unlock();
+#else
+        portEXIT_CRITICAL(&writerMux_);
+#endif
+    }
+
     static uint32_t pack4(const uint8_t *data)
     {
         return static_cast<uint32_t>(data[0]) |
@@ -275,6 +337,11 @@ private:
     Shared<bool> linkReady_{false};
     Shared<bool> capabilitySupported_{false};
     Shared<bool> hasState_{false};
+#ifdef NATIVE_BUILD
+    std::mutex writerMutex_;
+#else
+    portMUX_TYPE writerMux_ = portMUX_INITIALIZER_UNLOCKED;
+#endif
 };
 
 inline BrakeStateMailbox brakeStateMailbox;

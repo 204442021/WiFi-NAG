@@ -98,6 +98,11 @@ inline bool supportsBrakeState(uint8_t capabilities)
     return (capabilities & CAPABILITY_BRAKE_STATE) != 0U;
 }
 
+inline bool isHelloSessionBoundary(uint8_t messageType)
+{
+    return messageType == MSG_HELLO_ACK;
+}
+
 enum SequenceDisposition : uint8_t
 {
     SEQUENCE_FIRST = 0,
@@ -115,6 +120,30 @@ inline SequenceDisposition classifySequence(uint32_t candidate,
     if (!isSequenceNewer(candidate, previous))
         return SEQUENCE_DUPLICATE_OR_OLD;
     return candidate == previous + 1U ? SEQUENCE_NEXT : SEQUENCE_GAP;
+}
+
+enum HelloAckDisposition : uint8_t
+{
+    HELLO_NEW_SESSION = 0,
+    HELLO_DUPLICATE_OR_OLD,
+};
+
+inline HelloAckDisposition classifyHelloAck(uint32_t incomingBootId,
+                                            uint32_t currentBootId,
+                                            bool ready,
+                                            uint32_t candidateSequence,
+                                            uint32_t previousSequence,
+                                            bool havePreviousSequence)
+{
+    if (!ready || incomingBootId != currentBootId)
+        return HELLO_NEW_SESSION;
+
+    return classifySequence(candidateSequence,
+                            previousSequence,
+                            havePreviousSequence) ==
+                   SEQUENCE_DUPLICATE_OR_OLD
+               ? HELLO_DUPLICATE_OR_OLD
+               : HELLO_NEW_SESSION;
 }
 
 inline uint8_t *payload(Packet &packet)

@@ -39,11 +39,28 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
         app = (ROOT / "include/app.h").read_text(encoding="utf-8")
         self.assertIn("obstacleShiftController.tick", app)
         self.assertIn("obstacleShiftController.observeFrame", app)
+        self.assertRegex(
+            app,
+            r"brakeAfterRead\.sequence\s*==\s*brakeBeforeRead\.sequence",
+        )
 
     def test_twai_rejects_extended_and_remote_frames_before_business_logic(self):
         twai = (ROOT / "include/drivers/twai_driver.h").read_text(encoding="utf-8")
         self.assertIn("!msg.extd", twai)
         self.assertIn("!msg.rtr", twai)
+
+    def test_brake_mailbox_serializes_all_writers(self):
+        mailbox = (ROOT / "include/ble/brake_state.h").read_text(encoding="utf-8")
+        self.assertIn("writerMux_", mailbox)
+        self.assertIn("portENTER_CRITICAL(&writerMux_)", mailbox)
+        self.assertIn("portEXIT_CRITICAL(&writerMux_)", mailbox)
+
+    def test_hello_ack_can_reset_a_ready_session_before_sequence_rejection(self):
+        self.assertIn("isHelloSessionBoundary", self.client)
+        self.assertIn("classifyHelloAck", self.client)
+        boundary = self.client.index("isHelloSessionBoundary")
+        sequence = self.client.index("classifySequence")
+        self.assertLess(boundary, sequence)
 
     def test_ble_disconnect_does_not_hot_swap_can_filters(self):
         self.assertNotIn("setFilters(", self.client)

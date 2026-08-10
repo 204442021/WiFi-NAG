@@ -522,7 +522,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
     <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
   </div>
   <div class="subsec-body">
-    <div class="info-box">真实挡位 D/R、双源刹车确认且车辆静止时，复制每一帧新鲜的原车 0x118，改为 P 后在同一总线发送，最长维持 500 ms。原车帧仍会存在，不固定重放或补发历史帧。</div>
+    <div class="info-box"><strong>测试功能：</strong>台架/封闭场地验证完成前，不能作为道路安全功能使用。真实挡位 D/R、双源刹车确认且车辆静止时，复制每一帧新鲜的原车 0x118，改为 P 后在同一总线发送，最长维持 500 ms。原车帧仍会存在，不固定重放或补发历史帧。</div>
     <div class="setting-row">
       <div class="setting-info"><div class="setting-name">D/R 挡启用换挡</div><div class="setting-desc">首次默认开启；关闭后立即停止并等待下一次明确释放。</div></div>
       <label class="tgl"><input type="checkbox" id="shift-enabled" onchange="bleSaveConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>

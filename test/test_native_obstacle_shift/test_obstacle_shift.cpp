@@ -348,6 +348,23 @@ void test_virtual_p_fingerprint_is_not_accepted_as_real_118()
     TEST_ASSERT_EQUAL_UINT32(1, mock.sent.size());
 }
 
+void test_frame_is_not_used_when_press_was_not_established_before_read()
+{
+    arm();
+    BrakeStateView brake = pressed(1, 20);
+    CanFrame first = make118(0x95, 1);
+    controller.observeFrame(first, brake, kReadyRuntime, 25, mock, false);
+    TEST_ASSERT_EQUAL_UINT32(0, mock.sent.size());
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_ARMED,
+                            controller.view(25).state);
+
+    CanFrame next = make118(0x95, 2);
+    controller.observeFrame(next, brake, kReadyRuntime, 35, mock, true);
+    TEST_ASSERT_EQUAL_UINT32(1, mock.sent.size());
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_ACTIVE_P,
+                            controller.view(35).state);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -370,5 +387,6 @@ int main()
     RUN_TEST(test_send_failure_latches_and_never_replays);
     RUN_TEST(test_real_gear_leaving_dr_stops_active_and_requires_release);
     RUN_TEST(test_virtual_p_fingerprint_is_not_accepted_as_real_118);
+    RUN_TEST(test_frame_is_not_used_when_press_was_not_established_before_read);
     return UNITY_END();
 }

@@ -280,24 +280,57 @@ static bool appLoop()
     CarManagerBase *h = appActiveHandler ? appActiveHandler : appHandler.get();
     uint8_t framesThisLoop = 0;
     bool processedFrame = false;
-    while (appDriver->read(frame))
+    for (;;)
     {
-        processedFrame = true;
-        if (frame.bus == CAN_BUS_ANY)
-            frame.bus = CAN_BUS_DEFAULT;
 #if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
-        if (!brakeStateMailbox.read(brakeView))
-            brakeView = BrakeStateView{};
+        BrakeStateView brakeBeforeRead;
+        if (!brakeStateMailbox.read(brakeBeforeRead))
+            brakeBeforeRead = BrakeStateView{};
         shiftRuntime.featureEnabled =
             static_cast<bool>(obstacleShiftFeatureEnabled);
         shiftRuntime.canWriteReady =
             appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
             !Update.isRunning() && !appCanRestartPreparing;
+        const uint32_t beforeReadMs = millis();
+        obstacleShiftController.tick(brakeBeforeRead,
+                                     shiftRuntime,
+                                     beforeReadMs);
+#endif
+        if (!appDriver->read(frame))
+            break;
+        processedFrame = true;
+        if (frame.bus == CAN_BUS_ANY)
+            frame.bus = CAN_BUS_DEFAULT;
+#if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
+        BrakeStateView brakeAfterRead;
+        if (!brakeStateMailbox.read(brakeAfterRead))
+            brakeAfterRead = BrakeStateView{};
+        shiftRuntime.featureEnabled =
+            static_cast<bool>(obstacleShiftFeatureEnabled);
+        shiftRuntime.canWriteReady =
+            appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
+            !Update.isRunning() && !appCanRestartPreparing;
+        const uint32_t afterReadMs = millis();
+        const bool pressEstablishedBeforeRead =
+            brakeBeforeRead.linkReady &&
+            brakeBeforeRead.capabilitySupported &&
+            brakeBeforeRead.hasState &&
+            brakeBeforeRead.data.brakePressed &&
+            afterReadMs - brakeBeforeRead.lastRxMs <=
+                ObstacleShiftController::kBrakeFreshMs &&
+            brakeAfterRead.linkReady &&
+            brakeAfterRead.capabilitySupported &&
+            brakeAfterRead.hasState &&
+            brakeAfterRead.data.brakePressed &&
+            brakeAfterRead.sessionGeneration ==
+                brakeBeforeRead.sessionGeneration &&
+            brakeAfterRead.sequence == brakeBeforeRead.sequence;
         obstacleShiftController.observeFrame(frame,
-                                             brakeView,
+                                             brakeAfterRead,
                                              shiftRuntime,
-                                             millis(),
-                                             *appDriver);
+                                             afterReadMs,
+                                             *appDriver,
+                                             pressEstablishedBeforeRead);
 #endif
 #if !(defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD) && defined(DASH_RGB_STATUS_LED))
         digitalWrite(PIN_LED, LOW);
