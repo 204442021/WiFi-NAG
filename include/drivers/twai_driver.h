@@ -3,6 +3,7 @@
 #include <cstring>
 #include "../can_frame_types.h"
 #include "can_driver.h"
+#include "twai_filter.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcpp"
 #include <driver/twai.h>
@@ -58,19 +59,13 @@ public:
         if (!ids || count == 0)
             return;
 
-        uint32_t differ = 0;
-        for (uint8_t i = 1; i < count; i++)
-            differ |= ids[0] ^ ids[i];
-
-        const uint32_t base = ids[0] & ~differ;
-        const uint32_t nextCode = base << 21;
-        const uint32_t nextMask = (differ << 21) | 0x001FFFFF;
+        const TwaiFilterResult nextFilter = computeTwaiFilter(ids, count);
         const uint8_t nextExactCount = (count < kMaxExactFilters) ? count : kMaxExactFilters;
 
         lock();
         const bool sameFilter = filterConfigured_ &&
-                                f_config_.acceptance_code == nextCode &&
-                                f_config_.acceptance_mask == nextMask &&
+                                f_config_.acceptance_code == nextFilter.acceptance_code &&
+                                f_config_.acceptance_mask == nextFilter.acceptance_mask &&
                                 f_config_.single_filter &&
                                 exactFilterListMatchesLocked(ids, nextExactCount);
         if (sameFilter)
@@ -89,8 +84,8 @@ public:
         exactFilterCount_ = nextExactCount;
         for (uint8_t i = 0; i < exactFilterCount_; i++)
             exactFilterIds_[i] = ids[i];
-        f_config_.acceptance_code = nextCode;
-        f_config_.acceptance_mask = nextMask;
+        f_config_.acceptance_code = nextFilter.acceptance_code;
+        f_config_.acceptance_mask = nextFilter.acceptance_mask;
         f_config_.single_filter = true;
         filterConfigured_ = true;
 
@@ -174,7 +169,8 @@ public:
                 unlock();
                 return false;
             }
-            const bool accepted = exactFilterMatchesLocked(msg.identifier);
+            const bool accepted = !msg.extd && !msg.rtr &&
+                                  exactFilterMatchesLocked(msg.identifier);
             unlock();
 
             if (!accepted)
@@ -241,14 +237,7 @@ private:
 
     bool exactFilterMatchesLocked(uint32_t id) const
     {
-        if (exactFilterCount_ == 0)
-            return true;
-        for (uint8_t i = 0; i < exactFilterCount_; i++)
-        {
-            if (exactFilterIds_[i] == id)
-                return true;
-        }
-        return false;
+        return exactCanIdMatches(exactFilterIds_, exactFilterCount_, id);
     }
 
     bool waitForBusIdleLocked() const

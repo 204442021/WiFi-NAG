@@ -6,6 +6,12 @@
 #include "can_helpers.h"
 #include "handlers.h"
 
+#if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
+#include "ble/brake_state.h"
+#include "ble/bridge_client.h"
+#include "obstacle_shift_controller.h"
+#endif
+
 #ifndef NATIVE_BUILD
 #ifdef ESP_PLATFORM
 #include "platform/espidf_runtime.h"
@@ -79,6 +85,10 @@ static void appPrepareCanForRestart()
     nagKillerRuntime = false;
     appCanWriteModeKnown = true;
     appLastWriteEnabled = false;
+#if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
+    obstacleShiftController.reset();
+    brakeStateMailbox.endSession();
+#endif
     if (appDriver)
         appDriver->prepareForRestart();
 }
@@ -234,6 +244,18 @@ static bool appLoop()
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
     const bool desiredWriteEnabled = canActive && !Update.isRunning() && !appCanRestartPreparing;
     appSyncCanWriteMode(desiredWriteEnabled);
+#if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
+    BrakeStateView brakeView;
+    if (!brakeStateMailbox.read(brakeView))
+        brakeView = BrakeStateView{};
+    ObstacleShiftRuntimeInputs shiftRuntime{
+        static_cast<bool>(obstacleShiftFeatureEnabled),
+        appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
+            !Update.isRunning() && !appCanRestartPreparing,
+    };
+    const uint32_t shiftNowMs = millis();
+    obstacleShiftController.tick(brakeView, shiftRuntime, shiftNowMs);
+#endif
     if (Update.isRunning())
     {
         delay(1);
@@ -263,6 +285,20 @@ static bool appLoop()
         processedFrame = true;
         if (frame.bus == CAN_BUS_ANY)
             frame.bus = CAN_BUS_DEFAULT;
+#if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
+        if (!brakeStateMailbox.read(brakeView))
+            brakeView = BrakeStateView{};
+        shiftRuntime.featureEnabled =
+            static_cast<bool>(obstacleShiftFeatureEnabled);
+        shiftRuntime.canWriteReady =
+            appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
+            !Update.isRunning() && !appCanRestartPreparing;
+        obstacleShiftController.observeFrame(frame,
+                                             brakeView,
+                                             shiftRuntime,
+                                             millis(),
+                                             *appDriver);
+#endif
 #if !(defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD) && defined(DASH_RGB_STATUS_LED))
         digitalWrite(PIN_LED, LOW);
 #endif

@@ -1,35 +1,6 @@
 #include <unity.h>
 #include <cstdint>
-
-// Extracted filter computation logic from TWAIDriver::setFilters() so it can be
-// unit-tested without the ESP-IDF TWAI hardware API.
-struct TwaiFilterResult
-{
-    uint32_t acceptance_code;
-    uint32_t acceptance_mask;
-};
-
-static TwaiFilterResult computeTwaiFilter(const uint32_t *ids, uint8_t count)
-{
-    TwaiFilterResult r = {};
-    if (count == 0)
-        return r;
-
-    uint32_t differ = 0;
-    for (uint8_t i = 1; i < count; i++)
-        differ |= ids[0] ^ ids[i];
-
-    uint32_t base = ids[0] & ~differ;
-    r.acceptance_code = base << 21;
-    r.acceptance_mask = (differ << 21) | 0x001FFFFF;
-    return r;
-}
-
-static bool filterAccepts(const TwaiFilterResult &f, uint32_t id)
-{
-    uint32_t rx = id << 21;
-    return (rx & ~f.acceptance_mask) == (f.acceptance_code & ~f.acceptance_mask);
-}
+#include "drivers/twai_filter.h"
 
 void setUp() {}
 void tearDown() {}
@@ -38,15 +9,29 @@ void test_wifi_nag_single_id_accepts_0x370()
 {
     uint32_t ids[] = {880};
     auto f = computeTwaiFilter(ids, 1);
-    TEST_ASSERT_TRUE(filterAccepts(f, 880));
+    TEST_ASSERT_TRUE(twaiHardwareFilterAccepts(f, 880));
 }
 
 void test_wifi_nag_single_id_rejects_neighbor_ids()
 {
     uint32_t ids[] = {880};
     auto f = computeTwaiFilter(ids, 1);
-    TEST_ASSERT_FALSE(filterAccepts(f, 879));
-    TEST_ASSERT_FALSE(filterAccepts(f, 881));
+    TEST_ASSERT_FALSE(twaiHardwareFilterAccepts(f, 879));
+    TEST_ASSERT_FALSE(twaiHardwareFilterAccepts(f, 881));
+}
+
+void test_ble_filter_contains_four_required_ids()
+{
+    const uint32_t ids[] = {0x370, 0x255, 0x12B, 0x118};
+    const TwaiFilterResult filter = computeTwaiFilter(ids, 4);
+    for (const uint32_t id : ids)
+    {
+        TEST_ASSERT_TRUE(twaiHardwareFilterAccepts(filter, id));
+        TEST_ASSERT_TRUE(exactCanIdMatches(ids, 4, id));
+    }
+    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 4, 0x117));
+    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 4, 0x119));
+    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 4, 0x371));
 }
 
 void test_wifi_nag_single_id_mask_is_exact()
@@ -71,5 +56,6 @@ int main()
     RUN_TEST(test_wifi_nag_single_id_rejects_neighbor_ids);
     RUN_TEST(test_wifi_nag_single_id_mask_is_exact);
     RUN_TEST(test_empty_count_returns_zero);
+    RUN_TEST(test_ble_filter_contains_four_required_ids);
     return UNITY_END();
 }
