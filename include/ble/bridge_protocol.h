@@ -11,12 +11,17 @@ static constexpr std::size_t kPayloadOffset = 8;
 static constexpr std::size_t kPayloadSize = 10;
 static constexpr uint8_t kMagic = 0xA7;
 static constexpr uint8_t kVersion = 0x02;
+static constexpr uint8_t kRequiredCapabilities = 0x0F;
+static constexpr uint8_t CAPABILITY_BRAKE_STATE = 0x10;
+static constexpr uint8_t kAdvertisedCapabilities =
+    kRequiredCapabilities | CAPABILITY_BRAKE_STATE;
 
 enum MessageType : uint8_t
 {
     MSG_OBSTACLE_STATE = 0x01,
     MSG_SET_NAG = 0x10,
     MSG_QUERY_NAG = 0x11,
+    MSG_BRAKE_STATE = 0x12,
     MSG_NAG_STATE = 0x20,
     MSG_HELLO = 0x30,
     MSG_HELLO_ACK = 0x31,
@@ -77,6 +82,12 @@ inline void writeLe32(uint8_t *p, uint32_t value)
     p[3] = static_cast<uint8_t>((value >> 24) & 0xFFU);
 }
 
+inline bool isSequenceNewer(uint32_t candidate, uint32_t previous)
+{
+    return candidate != previous &&
+           static_cast<int32_t>(candidate - previous) > 0;
+}
+
 inline uint8_t *payload(Packet &packet)
 {
     return packet.bytes + kPayloadOffset;
@@ -123,6 +134,7 @@ inline bool isKnownMessageType(uint8_t type)
     case MSG_OBSTACLE_STATE:
     case MSG_SET_NAG:
     case MSG_QUERY_NAG:
+    case MSG_BRAKE_STATE:
     case MSG_NAG_STATE:
     case MSG_HELLO:
     case MSG_HELLO_ACK:

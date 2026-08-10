@@ -2,6 +2,7 @@
 
 #include "ble/bridge_client.h"
 #include "ble/bridge_protocol.h"
+#include "ble/brake_state.h"
 #include "can_frame_types.h"
 #include "nag_state_controller.h"
 #include "obstacle_can_snapshot.h"
@@ -60,6 +61,75 @@ void test_ble_packet_rejects_crc_corruption()
                                                         BleBridgeProtocol::kPacketSize));
 }
 
+void test_brake_state_contract_and_capabilities()
+{
+    TEST_ASSERT_TRUE(BleBridgeProtocol::isKnownMessageType(0x12));
+    TEST_ASSERT_EQUAL_HEX8(0x0F, BleBridgeProtocol::kRequiredCapabilities);
+    TEST_ASSERT_EQUAL_HEX8(0x1F, BleBridgeProtocol::kAdvertisedCapabilities);
+    TEST_ASSERT_EQUAL_HEX8(0x10, BleBridgeProtocol::CAPABILITY_BRAKE_STATE);
+}
+
+void test_brake_state_active_payload_decodes()
+{
+    const uint8_t payload[10] = {0x01, 0xFD, 0xDC, 0x37, 0x01,
+                                 0x01, 0x96, 0x00, 0x00, 0x00};
+    BrakeStateData state;
+    TEST_ASSERT_TRUE(decodeBrakeStatePayload(payload, state));
+    TEST_ASSERT_TRUE(state.brakePressed);
+    TEST_ASSERT_FALSE(state.releaseConfirmed);
+    TEST_ASSERT_EQUAL_UINT8(BRAKE_GEAR_D, state.realGear);
+    TEST_ASSERT_TRUE(state.stationaryConfirmed);
+    TEST_ASSERT_EQUAL_UINT16(150, state.brakeHoldMs);
+}
+
+void test_brake_state_release_payload_decodes()
+{
+    const uint8_t payload[10] = {0x01, 0x6E, 0xDC, 0x39, 0x01,
+                                 0x02, 0x00, 0x00, 0x00, 0x00};
+    BrakeStateData state;
+    TEST_ASSERT_TRUE(decodeBrakeStatePayload(payload, state));
+    TEST_ASSERT_FALSE(state.brakePressed);
+    TEST_ASSERT_TRUE(state.releaseConfirmed);
+}
+
+void test_brake_state_rejects_contradictory_release()
+{
+    const uint8_t payload[10] = {0x01, 0xFF, 0xDC, 0x3F, 0x01,
+                                 0x02, 0x96, 0x00, 0x00, 0x00};
+    BrakeStateData state;
+    TEST_ASSERT_FALSE(decodeBrakeStatePayload(payload, state));
+}
+
+void test_sequence_comparison_is_global_and_wrap_safe()
+{
+    TEST_ASSERT_TRUE(BleBridgeProtocol::isSequenceNewer(11, 10));
+    TEST_ASSERT_FALSE(BleBridgeProtocol::isSequenceNewer(10, 10));
+    TEST_ASSERT_FALSE(BleBridgeProtocol::isSequenceNewer(9, 10));
+    TEST_ASSERT_TRUE(BleBridgeProtocol::isSequenceNewer(0, UINT32_MAX));
+}
+
+void test_brake_mailbox_starts_new_session_without_reusing_old_state()
+{
+    BrakeStateMailbox mailbox;
+    mailbox.beginSession(0x1234, true, 100);
+    const uint8_t payload[10] = {0x01, 0xFD, 0xDC, 0x37, 0x01,
+                                 0x01, 0x96, 0x00, 0x00, 0x00};
+    TEST_ASSERT_TRUE(mailbox.publish(payload, 44, 120));
+
+    BrakeStateView before;
+    TEST_ASSERT_TRUE(mailbox.read(before));
+    TEST_ASSERT_TRUE(before.hasState);
+    TEST_ASSERT_TRUE(before.data.brakePressed);
+
+    mailbox.beginSession(0x5678, true, 200);
+    BrakeStateView after;
+    TEST_ASSERT_TRUE(mailbox.read(after));
+    TEST_ASSERT_FALSE(after.hasState);
+    TEST_ASSERT_TRUE(after.linkReady);
+    TEST_ASSERT_EQUAL_HEX32(0x5678, after.peerBootId);
+    TEST_ASSERT_TRUE(after.sessionGeneration > before.sessionGeneration);
+}
+
 void test_periodic_obstacle_contract_is_50ms_and_not_query()
 {
     TEST_ASSERT_EQUAL_UINT32(50, BleBridgeTiming::kObstacleStatePeriodMs);
@@ -83,7 +153,6 @@ void test_periodic_obstacle_contract_is_50ms_and_not_query()
     TEST_ASSERT_EQUAL_HEX8(BleBridgeProtocol::MSG_OBSTACLE_STATE,
                            packet.bytes[2]);
     TEST_ASSERT_EQUAL_UINT8(0, packet.bytes[3]);
-    TEST_ASSERT_FALSE(BleBridgeProtocol::isKnownMessageType(0x12));
 }
 
 void test_obstacle_snapshot_keeps_latest_255_and_12b()
@@ -211,6 +280,12 @@ int main()
     UNITY_BEGIN();
     RUN_TEST(test_ble_packet_crc_round_trip);
     RUN_TEST(test_ble_packet_rejects_crc_corruption);
+    RUN_TEST(test_brake_state_contract_and_capabilities);
+    RUN_TEST(test_brake_state_active_payload_decodes);
+    RUN_TEST(test_brake_state_release_payload_decodes);
+    RUN_TEST(test_brake_state_rejects_contradictory_release);
+    RUN_TEST(test_sequence_comparison_is_global_and_wrap_safe);
+    RUN_TEST(test_brake_mailbox_starts_new_session_without_reusing_old_state);
     RUN_TEST(test_periodic_obstacle_contract_is_50ms_and_not_query);
     RUN_TEST(test_obstacle_snapshot_keeps_latest_255_and_12b);
     RUN_TEST(test_obstacle_snapshot_marks_wrong_dlc_invalid_without_stale_payload);
