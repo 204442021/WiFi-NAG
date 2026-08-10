@@ -24,15 +24,11 @@ class WifiNagRegressionTests(unittest.TestCase):
         pattern = rf'\bid=(?:"{re.escape(element_id)}"|{re.escape(element_id)}\b)'
         self.assertRegex(self.ui, pattern)
 
-    def test_generated_ui_wrapper_loads_real_base_page(self) -> None:
+    def test_generated_ui_wrapper_loads_only_real_base_page(self) -> None:
         base_include = '#include "web/mcp2515_dashboard_ui.base.h"'
         extension_include = '#include "web/nag_sweep_dashboard.h"'
         self.assertEqual(self.ui_wrapper.count(base_include), 1)
-        self.assertIn(extension_include, self.ui_wrapper)
-        self.assertLess(
-            self.ui_wrapper.index(base_include),
-            self.ui_wrapper.index(extension_include),
-        )
+        self.assertNotIn(extension_include, self.ui_wrapper)
 
     def test_wifi_ui_has_expected_fields(self) -> None:
         required_ids = [

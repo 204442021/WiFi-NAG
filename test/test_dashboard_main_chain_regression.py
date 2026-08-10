@@ -147,21 +147,15 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             "ble-bridge-section",
             "obstacle-shift-card",
             "shift-enabled",
-            "shift-manual-btn",
-            "shift-manual-ready",
             "shift-card-meta",
             "shift-state",
             "shift-brake",
-            "shift-release",
-            "shift-source",
             "shift-gear",
             "shift-speed",
             "shift-118",
             "shift-virtual-p",
-            "shift-latch",
             "shift-reason",
             "shift-counters",
-            "shift-action-msg",
             "wifi-config-card",
             "wifi-hotspot-section",
             "wifi-internet-section",
@@ -175,6 +169,22 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             for element_id in core_ids:
                 with self.subTest(file=label, element_id=element_id):
                     self.assert_has_id(html, element_id)
+
+        retired_shift_ids = (
+            "shift-manual-btn",
+            "shift-manual-ready",
+            "shift-release",
+            "shift-source",
+            "shift-latch",
+            "shift-action-msg",
+        )
+        for label, html in (("source", self.source), ("generated", self.generated_html)):
+            for element_id in retired_shift_ids:
+                with self.subTest(file=label, retired_element_id=element_id):
+                    self.assertNotRegex(
+                        html,
+                        rf'\bid=(?:"{re.escape(element_id)}"|\'{re.escape(element_id)}\'|{re.escape(element_id)}\b)',
+                    )
 
     def test_static_page_regions_have_correct_owners(self) -> None:
         config = extract_element(self.source, "config-card")

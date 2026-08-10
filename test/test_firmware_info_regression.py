@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_FILE = ROOT / "VERSION"
-RELEASE_NOTES_FILE = ROOT / "RELEASE_NOTES_V1.0.6.md"
+RELEASE_NOTES_FILE = ROOT / "RELEASE_NOTES_V1.0.7.md"
 CMAKE_FILE = ROOT / "CMakeLists.txt"
 DASH_FILE = ROOT / "include" / "web" / "mcp2515_dashboard.h"
 UI_SOURCE_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.src.h"
@@ -17,23 +17,29 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.version = VERSION_FILE.read_text(encoding="utf-8").strip()
-        cls.release_notes = RELEASE_NOTES_FILE.read_text(encoding="utf-8")
+        cls.release_notes = (
+            RELEASE_NOTES_FILE.read_text(encoding="utf-8")
+            if RELEASE_NOTES_FILE.exists()
+            else ""
+        )
         cls.cmake = CMAKE_FILE.read_text(encoding="utf-8")
         cls.dash = DASH_FILE.read_text(encoding="utf-8")
         cls.ui_source = UI_SOURCE_FILE.read_text(encoding="utf-8-sig")
         cls.ui_base = UI_BASE_FILE.read_text(encoding="utf-8-sig")
         cls.ui_wrapper = UI_WRAPPER_FILE.read_text(encoding="utf-8-sig")
 
-    def test_version_file_is_single_v1_0_6_source(self) -> None:
-        self.assertEqual(self.version, "V1.0.6")
+    def test_version_file_is_single_v1_0_7_source(self) -> None:
+        self.assertEqual(self.version, "V1.0.7")
         self.assertNotIn("3.0.0-beta.5", self.version)
 
-    def test_v1_0_6_release_notes_match_internal_version(self) -> None:
-        self.assertIn("# WIFI-NAG V1.0.6", self.release_notes)
-        self.assertIn("`V1.0.6`", self.release_notes)
-        self.assertIn("持续虚拟 P 注入", self.release_notes)
-        self.assertIn("删除手动虚拟 P 按钮", self.release_notes)
-        self.assertNotIn("1000 ms", self.release_notes)
+    def test_v1_0_7_release_notes_match_internal_version(self) -> None:
+        self.assertIn("# WIFI-NAG V1.0.7", self.release_notes)
+        self.assertIn("`V1.0.7`", self.release_notes)
+        self.assertIn("每个真实 `0x370`", self.release_notes)
+        self.assertIn("`+1.50 .. +1.80 Nm`", self.release_notes)
+        self.assertIn("`2000 ms`", self.release_notes)
+        self.assertIn("障碍物换挡开关强制关闭", self.release_notes)
+        self.assertNotIn("5～8 秒发送间隔", self.release_notes)
 
     def test_espidf_internal_version_comes_from_version_file(self) -> None:
         self.assertRegex(
@@ -58,15 +64,11 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
         self.assertIn(persist_call, self.dash)
         self.assertLess(self.dash.index(success_guard), self.dash.index(persist_call))
 
-    def test_generated_ui_wrapper_loads_real_base_page(self) -> None:
+    def test_generated_ui_wrapper_loads_only_real_base_page(self) -> None:
         base_include = '#include "web/mcp2515_dashboard_ui.base.h"'
         extension_include = '#include "web/nag_sweep_dashboard.h"'
         self.assertEqual(self.ui_wrapper.count(base_include), 1)
-        self.assertIn(extension_include, self.ui_wrapper)
-        self.assertLess(
-            self.ui_wrapper.index(base_include),
-            self.ui_wrapper.index(extension_include),
-        )
+        self.assertNotIn(extension_include, self.ui_wrapper)
 
     def test_firmware_update_card_has_exactly_required_metadata_fields(self) -> None:
         for label, ui in (("source", self.ui_source), ("base", self.ui_base)):
@@ -113,6 +115,7 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
                 self.assertNotIn("V1.0.3", text)
                 self.assertNotIn("V1.0.4", text)
                 self.assertNotIn("V1.0.5", text)
+                self.assertNotIn("V1.0.6", text)
 
 
 if __name__ == "__main__":
