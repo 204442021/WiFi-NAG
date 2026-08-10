@@ -2,6 +2,7 @@
 #if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
 #include <algorithm>
 #include <cstring>
+#include "ble/brake_state.h"
 #include "ble/bridge_protocol.h"
 #include "obstacle_can_snapshot.h"
 #include "platform/espidf_runtime.h"
@@ -32,7 +33,6 @@ constexpr uint32_t kHandshakeMs = 5000;
 constexpr uint32_t kStateMs = 1000;
 constexpr uint32_t kScanMs = 5000;
 constexpr uint32_t kBackoff[] = {500, 1000, 2000, 5000};
-constexpr uint8_t kCaps = 0x0f;
 constexpr uint8_t kRemoteRole = 0x02;
 constexpr uint8_t kCommandDepth = 4;
 const ble_uuid128_t kService = {{BLE_UUID_TYPE_128},
@@ -59,7 +59,7 @@ Shared<uint8_t> peerCaps{0};
 Shared<int8_t> rssi{-127};
 Shared<uint32_t> reconnects{0}, disconnects{0}, obstacleTx{0}, obstacleFail{0}, stateTx{0};
 Shared<uint32_t> crcFail{0}, badLength{0}, badMagic{0}, badVersion{0}, unknown{0};
-Shared<uint32_t> peerReject{0}, seqGap{0};
+Shared<uint32_t> peerReject{0}, seqGap{0}, duplicateOrOld{0}, badBrakeState{0};
 QueueHandle_t commands = nullptr;
 } g;
 uint32_t randomNonZero()
@@ -100,6 +100,7 @@ g.status = static_cast<uint8_t>(status);
 }
 void resetLink()
 {
+brakeStateMailbox.endSession();
 g.scanning = false;
 g.connecting = false;
 g.connected = false;
@@ -271,7 +272,7 @@ auto packet = BleBridgeProtocol::makePacket(BleBridgeProtocol::MSG_HELLO, 0, nex
 uint8_t *body = BleBridgeProtocol::payload(packet);
 BleBridgeProtocol::writeLe32(body, static_cast<uint32_t>(g.deviceId));
 BleBridgeProtocol::writeLe32(body + 4, static_cast<uint32_t>(g.bootId));
-body[8] = kCaps;
+body[8] = BleBridgeProtocol::kAdvertisedCapabilities;
 body[9] = 0x01;
 return sendPacket(packet, false, false);
 }
@@ -325,7 +326,9 @@ void acceptHello(const uint8_t *data)
 const uint8_t *body = data + BleBridgeProtocol::kPayloadOffset;
 const uint32_t peer = BleBridgeProtocol::readLe32(body);
 const uint32_t saved = static_cast<uint32_t>(g.peerId);
-if (!peer || body[9] != kRemoteRole || (body[8] & kCaps) != kCaps || (saved && saved != peer))
+if (!peer || body[9] != kRemoteRole ||
+    !BleBridgeProtocol::supportsRequiredCapabilities(body[8]) ||
+    (saved && saved != peer))
 {
 g.peerReject = static_cast<uint32_t>(g.peerReject) + 1;
 setStatus(BLE_BRIDGE_PROTOCOL_INCOMPATIBLE);
@@ -347,9 +350,12 @@ g.pairing = false;
 }
 g.peerBoot = BleBridgeProtocol::readLe32(body + 4);
 g.peerCaps = body[8];
+brakeStateMailbox.beginSession(
+    static_cast<uint32_t>(g.peerBoot),
+    BleBridgeProtocol::supportsBrakeState(body[8]),
+    millis());
 g.ready = true;
 g.backoff = 0;
-g.haveRxSeq = false;
 setStatus(BLE_BRIDGE_PROTOCOL_READY);
 nagStateController.forceReport();
 g.forceState = true;
@@ -358,8 +364,18 @@ g.lastObstacle = 0;
 void handlePacket(const uint8_t *data)
 {
 const uint32_t sequence = BleBridgeProtocol::readLe32(data + 4);
-if (static_cast<bool>(g.haveRxSeq) && sequence != static_cast<uint32_t>(g.lastRxSeq) + 1u)
-g.seqGap = static_cast<uint32_t>(g.seqGap) + 1;
+const BleBridgeProtocol::SequenceDisposition disposition =
+    BleBridgeProtocol::classifySequence(
+        sequence,
+        static_cast<uint32_t>(g.lastRxSeq),
+        static_cast<bool>(g.haveRxSeq));
+if (disposition == BleBridgeProtocol::SEQUENCE_DUPLICATE_OR_OLD)
+{
+g.duplicateOrOld = static_cast<uint32_t>(g.duplicateOrOld) + 1U;
+return;
+}
+if (disposition == BleBridgeProtocol::SEQUENCE_GAP)
+g.seqGap = static_cast<uint32_t>(g.seqGap) + 1U;
 g.haveRxSeq = true;
 g.lastRxSeq = sequence;
 g.lastPacket = millis();
@@ -375,6 +391,14 @@ if (data[2] == BleBridgeProtocol::MSG_QUERY_NAG)
 {
 nagStateController.forceReport();
 g.forceState = true;
+return;
+}
+if (data[2] == BleBridgeProtocol::MSG_BRAKE_STATE)
+{
+if (!brakeStateMailbox.publish(data + BleBridgeProtocol::kPayloadOffset,
+                               sequence,
+                               millis()))
+g.badBrakeState = static_cast<uint32_t>(g.badBrakeState) + 1U;
 return;
 }
 if (data[2] != BleBridgeProtocol::MSG_SET_NAG)
@@ -654,6 +678,7 @@ if (p.begin(kPrefs, false))
 {
 g.enabled = p.getBool("enabled", false);
 g.obstacle = p.getBool("obs_fwd", true);
+obstacleShiftFeatureEnabled = p.getBool("shift_dr", true);
 uint32_t id = readU32(p, "dev_id");
 if (!id)
 {
@@ -711,6 +736,7 @@ else
 {
 g.pairing = false;
 g.ready = false;
+brakeStateMailbox.endSession();
 setStatus(BLE_BRIDGE_PROTOCOL_DISABLED);
 }
 }
@@ -724,6 +750,16 @@ if (persist)
 persistBool("obs_fwd", value);
 }
 bool BleBridgeClient::obstacleForwarding() const { return static_cast<bool>(g.obstacle); }
+void BleBridgeClient::setObstacleShiftEnabled(bool value, bool persist)
+{
+obstacleShiftFeatureEnabled = value;
+if (persist)
+persistBool("shift_dr", value);
+}
+bool BleBridgeClient::obstacleShiftEnabled() const
+{
+return static_cast<bool>(obstacleShiftFeatureEnabled);
+}
 bool BleBridgeClient::startPairing()
 {
 if (static_cast<uint32_t>(g.peerId))
@@ -741,6 +777,7 @@ g.stopping = true;
 g.enabled = false;
 g.pairing = false;
 g.ready = false;
+brakeStateMailbox.endSession();
 setStatus(BLE_BRIDGE_PROTOCOL_DISABLED);
 }
 void BleBridgeClient::forceNagState() { g.forceState = true; }
@@ -806,6 +843,8 @@ out.badVersionCount = static_cast<uint32_t>(g.badVersion);
 out.unknownTypeCount = static_cast<uint32_t>(g.unknown);
 out.peerRejectCount = static_cast<uint32_t>(g.peerReject);
 out.sequenceGapCount = static_cast<uint32_t>(g.seqGap);
+out.duplicateOrOldSequenceCount = static_cast<uint32_t>(g.duplicateOrOld);
+out.badBrakeStateCount = static_cast<uint32_t>(g.badBrakeState);
 return out;
 }
 #endif

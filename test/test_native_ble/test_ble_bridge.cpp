@@ -108,6 +108,36 @@ void test_sequence_comparison_is_global_and_wrap_safe()
     TEST_ASSERT_TRUE(BleBridgeProtocol::isSequenceNewer(0, UINT32_MAX));
 }
 
+void test_required_capabilities_keep_brake_state_optional()
+{
+    TEST_ASSERT_TRUE(BleBridgeProtocol::supportsRequiredCapabilities(0x0F));
+    TEST_ASSERT_TRUE(BleBridgeProtocol::supportsRequiredCapabilities(0x1F));
+    TEST_ASSERT_FALSE(BleBridgeProtocol::supportsRequiredCapabilities(0x10));
+    TEST_ASSERT_FALSE(BleBridgeProtocol::supportsBrakeState(0x0F));
+    TEST_ASSERT_TRUE(BleBridgeProtocol::supportsBrakeState(0x1F));
+}
+
+void test_sequence_classification_accepts_gaps_and_rejects_old_packets()
+{
+    TEST_ASSERT_EQUAL_UINT8(BleBridgeProtocol::SEQUENCE_FIRST,
+                            BleBridgeProtocol::classifySequence(100, 0, false));
+    TEST_ASSERT_EQUAL_UINT8(BleBridgeProtocol::SEQUENCE_NEXT,
+                            BleBridgeProtocol::classifySequence(101, 100, true));
+    TEST_ASSERT_EQUAL_UINT8(BleBridgeProtocol::SEQUENCE_GAP,
+                            BleBridgeProtocol::classifySequence(104, 101, true));
+    TEST_ASSERT_EQUAL_UINT8(BleBridgeProtocol::SEQUENCE_DUPLICATE_OR_OLD,
+                            BleBridgeProtocol::classifySequence(104, 104, true));
+    TEST_ASSERT_EQUAL_UINT8(BleBridgeProtocol::SEQUENCE_DUPLICATE_OR_OLD,
+                            BleBridgeProtocol::classifySequence(103, 104, true));
+    TEST_ASSERT_EQUAL_UINT8(BleBridgeProtocol::SEQUENCE_NEXT,
+                            BleBridgeProtocol::classifySequence(0, UINT32_MAX, true));
+}
+
+void test_obstacle_shift_feature_defaults_enabled()
+{
+    TEST_ASSERT_TRUE(static_cast<bool>(obstacleShiftFeatureEnabled));
+}
+
 void test_brake_mailbox_starts_new_session_without_reusing_old_state()
 {
     BrakeStateMailbox mailbox;
@@ -285,6 +315,9 @@ int main()
     RUN_TEST(test_brake_state_release_payload_decodes);
     RUN_TEST(test_brake_state_rejects_contradictory_release);
     RUN_TEST(test_sequence_comparison_is_global_and_wrap_safe);
+    RUN_TEST(test_required_capabilities_keep_brake_state_optional);
+    RUN_TEST(test_sequence_classification_accepts_gaps_and_rejects_old_packets);
+    RUN_TEST(test_obstacle_shift_feature_defaults_enabled);
     RUN_TEST(test_brake_mailbox_starts_new_session_without_reusing_old_state);
     RUN_TEST(test_periodic_obstacle_contract_is_50ms_and_not_query);
     RUN_TEST(test_obstacle_snapshot_keeps_latest_255_and_12b);

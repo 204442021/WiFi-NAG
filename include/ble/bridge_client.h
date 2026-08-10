@@ -2,11 +2,15 @@
 
 #include <cstdint>
 
+#include "shared_types.h"
+
 #if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
 #include <esp_random.h>
 #endif
 
 #include "nag_state_controller.h"
+
+inline Shared<bool> obstacleShiftFeatureEnabled{true};
 
 namespace BleBridgeTiming
 {
@@ -100,6 +104,8 @@ struct BleBridgeDiagnostics
     uint32_t unknownTypeCount = 0;
     uint32_t peerRejectCount = 0;
     uint32_t sequenceGapCount = 0;
+    uint32_t duplicateOrOldSequenceCount = 0;
+    uint32_t badBrakeStateCount = 0;
 };
 
 class BleBridgeClient
@@ -110,6 +116,8 @@ public:
     bool enabled() const;
     void setObstacleForwarding(bool enabled, bool persist = true);
     bool obstacleForwarding() const;
+    void setObstacleShiftEnabled(bool enabled, bool persist = true);
+    bool obstacleShiftEnabled() const;
     bool startPairing();
     void unbind();
     void prepareForRestart();

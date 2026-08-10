@@ -88,6 +88,35 @@ inline bool isSequenceNewer(uint32_t candidate, uint32_t previous)
            static_cast<int32_t>(candidate - previous) > 0;
 }
 
+inline bool supportsRequiredCapabilities(uint8_t capabilities)
+{
+    return (capabilities & kRequiredCapabilities) == kRequiredCapabilities;
+}
+
+inline bool supportsBrakeState(uint8_t capabilities)
+{
+    return (capabilities & CAPABILITY_BRAKE_STATE) != 0U;
+}
+
+enum SequenceDisposition : uint8_t
+{
+    SEQUENCE_FIRST = 0,
+    SEQUENCE_NEXT,
+    SEQUENCE_GAP,
+    SEQUENCE_DUPLICATE_OR_OLD,
+};
+
+inline SequenceDisposition classifySequence(uint32_t candidate,
+                                            uint32_t previous,
+                                            bool havePrevious)
+{
+    if (!havePrevious)
+        return SEQUENCE_FIRST;
+    if (!isSequenceNewer(candidate, previous))
+        return SEQUENCE_DUPLICATE_OR_OLD;
+    return candidate == previous + 1U ? SEQUENCE_NEXT : SEQUENCE_GAP;
+}
+
 inline uint8_t *payload(Packet &packet)
 {
     return packet.bytes + kPayloadOffset;
