@@ -36,9 +36,11 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
         self.assertIn("MSG_BRAKE_STATE", self.client)
         self.assertIn("brakeStateMailbox.publish", self.client)
 
-    def test_shift_enable_is_persistent_and_defaults_true(self):
-        self.assertIn('p.getBool("shift_dr", true)', self.client)
-        self.assertIn('persistBool("shift_dr", value)', self.client)
+    def test_shift_enable_is_forced_off_without_changing_shift_controller(self):
+        self.assertIn("obstacleShiftFeatureEnabled{false}", self.header)
+        self.assertIn("obstacleShiftFeatureEnabled = false", self.client)
+        self.assertIn('p.putBool("shift_dr", false)', self.client)
+        self.assertIn('persistBool("shift_dr", false)', self.client)
         self.assertIn("setObstacleShiftEnabled", self.header)
 
     def test_ble_filter_includes_118_without_changing_base_nag_filter(self):
