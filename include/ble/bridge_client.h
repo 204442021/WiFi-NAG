@@ -10,7 +10,7 @@
 
 #include "nag_state_controller.h"
 
-inline Shared<bool> obstacleShiftFeatureEnabled{true};
+inline Shared<bool> obstacleShiftFeatureEnabled{false};
 
 namespace BleBridgeTiming
 {
