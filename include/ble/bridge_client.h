@@ -12,33 +12,6 @@
 
 inline Shared<bool> obstacleShiftFeatureEnabled{true};
 
-class ObstacleShiftManualRequestMailbox
-{
-public:
-    uint32_t request()
-    {
-#ifdef NATIVE_BUILD
-        return ++generation_;
-#else
-        return generation_.fetch_add(1U, std::memory_order_relaxed) + 1U;
-#endif
-    }
-
-    uint32_t generation() const
-    {
-#ifdef NATIVE_BUILD
-        return generation_;
-#else
-        return generation_.load(std::memory_order_relaxed);
-#endif
-    }
-
-private:
-    Shared<uint32_t> generation_{0};
-};
-
-inline ObstacleShiftManualRequestMailbox obstacleShiftManualRequests;
-
 namespace BleBridgeTiming
 {
 static constexpr uint32_t kObstacleStatePeriodMs = 50;

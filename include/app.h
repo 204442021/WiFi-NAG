@@ -252,7 +252,6 @@ static bool appLoop()
         static_cast<bool>(obstacleShiftFeatureEnabled),
         appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
             !Update.isRunning() && !appCanRestartPreparing,
-        obstacleShiftManualRequests.generation(),
     };
     const uint32_t shiftNowMs = millis();
     obstacleShiftController.tick(brakeView, shiftRuntime, shiftNowMs);
@@ -292,8 +291,6 @@ static bool appLoop()
         shiftRuntime.canWriteReady =
             appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
             !Update.isRunning() && !appCanRestartPreparing;
-        shiftRuntime.manualRequestGeneration =
-            obstacleShiftManualRequests.generation();
         const uint32_t beforeReadMs = millis();
         obstacleShiftController.tick(brakeBeforeRead,
                                      shiftRuntime,
@@ -313,8 +310,6 @@ static bool appLoop()
         shiftRuntime.canWriteReady =
             appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
             !Update.isRunning() && !appCanRestartPreparing;
-        shiftRuntime.manualRequestGeneration =
-            obstacleShiftManualRequests.generation();
         const uint32_t afterReadMs = millis();
         obstacleShiftController.observeFrame(frame,
                                              brakeAfterRead,

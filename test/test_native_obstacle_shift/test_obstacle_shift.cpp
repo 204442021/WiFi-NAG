@@ -8,8 +8,7 @@
 
 static MockDriver mock;
 static ObstacleShiftController controller;
-static const ObstacleShiftRuntimeInputs kAutomaticReady{true, true, 0};
-static const ObstacleShiftRuntimeInputs kManualReady{false, true, 0};
+static const ObstacleShiftRuntimeInputs kReady{true, true};
 
 static uint8_t checksum118(const CanFrame &frame)
 {
@@ -45,10 +44,6 @@ static BrakeStateView released(uint32_t session, uint32_t rxMs)
     view.data.physicalKnown = true;
     view.data.physicalFresh = true;
     view.data.physicalPressed = false;
-    view.data.systemKnown = true;
-    view.data.systemFresh = true;
-    view.data.systemPressed = false;
-    view.data.sourcesAgree = true;
     view.data.realGear = BRAKE_GEAR_D;
     view.data.gearFresh = true;
     view.data.speedFresh = true;
@@ -57,56 +52,28 @@ static BrakeStateView released(uint32_t session, uint32_t rxMs)
     return view;
 }
 
-static BrakeStateView physicalPressedOnly(uint32_t session, uint32_t rxMs)
+static BrakeStateView pressed(uint32_t session, uint32_t rxMs)
 {
     BrakeStateView view = released(session, rxMs);
     view.data.releaseConfirmed = false;
     view.data.physicalPressed = true;
+    view.data.systemKnown = false;
+    view.data.systemFresh = false;
     view.data.systemPressed = false;
     view.data.sourcesAgree = false;
     view.data.brakePressed = false;
     view.data.brakeHoldReady = false;
     view.data.activeEligible = false;
-    view.data.reason = BRAKE_REASON_CONFLICT;
+    view.data.reason = BRAKE_REASON_ACTIVE;
     return view;
 }
 
-static void armAutomatic(uint32_t session = 1, uint32_t nowMs = 10)
+static void sendReal118(const BrakeStateView &brake,
+                        uint32_t nowMs,
+                        uint8_t counter = 1)
 {
-    controller.tick(released(session, nowMs), kAutomaticReady, nowMs);
-    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_ARMED,
-                            controller.view(nowMs).state);
-}
-
-static void startAutomatic(uint32_t session = 1,
-                           uint32_t pressMs = 20,
-                           uint32_t frameMs = 21)
-{
-    armAutomatic(session, 10);
-    BrakeStateView brake = physicalPressedOnly(session, pressMs);
-    controller.tick(brake, kAutomaticReady, pressMs);
-    CanFrame frame = make118(0x41, 1);
-    controller.observeFrame(frame, brake, kAutomaticReady, frameMs, mock);
-    const ObstacleShiftView view = controller.view(frameMs);
-    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_ACTIVE_P, view.state);
-    TEST_ASSERT_EQUAL_UINT8(SHIFT_TRIGGER_AUTOMATIC_BRAKE,
-                            view.triggerSource);
-}
-
-static void startManual(uint32_t requestGeneration = 1,
-                        uint32_t startMs = 20,
-                        uint32_t frameMs = 21)
-{
-    BrakeStateView brake = released(1, startMs);
-    controller.tick(brake, kManualReady, startMs - 1);
-    ObstacleShiftRuntimeInputs runtime{false, true, requestGeneration};
-    controller.tick(brake, runtime, startMs);
-    CanFrame frame = make118(0x41, 1);
-    controller.observeFrame(frame, brake, runtime, frameMs, mock);
-    const ObstacleShiftView view = controller.view(frameMs);
-    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_ACTIVE_P, view.state);
-    TEST_ASSERT_EQUAL_UINT8(SHIFT_TRIGGER_MANUAL_BUTTON,
-                            view.triggerSource);
+    const CanFrame frame = make118(0x41, counter);
+    controller.observeFrame(frame, brake, kReady, nowMs, mock);
 }
 
 void setUp()
@@ -119,12 +86,14 @@ void tearDown() {}
 
 void test_d_frame_becomes_expected_virtual_p()
 {
-    const uint8_t raw[8] = {0x0F,0x61,0x95,0x30,0x00,0xC8,0x08,0x00};
+    const uint8_t raw[8] = {0x0F, 0x61, 0x95, 0x30,
+                            0x00, 0xC8, 0x08, 0x00};
     CanFrame source{.id = 0x118, .dlc = 8};
     std::memcpy(source.data, raw, 8);
     CanFrame out;
     TEST_ASSERT_TRUE(ObstacleShiftController::makeVirtualParkFrame(source, out));
-    const uint8_t expected[8] = {0xA4,0x61,0x32,0x30,0x00,0xC8,0x00,0x00};
+    const uint8_t expected[8] = {0xA4, 0x61, 0x32, 0x30,
+                                 0x00, 0xC8, 0x00, 0x00};
     TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, out.data, 8);
 }
 
@@ -143,193 +112,145 @@ void test_wrong_dlc_and_bad_checksum_do_not_build_virtual_p()
     CanFrame out;
     CanFrame shortFrame = make118(0x41);
     shortFrame.dlc = 7;
-    TEST_ASSERT_FALSE(ObstacleShiftController::makeVirtualParkFrame(shortFrame, out));
+    TEST_ASSERT_FALSE(
+        ObstacleShiftController::makeVirtualParkFrame(shortFrame, out));
     CanFrame corrupt = make118(0x41);
     corrupt.data[0] ^= 0x01;
     TEST_ASSERT_FALSE(ObstacleShiftController::makeVirtualParkFrame(corrupt, out));
 }
 
-void test_automatic_waits_for_release_before_first_press()
+void test_fresh_press_starts_without_prior_release()
 {
-    BrakeStateView brake = physicalPressedOnly(1, 10);
-    controller.tick(brake, kAutomaticReady, 10);
-    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_WAIT_RELEASE,
-                            controller.view(10).state);
-}
+    const BrakeStateView brake = pressed(1, 20);
+    sendReal118(brake, 20);
 
-void test_automatic_uses_physical_brake_without_system_or_hold_gates()
-{
-    startAutomatic();
-    const ObstacleShiftView view = controller.view(21);
+    const ObstacleShiftView view = controller.view(20);
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_ACTIVE_P, view.state);
     TEST_ASSERT_TRUE(view.virtualParkActive);
-    TEST_ASSERT_TRUE(view.latched);
-    TEST_ASSERT_EQUAL_UINT32(999, view.virtualParkRemainingMs);
-    TEST_ASSERT_EQUAL_UINT32(1, view.automaticWindowCount);
+    TEST_ASSERT_EQUAL_UINT32(1, view.activationCount);
     TEST_ASSERT_EQUAL_UINT32(1, mock.sent.size());
 }
 
-void test_active_sends_once_per_new_real_118_using_t2can_gear()
+void test_stale_idle_release_does_not_lock_next_press()
 {
-    startAutomatic();
-    BrakeStateView brake = physicalPressedOnly(1, 30);
-    CanFrame second = make118(0x73, 2);
-    controller.observeFrame(second, brake, kAutomaticReady, 30, mock);
-    CanFrame third = make118(0x18, 3);
-    controller.observeFrame(third, brake, kAutomaticReady, 40, mock);
+    controller.tick(released(1, 0), kReady, 501);
+    ObstacleShiftView view = controller.view(501);
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_IDLE, view.state);
+    TEST_ASSERT_EQUAL_UINT8(SHIFT_REASON_BRAKE_STALE, view.reason);
+    TEST_ASSERT_FALSE(view.virtualParkActive);
+
+    const BrakeStateView brake = pressed(1, 510);
+    sendReal118(brake, 510);
+    view = controller.view(510);
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_ACTIVE_P, view.state);
+    TEST_ASSERT_EQUAL_UINT32(1, mock.sent.size());
+}
+
+void test_continues_past_1000ms_while_pressed_and_fresh()
+{
+    sendReal118(pressed(1, 20), 20, 1);
+    sendReal118(pressed(1, 1500), 1500, 2);
+
+    const ObstacleShiftView view = controller.view(1500);
+    TEST_ASSERT_TRUE(view.virtualParkActive);
+    TEST_ASSERT_EQUAL_UINT32(1, view.activationCount);
+    TEST_ASSERT_EQUAL_UINT32(2, mock.sent.size());
+}
+
+void test_each_real_frame_gets_at_most_one_send_attempt()
+{
+    const BrakeStateView brake = pressed(1, 20);
+    sendReal118(brake, 20, 1);
+    sendReal118(pressed(1, 30), 30, 2);
+    sendReal118(pressed(1, 40), 40, 3);
+
     TEST_ASSERT_EQUAL_UINT32(3, mock.sent.size());
+    TEST_ASSERT_EQUAL_HEX8(0x61, mock.sent[0].data[1]);
     TEST_ASSERT_EQUAL_HEX8(0x62, mock.sent[1].data[1]);
     TEST_ASSERT_EQUAL_HEX8(0x63, mock.sent[2].data[1]);
 }
 
-void test_window_expires_at_1000ms_and_same_press_cannot_retrigger()
+void test_release_stops_immediately_and_next_press_restarts()
 {
-    startAutomatic();
-    BrakeStateView brake = physicalPressedOnly(1, 1020);
-    controller.tick(brake, kAutomaticReady, 1020);
-    ObstacleShiftView view = controller.view(1020);
-    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_LATCHED, view.state);
-    TEST_ASSERT_FALSE(view.virtualParkActive);
-    TEST_ASSERT_EQUAL_UINT8(SHIFT_TRIGGER_NONE, view.triggerSource);
+    sendReal118(pressed(1, 20), 20, 1);
+    controller.tick(released(1, 30), kReady, 30);
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_IDLE, controller.view(30).state);
+    TEST_ASSERT_FALSE(controller.view(30).virtualParkActive);
 
-    CanFrame later = make118(0x41, 2);
-    controller.observeFrame(later, brake, kAutomaticReady, 1021, mock);
+    sendReal118(released(1, 31), 31, 2);
     TEST_ASSERT_EQUAL_UINT32(1, mock.sent.size());
+
+    sendReal118(pressed(1, 40), 40, 3);
+    TEST_ASSERT_EQUAL_UINT32(2, mock.sent.size());
+    TEST_ASSERT_EQUAL_UINT32(2, controller.view(40).activationCount);
 }
 
-void test_physical_release_rearms_automatic_after_latch()
+void test_stale_pressed_state_stops_injection()
 {
-    startAutomatic();
-    controller.tick(physicalPressedOnly(1, 1020), kAutomaticReady, 1020);
-    controller.tick(released(1, 1030), kAutomaticReady, 1030);
-    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_ARMED,
-                            controller.view(1030).state);
-}
-
-void test_control_snapshot_stale_at_501ms_stops_window()
-{
-    startAutomatic();
-    BrakeStateView brake = physicalPressedOnly(1, 20);
-    controller.tick(brake, kAutomaticReady, 521);
-    const ObstacleShiftView view = controller.view(521);
-    TEST_ASSERT_FALSE(view.virtualParkActive);
-    TEST_ASSERT_EQUAL_UINT8(SHIFT_REASON_BRAKE_STALE, view.reason);
-}
-
-void test_moving_or_t2can_not_dr_never_starts_automatic()
-{
-    armAutomatic();
-    BrakeStateView moving = physicalPressedOnly(1, 20);
-    moving.data.stationaryConfirmed = false;
-    controller.tick(moving, kAutomaticReady, 20);
-    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_ARMED,
-                            controller.view(20).state);
-
-    BrakeStateView park = physicalPressedOnly(1, 30);
-    park.data.realGear = BRAKE_GEAR_P;
-    controller.tick(park, kAutomaticReady, 30);
-    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_SHIFT_ARMED,
-                            controller.view(30).state);
-    TEST_ASSERT_EQUAL_UINT32(0, mock.sent.size());
-}
-
-void test_manual_starts_without_brake_and_runs_one_1000ms_window()
-{
-    startManual();
-    const ObstacleShiftView view = controller.view(21);
-    TEST_ASSERT_TRUE(view.virtualParkActive);
-    TEST_ASSERT_EQUAL_UINT32(999, view.virtualParkRemainingMs);
-    TEST_ASSERT_EQUAL_UINT32(1, view.manualWindowCount);
-    TEST_ASSERT_EQUAL_UINT32(1, mock.sent.size());
-}
-
-void test_manual_request_is_rejected_when_moving_stale_or_not_dr()
-{
-    BrakeStateView moving = released(1, 20);
-    moving.data.stationaryConfirmed = false;
-    controller.tick(moving, {false, true, 1}, 20);
-    TEST_ASSERT_FALSE(controller.view(20).virtualParkActive);
-    TEST_ASSERT_EQUAL_UINT8(SHIFT_REASON_MOVING,
-                            controller.view(20).reason);
-
-    controller.reset();
-    BrakeStateView stale = released(1, 20);
-    controller.tick(stale, {false, true, 1}, 521);
+    sendReal118(pressed(1, 20), 20, 1);
+    const BrakeStateView stalePress = pressed(1, 20);
+    controller.tick(stalePress, kReady, 521);
     TEST_ASSERT_FALSE(controller.view(521).virtualParkActive);
     TEST_ASSERT_EQUAL_UINT8(SHIFT_REASON_BRAKE_STALE,
                             controller.view(521).reason);
 
-    controller.reset();
-    BrakeStateView park = released(1, 20);
-    park.data.realGear = BRAKE_GEAR_P;
-    controller.tick(park, {false, true, 1}, 20);
-    TEST_ASSERT_FALSE(controller.view(20).virtualParkActive);
-    TEST_ASSERT_EQUAL_UINT8(SHIFT_REASON_GEAR_NOT_DR,
-                            controller.view(20).reason);
-}
-
-void test_manual_window_does_not_repeat_without_new_request()
-{
-    startManual();
-    BrakeStateView brake = released(1, 1020);
-    controller.tick(brake, {false, true, 1}, 1020);
-    CanFrame after = make118(0x41, 2);
-    controller.observeFrame(after, brake, {false, true, 1}, 1021, mock);
+    sendReal118(stalePress, 522, 2);
     TEST_ASSERT_EQUAL_UINT32(1, mock.sent.size());
-
-    controller.tick(brake, {false, true, 2}, 1030);
-    controller.observeFrame(after, brake, {false, true, 2}, 1031, mock);
-    TEST_ASSERT_EQUAL_UINT32(2, mock.sent.size());
-    TEST_ASSERT_EQUAL_UINT32(2, controller.view(1031).manualWindowCount);
 }
 
-void test_manual_and_automatic_windows_are_mutually_exclusive()
+void test_moving_or_t2can_not_dr_never_sends()
 {
-    startAutomatic();
-    BrakeStateView brake = physicalPressedOnly(1, 30);
-    controller.tick(brake, {true, true, 1}, 30);
-    const ObstacleShiftView view = controller.view(30);
-    TEST_ASSERT_EQUAL_UINT8(SHIFT_TRIGGER_AUTOMATIC_BRAKE,
-                            view.triggerSource);
-    TEST_ASSERT_EQUAL_UINT32(0, view.manualWindowCount);
+    BrakeStateView moving = pressed(1, 20);
+    moving.data.stationaryConfirmed = false;
+    sendReal118(moving, 20, 1);
+    TEST_ASSERT_EQUAL_UINT8(SHIFT_REASON_MOVING, controller.view(20).reason);
+
+    BrakeStateView park = pressed(1, 30);
+    park.data.realGear = BRAKE_GEAR_P;
+    sendReal118(park, 30, 2);
+    TEST_ASSERT_EQUAL_UINT8(SHIFT_REASON_GEAR_NOT_DR,
+                            controller.view(30).reason);
+    TEST_ASSERT_EQUAL_UINT32(0, mock.sent.size());
 }
 
-void test_manual_ignores_feature_switch_but_honors_can_write_gate()
+void test_feature_and_can_write_gates_remain_required()
 {
-    BrakeStateView brake = released(1, 20);
-    controller.tick(brake, {false, false, 1}, 20);
-    TEST_ASSERT_FALSE(controller.view(20).virtualParkActive);
-    TEST_ASSERT_EQUAL_UINT8(SHIFT_REASON_CAN_WRITE_DISABLED,
+    const BrakeStateView brake = pressed(1, 20);
+    const CanFrame frame = make118(0x41, 1);
+    controller.observeFrame(frame, brake, {false, true}, 20, mock);
+    TEST_ASSERT_EQUAL_UINT8(SHIFT_REASON_FEATURE_DISABLED,
                             controller.view(20).reason);
 
-    controller.reset();
-    startManual();
-    TEST_ASSERT_TRUE(controller.view(21).virtualParkActive);
+    controller.observeFrame(frame, brake, {true, false}, 21, mock);
+    TEST_ASSERT_EQUAL_UINT8(SHIFT_REASON_CAN_WRITE_DISABLED,
+                            controller.view(21).reason);
+    TEST_ASSERT_EQUAL_UINT32(0, mock.sent.size());
 }
 
-void test_send_failure_stops_and_never_replays()
+void test_send_failure_does_not_lock_and_next_frame_retries()
 {
-    BrakeStateView brake = released(1, 20);
-    controller.tick(brake, {false, true, 1}, 20);
     mock.writeEnabled = false;
-    CanFrame frame = make118(0x41, 1);
-    controller.observeFrame(frame, brake, {false, true, 1}, 21, mock);
-    ObstacleShiftView view = controller.view(21);
-    TEST_ASSERT_FALSE(view.virtualParkActive);
+    sendReal118(pressed(1, 20), 20, 1);
+    ObstacleShiftView view = controller.view(20);
+    TEST_ASSERT_TRUE(view.virtualParkActive);
     TEST_ASSERT_EQUAL_UINT8(SHIFT_REASON_TX_FAILED, view.reason);
     TEST_ASSERT_EQUAL_UINT32(1, view.virtualParkTxFailCount);
 
     mock.writeEnabled = true;
-    controller.observeFrame(frame, brake, {false, true, 1}, 22, mock);
-    TEST_ASSERT_EQUAL_UINT32(0, mock.sent.size());
+    sendReal118(pressed(1, 30), 30, 2);
+    view = controller.view(30);
+    TEST_ASSERT_TRUE(view.virtualParkActive);
+    TEST_ASSERT_EQUAL_UINT32(1, mock.sent.size());
+    TEST_ASSERT_EQUAL_UINT32(1, view.virtualParkTxFailCount);
 }
 
 void test_virtual_p_fingerprint_is_not_accepted_as_real_118()
 {
-    startManual();
-    const ObstacleShiftView before = controller.view(21);
-    CanFrame echo = mock.sent.back();
-    controller.observeFrame(echo, released(1, 22), {false, true, 1}, 22, mock);
-    const ObstacleShiftView after = controller.view(22);
+    sendReal118(pressed(1, 20), 20, 1);
+    const ObstacleShiftView before = controller.view(20);
+    const CanFrame echo = mock.sent.back();
+    controller.observeFrame(echo, pressed(1, 21), kReady, 21, mock);
+    const ObstacleShiftView after = controller.view(21);
     TEST_ASSERT_EQUAL_UINT32(before.real118RxCount, after.real118RxCount);
     TEST_ASSERT_EQUAL_UINT32(1, mock.sent.size());
 }
@@ -340,19 +261,15 @@ int main()
     RUN_TEST(test_d_frame_becomes_expected_virtual_p);
     RUN_TEST(test_unknown_local_gear_still_becomes_virtual_p);
     RUN_TEST(test_wrong_dlc_and_bad_checksum_do_not_build_virtual_p);
-    RUN_TEST(test_automatic_waits_for_release_before_first_press);
-    RUN_TEST(test_automatic_uses_physical_brake_without_system_or_hold_gates);
-    RUN_TEST(test_active_sends_once_per_new_real_118_using_t2can_gear);
-    RUN_TEST(test_window_expires_at_1000ms_and_same_press_cannot_retrigger);
-    RUN_TEST(test_physical_release_rearms_automatic_after_latch);
-    RUN_TEST(test_control_snapshot_stale_at_501ms_stops_window);
-    RUN_TEST(test_moving_or_t2can_not_dr_never_starts_automatic);
-    RUN_TEST(test_manual_starts_without_brake_and_runs_one_1000ms_window);
-    RUN_TEST(test_manual_request_is_rejected_when_moving_stale_or_not_dr);
-    RUN_TEST(test_manual_window_does_not_repeat_without_new_request);
-    RUN_TEST(test_manual_and_automatic_windows_are_mutually_exclusive);
-    RUN_TEST(test_manual_ignores_feature_switch_but_honors_can_write_gate);
-    RUN_TEST(test_send_failure_stops_and_never_replays);
+    RUN_TEST(test_fresh_press_starts_without_prior_release);
+    RUN_TEST(test_stale_idle_release_does_not_lock_next_press);
+    RUN_TEST(test_continues_past_1000ms_while_pressed_and_fresh);
+    RUN_TEST(test_each_real_frame_gets_at_most_one_send_attempt);
+    RUN_TEST(test_release_stops_immediately_and_next_press_restarts);
+    RUN_TEST(test_stale_pressed_state_stops_injection);
+    RUN_TEST(test_moving_or_t2can_not_dr_never_sends);
+    RUN_TEST(test_feature_and_can_write_gates_remain_required);
+    RUN_TEST(test_send_failure_does_not_lock_and_next_frame_retries);
     RUN_TEST(test_virtual_p_fingerprint_is_not_accepted_as_real_118);
     return UNITY_END();
 }

@@ -31,8 +31,9 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
     def test_v1_0_6_release_notes_match_internal_version(self) -> None:
         self.assertIn("# WIFI-NAG V1.0.6", self.release_notes)
         self.assertIn("`V1.0.6`", self.release_notes)
-        self.assertIn("1000 ms", self.release_notes)
-        self.assertIn("手动", self.release_notes)
+        self.assertIn("持续虚拟 P 注入", self.release_notes)
+        self.assertIn("删除手动虚拟 P 按钮", self.release_notes)
+        self.assertNotIn("1000 ms", self.release_notes)
 
     def test_espidf_internal_version_comes_from_version_file(self) -> None:
         self.assertRegex(
