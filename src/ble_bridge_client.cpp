@@ -701,7 +701,8 @@ if (p.begin(kPrefs, false))
 {
 g.enabled = p.getBool("enabled", false);
 g.obstacle = p.getBool("obs_fwd", true);
-obstacleShiftFeatureEnabled = p.getBool("shift_dr", true);
+obstacleShiftFeatureEnabled = false;
+p.putBool("shift_dr", false);
 uint32_t id = readU32(p, "dev_id");
 if (!id)
 {
@@ -775,9 +776,10 @@ persistBool("obs_fwd", value);
 bool BleBridgeClient::obstacleForwarding() const { return static_cast<bool>(g.obstacle); }
 void BleBridgeClient::setObstacleShiftEnabled(bool value, bool persist)
 {
-obstacleShiftFeatureEnabled = value;
+(void)value;
+obstacleShiftFeatureEnabled = false;
 if (persist)
-persistBool("shift_dr", value);
+persistBool("shift_dr", false);
 }
 bool BleBridgeClient::obstacleShiftEnabled() const
 {
