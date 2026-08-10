@@ -48,6 +48,24 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
     def test_ble_disconnect_does_not_hot_swap_can_filters(self):
         self.assertNotIn("setFilters(", self.client)
 
+    def test_ble_status_exposes_shift_state_and_config_route(self):
+        bridge = (ROOT / "include/ble/bridge_webui.h").read_text(encoding="utf-8")
+        for token in (
+            "shiftEnabled",
+            "shiftState",
+            "shiftReason",
+            "brakeStateAgeMs",
+            "releaseConfirmed",
+            "real118AgeMs",
+            "virtualParkActive",
+            "shiftLatched",
+            "virtualParkTxCount",
+            "virtualParkTxFailCount",
+        ):
+            self.assertIn(token, bridge)
+        self.assertIn('bleBridgeArgEnabled("shift"', bridge)
+        self.assertIn("setObstacleShiftEnabled", bridge)
+
 
 if __name__ == "__main__":
     unittest.main()

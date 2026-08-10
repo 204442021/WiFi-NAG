@@ -5,8 +5,10 @@
 #include <climits>
 
 #include "ble/bridge_client.h"
+#include "ble/brake_state.h"
 #include "nag_state_controller.h"
 #include "obstacle_can_snapshot.h"
+#include "obstacle_shift_controller.h"
 
 static const char *bleBridgeProtocolName(BleBridgeProtocolStatus status)
 {
@@ -36,6 +38,76 @@ static const char *bleBridgeResultName(NagResultCode result)
     case NAG_RESULT_UNSUPPORTED: return "不支持";
     case NAG_RESULT_BUSY: return "队列忙";
     default: return "内部错误";
+    }
+}
+
+static const char *bleBridgeShiftStateName(ObstacleShiftState state)
+{
+    switch (state)
+    {
+    case OBSTACLE_SHIFT_WAIT_RELEASE: return "等待释放";
+    case OBSTACLE_SHIFT_ARMED: return "已就绪";
+    case OBSTACLE_SHIFT_ACTIVE_P: return "虚拟 P 发送中";
+    case OBSTACLE_SHIFT_LATCHED: return "已锁存";
+    default: return "未知";
+    }
+}
+
+static const char *bleBridgeShiftReasonName(ObstacleShiftReason reason)
+{
+    switch (reason)
+    {
+    case SHIFT_REASON_NONE: return "无";
+    case SHIFT_REASON_WAIT_RELEASE: return "等待释放";
+    case SHIFT_REASON_ACTIVE: return "正在发送";
+    case SHIFT_REASON_WINDOW_COMPLETE: return "500 ms 窗口完成";
+    case SHIFT_REASON_BRAKE_STALE: return "刹车数据超时";
+    case SHIFT_REASON_RELEASE_UNCONFIRMED: return "释放未确认";
+    case SHIFT_REASON_SESSION_CHANGED: return "BLE 会话变化";
+    case SHIFT_REASON_LINK_UNAVAILABLE: return "BLE 链路不可用";
+    case SHIFT_REASON_CAPABILITY_MISSING: return "对端不支持刹车状态";
+    case SHIFT_REASON_FEATURE_DISABLED: return "功能已关闭";
+    case SHIFT_REASON_CAN_WRITE_DISABLED: return "CAN 写入不可用";
+    case SHIFT_REASON_118_STALE: return "0x118 数据超时";
+    case SHIFT_REASON_GEAR_NOT_DR: return "真实挡位非 D/R";
+    case SHIFT_REASON_MOVING: return "车辆未确认静止";
+    case SHIFT_REASON_TX_FAILED: return "虚拟 P 发送失败";
+    default: return "未知";
+    }
+}
+
+static const char *bleBridgeGearName(BrakeRealGear gear)
+{
+    switch (gear)
+    {
+    case BRAKE_GEAR_P: return "P";
+    case BRAKE_GEAR_R: return "R";
+    case BRAKE_GEAR_N: return "N";
+    case BRAKE_GEAR_D: return "D";
+    default: return "未知";
+    }
+}
+
+static const char *bleBridgeBrakeReasonName(BrakeStateReason reason)
+{
+    switch (reason)
+    {
+    case BRAKE_REASON_IDLE: return "空闲";
+    case BRAKE_REASON_ACTIVE: return "制动有效";
+    case BRAKE_REASON_RELEASE_CONFIRMED: return "释放已确认";
+    case BRAKE_REASON_STALE: return "数据超时";
+    case BRAKE_REASON_CONFLICT: return "双源冲突";
+    case BRAKE_REASON_FALLBACK: return "降级来源";
+    case BRAKE_REASON_HOLD_PENDING: return "等待保持";
+    case BRAKE_REASON_GEAR_UNKNOWN: return "挡位未知";
+    case BRAKE_REASON_GEAR_STALE: return "挡位超时";
+    case BRAKE_REASON_GEAR_NOT_DR: return "挡位非 D/R";
+    case BRAKE_REASON_SPEED_UNKNOWN: return "车速未知";
+    case BRAKE_REASON_SPEED_STALE: return "车速超时";
+    case BRAKE_REASON_MOVING: return "车辆移动中";
+    case BRAKE_REASON_DISABLED: return "发送端已关闭";
+    case BRAKE_REASON_SESSION_RESYNC: return "会话重新同步";
+    default: return "未知";
     }
 }
 
@@ -95,10 +167,14 @@ static void bleBridgeAppendAge(String &json, const char *name,
 
 static void bleBridgeHandleStatus()
 {
+    const uint32_t now = millis();
     const BleBridgeDiagnostics diagnostics = bleBridgeClient.diagnostics();
     const NagStateView nag = nagStateController.view();
+    BrakeStateView brake;
+    const bool haveBrakeView = brakeStateMailbox.read(brake);
+    const ObstacleShiftView shift = obstacleShiftController.view(now);
     String json = "{\"ok\":true";
-    json.reserve(1900);
+    json.reserve(3600);
 #define BLE_JSON_BOOL(name, value) do { json += ",\"" name "\":"; json += ((value) ? "true" : "false"); } while (0)
     BLE_JSON_BOOL("enabled", diagnostics.enabled);
     BLE_JSON_BOOL("obstacleForwarding", diagnostics.obstacleForwarding);
@@ -119,6 +195,32 @@ static void bleBridgeHandleStatus()
     BLE_JSON_BOOL("lastRemoteDesired", diagnostics.lastRemoteDesired);
     BLE_JSON_BOOL("nagConfigured", nag.configuredEnabled);
     BLE_JSON_BOOL("nagRuntime", nag.runtimeEffective);
+    BLE_JSON_BOOL("shiftEnabled", bleBridgeClient.obstacleShiftEnabled());
+    BLE_JSON_BOOL("brakeLinkReady", haveBrakeView && brake.linkReady);
+    BLE_JSON_BOOL("brakeCapabilitySupported", haveBrakeView && brake.capabilitySupported);
+    BLE_JSON_BOOL("brakeStateFresh", shift.brakeStateFresh);
+    BLE_JSON_BOOL("brakePressed", haveBrakeView && brake.data.brakePressed);
+    BLE_JSON_BOOL("releaseConfirmed", haveBrakeView && brake.data.releaseConfirmed);
+    BLE_JSON_BOOL("physicalKnown", haveBrakeView && brake.data.physicalKnown);
+    BLE_JSON_BOOL("physicalFresh", haveBrakeView && brake.data.physicalFresh);
+    BLE_JSON_BOOL("physicalPressed", haveBrakeView && brake.data.physicalPressed);
+    BLE_JSON_BOOL("systemKnown", haveBrakeView && brake.data.systemKnown);
+    BLE_JSON_BOOL("systemFresh", haveBrakeView && brake.data.systemFresh);
+    BLE_JSON_BOOL("systemPressed", haveBrakeView && brake.data.systemPressed);
+    BLE_JSON_BOOL("sourcesAgree", haveBrakeView && brake.data.sourcesAgree);
+    BLE_JSON_BOOL("fallbackActive", haveBrakeView && brake.data.fallbackActive);
+    BLE_JSON_BOOL("gearFresh", haveBrakeView && brake.data.gearFresh);
+    BLE_JSON_BOOL("drConfirmed", haveBrakeView && brake.data.drConfirmed);
+    BLE_JSON_BOOL("brakeHoldReady", haveBrakeView && brake.data.brakeHoldReady);
+    BLE_JSON_BOOL("activeEligible", haveBrakeView && brake.data.activeEligible);
+    BLE_JSON_BOOL("speedFresh", haveBrakeView && brake.data.speedFresh);
+    BLE_JSON_BOOL("stationaryConfirmed", haveBrakeView && brake.data.stationaryConfirmed);
+    BLE_JSON_BOOL("releaseTail", haveBrakeView && brake.data.releaseTail);
+    BLE_JSON_BOOL("senderEnabled", haveBrakeView && brake.data.senderEnabled);
+    BLE_JSON_BOOL("normalRuntime", haveBrakeView && brake.data.normalRuntime);
+    BLE_JSON_BOOL("hasReal118", shift.hasReal118);
+    BLE_JSON_BOOL("virtualParkActive", shift.virtualParkActive);
+    BLE_JSON_BOOL("shiftLatched", shift.latched);
 #undef BLE_JSON_BOOL
     json += ",\"pairingRemainingMs\":" + String(diagnostics.pairingRemainingMs);
     json += ",\"deviceId\":" + String(diagnostics.deviceId);
@@ -134,6 +236,11 @@ static void bleBridgeHandleStatus()
     bleBridgeAppendAge(json, "lastSendAgeMs", diagnostics.hasLastSend, diagnostics.lastSendAgeMs);
     bleBridgeAppendAge(json, "last255AgeMs", diagnostics.last255AgeMs != UINT32_MAX, diagnostics.last255AgeMs);
     bleBridgeAppendAge(json, "last12BAgeMs", diagnostics.last12BAgeMs != UINT32_MAX, diagnostics.last12BAgeMs);
+    bleBridgeAppendAge(json, "brakeStateAgeMs",
+                       haveBrakeView && brake.hasState,
+                       haveBrakeView && brake.hasState ? now - brake.lastRxMs : 0);
+    bleBridgeAppendAge(json, "real118AgeMs", shift.hasReal118,
+                       shift.real118AgeMs);
     json += ",\"suggestedGear\":" + String(diagnostics.suggestedGear);
     json += ",\"torqueDirection\":" + String(diagnostics.torqueDirection);
     json += ",\"nagRevision\":" + String(nag.revision);
@@ -152,10 +259,31 @@ static void bleBridgeHandleStatus()
     json += ",\"unknownTypeCount\":" + String(diagnostics.unknownTypeCount);
     json += ",\"peerRejectCount\":" + String(diagnostics.peerRejectCount);
     json += ",\"sequenceGapCount\":" + String(diagnostics.sequenceGapCount);
+    json += ",\"duplicateOrOldSequenceCount\":" + String(diagnostics.duplicateOrOldSequenceCount);
+    json += ",\"badBrakeStateCount\":" + String(diagnostics.badBrakeStateCount);
     json += ",\"setCommandCount\":" + String(nag.setCommandCount);
     json += ",\"duplicateCommandCount\":" + String(nag.duplicateCommandCount);
     json += ",\"revisionConflictCount\":" + String(nag.revisionConflictCount);
     json += ",\"commandRejectCount\":" + String(nag.commandRejectCount);
+    json += ",\"shiftState\":" + String(static_cast<unsigned>(shift.state));
+    json += ",\"shiftStateName\":\"" + String(bleBridgeShiftStateName(shift.state)) + "\"";
+    json += ",\"shiftReason\":" + String(static_cast<unsigned>(shift.reason));
+    json += ",\"shiftReasonName\":\"" + String(bleBridgeShiftReasonName(shift.reason)) + "\"";
+    json += ",\"brakeSessionGeneration\":" + String(brake.sessionGeneration);
+    json += ",\"brakeSequence\":" + String(brake.sequence);
+    json += ",\"brakeRealGear\":" + String(static_cast<unsigned>(brake.data.realGear));
+    json += ",\"brakeRealGearName\":\"" + String(bleBridgeGearName(brake.data.realGear)) + "\"";
+    json += ",\"gearSource\":" + String(brake.data.gearSource);
+    json += ",\"senderReason\":" + String(static_cast<unsigned>(brake.data.reason));
+    json += ",\"senderReasonName\":\"" + String(bleBridgeBrakeReasonName(brake.data.reason)) + "\"";
+    json += ",\"brakeHoldMs\":" + String(brake.data.brakeHoldMs);
+    json += ",\"speedDeciKph\":" + String(brake.data.speedDeciKph);
+    json += ",\"real118Gear\":" + String(static_cast<unsigned>(shift.realGear));
+    json += ",\"real118GearName\":\"" + String(bleBridgeGearName(shift.realGear)) + "\"";
+    json += ",\"virtualParkRemainingMs\":" + String(shift.virtualParkRemainingMs);
+    json += ",\"real118RxCount\":" + String(shift.real118RxCount);
+    json += ",\"virtualParkTxCount\":" + String(shift.virtualParkTxCount);
+    json += ",\"virtualParkTxFailCount\":" + String(shift.virtualParkTxFailCount);
     json += "}";
     server.send(200, "application/json", json);
 }
@@ -173,6 +301,9 @@ static void bleBridgeHandleConfig()
     bleBridgeClient.setEnabled(bleBridgeArgEnabled("enabled", bleBridgeClient.enabled()), true);
     bleBridgeClient.setObstacleForwarding(
         bleBridgeArgEnabled("obstacle", bleBridgeClient.obstacleForwarding()), true);
+    bleBridgeClient.setObstacleShiftEnabled(
+        bleBridgeArgEnabled("shift", bleBridgeClient.obstacleShiftEnabled()),
+        true);
     server.send(200, "application/json", "{\"ok\":true}");
 }
 
