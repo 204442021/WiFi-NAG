@@ -66,6 +66,24 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
         self.assertIn('bleBridgeArgEnabled("shift"', bridge)
         self.assertIn("setObstacleShiftEnabled", bridge)
 
+    def test_dashboard_posts_and_renders_obstacle_shift_status(self):
+        source = (ROOT / "include/web/mcp2515_dashboard_ui.src.h").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("shift:bleElement('shift-enabled').checked?'1':'0'", source)
+        for token in (
+            "data.shiftEnabled",
+            "data.shiftStateName",
+            "data.brakePressed",
+            "data.brakeStateAgeMs",
+            "data.releaseConfirmed",
+            "data.real118AgeMs",
+            "data.virtualParkActive",
+            "data.shiftLatched",
+            "data.shiftReasonName",
+        ):
+            self.assertIn(token, source)
+
 
 if __name__ == "__main__":
     unittest.main()

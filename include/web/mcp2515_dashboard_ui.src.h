@@ -122,6 +122,8 @@ body.ui-shell .ui-main-card>.card-hdr .card-title{display:flex;align-items:cente
 .ui-card-icon{width:38px;height:38px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 38px;border:1px solid transparent}
 .ui-card-icon svg{width:20px;height:20px;display:block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 [data-ui-kind="nag"] .ui-card-icon{color:#12a56f;background:rgba(18,165,111,.1);border-color:rgba(18,165,111,.18)}
+[data-ui-kind="ble"] .ui-card-icon{color:#287fd8;background:rgba(40,127,216,.1);border-color:rgba(40,127,216,.2)}
+[data-ui-kind="obstacle-shift"] .ui-card-icon{color:#d66b26;background:rgba(214,107,38,.1);border-color:rgba(214,107,38,.2)}
 [data-ui-kind="wifi"] .ui-card-icon{color:#3478f6;background:rgba(52,120,246,.1);border-color:rgba(52,120,246,.18)}
 [data-ui-kind="system"] .ui-card-icon{color:#7c63e6;background:rgba(124,99,230,.1);border-color:rgba(124,99,230,.18)}
 [data-ui-kind="firmware"] .ui-card-icon{color:#e09025;background:rgba(224,144,37,.11);border-color:rgba(224,144,37,.2)}
@@ -139,6 +141,7 @@ body.ui-shell .subsec.collapsed .subsec-body{display:block}
 body.ui-shell #status-panel{margin:16px;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
 body.ui-shell #status-panel .stat,body.ui-shell #status-panel>.btn{border-radius:12px;background:var(--bg2);border:1px solid var(--bd);box-shadow:none}
 body.ui-shell #system-card>.sys-grid{margin:0 16px 16px}
+body.ui-shell #obstacle-shift-card>.subsec-body{margin:16px}
 body.ui-shell #firmware-update-card>.sys-grid{margin:16px 16px 12px}
 body.ui-shell #firmware-update-card>.firmware-body{margin:0 16px 16px}
 .subsec{margin-top:14px;padding-top:12px;border-top:1px solid var(--bd)}
@@ -407,7 +410,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
 <section class="card ui-main-card collapsed" id="config-card" data-ui-kind="nag">
   <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
     <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"/><path d="M9 12l2 2 4-5"/></svg></span><span>NAG 配置</span></div>
-    <div class="card-meta">NAG / CAN / BLE</div>
+    <div class="card-meta">NAG / CAN</div>
     <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
   </div>
 
@@ -464,10 +467,17 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       </div>
     </div>
   </div>
+</section>
 
-  <div class="subsec" id="ble-bridge-section" data-subkey="config-ble-bridge">
+<section class="card ui-main-card collapsed" id="ble-card" data-ui-kind="ble">
+  <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
+    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18M8 7l8 10M16 7L8 17"/></svg></span><span>BLE 联动</span></div>
+    <div class="card-meta" id="ble-main-card-meta">未连接</div>
+    <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
+  </div>
+  <div class="subsec" id="ble-bridge-section" data-subkey="ble-bridge">
     <div class="subsec-head">
-      <div class="subsec-title">BLE 联动 <span class="title-help" title="与 T2CAN-FSD 一对一绑定，转发 0x255/0x12B，并同步 NAG 权威状态。">i</span></div>
+      <div class="subsec-title">BLE 联动 <span class="title-help" title="与 T2CAN-FSD 一对一绑定，转发 0x255/0x12B、接收刹车状态，并同步 NAG 权威状态。">i</span></div>
       <div class="subsec-meta" id="ble-card-meta">未连接</div>
     </div>
     <div class="subsec-body">
@@ -501,6 +511,35 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
         <div class="sys-item"><div class="sys-lbl">FSD 接收 / 最后发送</div><div class="sys-val" id="ble-fsd-rx">--</div></div>
         <div class="sys-item sys-wide"><div class="sys-lbl">诊断计数</div><div class="sys-val" id="ble-counters">--</div></div>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="card ui-main-card collapsed" id="obstacle-shift-card" data-ui-kind="obstacle-shift">
+  <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
+    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5zM8 8h4a3 3 0 0 1 0 6H8zM15 8v8M15 8h3"/></svg></span><span>障碍物换挡</span></div>
+    <div class="card-meta" id="shift-card-meta">等待释放</div>
+    <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
+  </div>
+  <div class="subsec-body">
+    <div class="info-box">真实挡位 D/R、双源刹车确认且车辆静止时，复制每一帧新鲜的原车 0x118，改为 P 后在同一总线发送，最长维持 500 ms。原车帧仍会存在，不固定重放或补发历史帧。</div>
+    <div class="setting-row">
+      <div class="setting-info"><div class="setting-name">D/R 挡启用换挡</div><div class="setting-desc">首次默认开启；关闭后立即停止并等待下一次明确释放。</div></div>
+      <label class="tgl"><input type="checkbox" id="shift-enabled" onchange="bleSaveConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+    </div>
+    <div id="shift-action-msg" class="setting-desc" style="margin-top:8px"></div>
+    <div class="sys-grid" style="margin-top:12px">
+      <div class="sys-item"><div class="sys-lbl">状态机</div><div class="sys-val" id="shift-state">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">刹车</div><div class="sys-val" id="shift-brake">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">释放确认</div><div class="sys-val" id="shift-release">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">双源状态</div><div class="sys-val" id="shift-source">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">真实挡位</div><div class="sys-val" id="shift-gear">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">车辆状态</div><div class="sys-val" id="shift-speed">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">0x118</div><div class="sys-val" id="shift-118">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">虚拟 P</div><div class="sys-val" id="shift-virtual-p">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">锁存</div><div class="sys-val" id="shift-latch">--</div></div>
+      <div class="sys-item"><div class="sys-lbl">原因</div><div class="sys-val" id="shift-reason">--</div></div>
+      <div class="sys-item sys-wide"><div class="sys-lbl">计数</div><div class="sys-val" id="shift-counters">--</div></div>
     </div>
   </div>
 </section>
@@ -817,6 +856,15 @@ const I18N_ZH={
   'Confirm':'确认','Continue':'继续','Cancel':'取消','Reboot device?':'重启设备？','CAN bus writes affect vehicle behavior. Remove device immediately if unexpected behavior occurs. Not affiliated with any vehicle manufacturer.':'CAN 写入会影响车辆行为。如出现异常请立即拔除设备。与任何车厂无关联。'
 };
 Object.assign(I18N_ZH,{'Ali':'阿里','Tencent':'腾讯','fetch error':'获取失败','network':'网络错误','scan failed':'扫描失败'});
+Object.assign(I18N_ZH,{
+  'BLE Link':'BLE 联动','Obstacle Shift':'障碍物换挡',
+  'Enable D/R shifting':'D/R 挡启用换挡','State Machine':'状态机',
+  'Brake':'刹车','Release Confirmation':'释放确认','Dual Sources':'双源状态',
+  'Real Gear':'真实挡位','Vehicle State':'车辆状态','Virtual P':'虚拟 P',
+  'Latch':'锁存','Reason':'原因','Counters':'计数',
+  'Waiting for release':'等待释放','Armed':'已就绪','Active P':'虚拟 P 发送中',
+  'Latched':'已锁存','Confirmed':'已确认','Not confirmed':'未确认'
+});
 const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
 Object.assign(I18N_EN,{});
 const I18N_RX=[
@@ -1141,6 +1189,10 @@ function bleSetMessage(message,ok){
   const el=bleElement('ble-action-msg');if(!el)return;
   el.textContent=message||'';el.style.color=ok?'var(--ok)':'var(--err)';
 }
+function bleSetShiftMessage(message,ok){
+  const el=bleElement('shift-action-msg');if(!el)return;
+  el.textContent=message||'';el.style.color=ok?'var(--ok)':'var(--err)';
+}
 function bleAge(value){return value===null||value===undefined?'--':(value+' ms');}
 function bleShortId(value){return value?('0x'+Number(value).toString(16).toUpperCase().padStart(8,'0')):'未绑定';}
 function bleGearName(value){return({0:'无',1:'D',2:'R'}[Number(value)]||('未知('+value+')'));}
@@ -1155,10 +1207,11 @@ async function bleLoadStatus(){
     const response=await fetch('/ble_status',{cache:'no-store',signal:controller.signal});
     const data=await response.json();
     if(!response.ok||data.ok===false)throw new Error(data.error||('HTTP '+response.status));
-    const enabled=bleElement('ble-enabled'),obstacle=bleElement('ble-obstacle');
-    if(enabled)enabled.checked=!!data.enabled;if(obstacle)obstacle.checked=!!data.obstacleForwarding;
+    const enabled=bleElement('ble-enabled'),obstacle=bleElement('ble-obstacle'),shiftEnabled=bleElement('shift-enabled');
+    if(enabled)enabled.checked=!!data.enabled;if(obstacle)obstacle.checked=!!data.obstacleForwarding;if(shiftEnabled)shiftEnabled.checked=!!data.shiftEnabled;
     const device=data.pairing?'配对中 '+Math.ceil((data.pairingRemainingMs||0)/1000)+'s':(data.bridgeReady?'已连接':(data.connected?'握手中':(data.connecting?'连接中':(data.scanning?'扫描中':'离线'))));
     bleSetText('ble-card-meta',device);
+    bleSetText('ble-main-card-meta',device);
     bleSetText('ble-device-state',device+(data.bonded?' · 已绑定':'')+(data.lastDisconnectReason?' · 原因 '+data.lastDisconnectReason:''));
     bleSetText('ble-protocol',data.protocolName+' · '+(data.subscribed?'Notify 已订阅':'Notify 未订阅'));
     bleSetText('ble-peer-id',bleShortId(data.deviceId)+' / '+bleShortId(data.peerDeviceId));
@@ -1173,10 +1226,25 @@ async function bleLoadStatus(){
     bleSetText('ble-summary','建议 '+bleGearName(data.suggestedGear)+' / 方向 '+bleDirectionName(data.torqueDirection)+' / Party CAN '+(data.partyCanAlive?'在线':'过期'));
     bleSetText('ble-fsd-rx',(data.bridgeReady?'正常':'未确认')+' / '+bleAge(data.lastSendAgeMs));
     bleSetText('ble-counters','obstacle '+data.obstacleTxCount+'/'+data.obstacleTxFailCount+' · state '+data.stateReportCount+' · reconnect '+data.reconnectCount+' · disconnect '+data.disconnectCount+' · CRC '+data.crcFailCount+' · bad '+(data.badLengthCount+data.badMagicCount+data.badVersionCount+data.unknownTypeCount)+' · conflict '+data.revisionConflictCount+' · duplicate '+data.duplicateCommandCount);
+    const sourceState=(data.physicalKnown&&data.physicalFresh?(data.physicalPressed?'物理已踩':'物理释放'):'物理无效')+' / '+(data.systemKnown&&data.systemFresh?(data.systemPressed?'系统已踩':'系统释放'):'系统无效');
+    const speedText=data.speedFresh?((Number(data.speedDeciKph||0)/10).toFixed(1)+' km/h'):'车速无效';
+    bleSetText('shift-card-meta',data.shiftStateName||'不可用');
+    bleSetText('shift-state',data.shiftStateName||'--');
+    bleSetText('shift-brake',(data.brakePressed?'已踩下':'未踩下')+' · '+bleAge(data.brakeStateAgeMs));
+    bleSetText('shift-release',data.releaseConfirmed?'已确认':'未确认');
+    bleSetText('shift-source',sourceState+' · '+(data.sourcesAgree?'一致':'未确认一致'));
+    bleSetText('shift-gear',(data.real118GearName||'未知')+' / T2CAN '+(data.brakeRealGearName||'未知'));
+    bleSetText('shift-speed',speedText+' · '+(data.stationaryConfirmed?'静止已确认':'静止未确认'));
+    bleSetText('shift-118',(data.real118GearName||'未知')+' · '+bleAge(data.real118AgeMs));
+    bleSetText('shift-virtual-p',data.virtualParkActive?('发送中 · '+data.virtualParkRemainingMs+' ms'):'未发送');
+    bleSetText('shift-latch',data.shiftLatched?'已锁存':'未锁存');
+    bleSetText('shift-reason',(data.shiftReasonName||'--')+' / '+(data.senderReasonName||'--'));
+    bleSetText('shift-counters','0x118 RX '+data.real118RxCount+' · P TX '+data.virtualParkTxCount+' · TX fail '+data.virtualParkTxFailCount+' · Brake bad '+data.badBrakeStateCount+' · Seq old '+data.duplicateOrOldSequenceCount+' / gap '+data.sequenceGapCount);
+    bleSetShiftMessage(data.shiftEnabled?'功能已开启':'功能已关闭',!!data.shiftEnabled);
     const pair=bleElement('ble-pair-btn'),unbind=bleElement('ble-unbind-btn');
     if(pair)pair.disabled=!!data.peerDeviceId||!!data.pairing;if(unbind)unbind.disabled=!data.peerDeviceId;
   }catch(error){
-    bleSetText('ble-card-meta','状态不可用');bleSetMessage(error&&error.message?error.message:'BLE 状态读取失败',false);
+    bleSetText('ble-card-meta','状态不可用');bleSetText('ble-main-card-meta','状态不可用');bleSetText('shift-card-meta','状态不可用');bleSetMessage(error&&error.message?error.message:'BLE 状态读取失败',false);bleSetShiftMessage(error&&error.message?error.message:'换挡状态读取失败',false);
   }finally{
     if(timeout!==null)clearTimeout(timeout);
     bleStatusLoading=false;
@@ -1185,11 +1253,11 @@ async function bleLoadStatus(){
 async function bleSaveConfig(){
   try{
     const enabled=bleElement('ble-enabled'),obstacle=bleElement('ble-obstacle');
-    const body='enabled='+(enabled&&enabled.checked?'1':'0')+'&obstacle='+(obstacle&&obstacle.checked?'1':'0');
-    const response=await fetch('/ble_config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
+    const body=new URLSearchParams({enabled:enabled&&enabled.checked?'1':'0',obstacle:obstacle&&obstacle.checked?'1':'0',shift:bleElement('shift-enabled').checked?'1':'0'});
+    const response=await fetch('/ble_config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
     const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'保存失败');
-    bleSetMessage('BLE 配置已保存',true);bleLoadStatus();
-  }catch(error){bleSetMessage(error&&error.message?error.message:'保存失败',false);}
+    bleSetMessage('BLE 配置已保存',true);bleSetShiftMessage('换挡配置已保存',true);bleLoadStatus();
+  }catch(error){bleSetMessage(error&&error.message?error.message:'保存失败',false);bleSetShiftMessage(error&&error.message?error.message:'保存失败',false);}
 }
 async function bleStartPairing(){
   try{

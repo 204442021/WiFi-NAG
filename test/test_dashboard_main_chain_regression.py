@@ -146,7 +146,23 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             "config-card",
             "config-hardware-section",
             "nag-sweep-row",
+            "ble-card",
             "ble-bridge-section",
+            "obstacle-shift-card",
+            "shift-enabled",
+            "shift-card-meta",
+            "shift-state",
+            "shift-brake",
+            "shift-release",
+            "shift-source",
+            "shift-gear",
+            "shift-speed",
+            "shift-118",
+            "shift-virtual-p",
+            "shift-latch",
+            "shift-reason",
+            "shift-counters",
+            "shift-action-msg",
             "wifi-config-card",
             "wifi-hotspot-section",
             "wifi-internet-section",
@@ -163,10 +179,13 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
 
     def test_static_page_regions_have_correct_owners(self) -> None:
         config = extract_element(self.source, "config-card")
+        ble = extract_element(self.source, "ble-card")
         wifi = extract_element(self.source, "wifi-config-card")
         system = extract_element(self.source, "system-card")
-        for element_id in ("config-hardware-section", "ble-bridge-section"):
+        for element_id in ("config-hardware-section",):
             self.assert_has_id(config, element_id)
+        self.assertNotIn('id="ble-bridge-section"', config)
+        self.assert_has_id(ble, "ble-bridge-section")
         for element_id in ("wifi-hotspot-section", "wifi-internet-section", "gateway-section"):
             self.assert_has_id(wifi, element_id)
         for element_id in ("status-panel", "debug-log-section"):
@@ -197,6 +216,7 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
 
     def test_ble_is_static_and_backend_is_api_only(self) -> None:
         ble_ids = (
+            "ble-card",
             "ble-bridge-section",
             "ble-card-meta",
             "ble-enabled",
@@ -217,6 +237,21 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             "ble-summary",
             "ble-fsd-rx",
             "ble-counters",
+            "obstacle-shift-card",
+            "shift-enabled",
+            "shift-card-meta",
+            "shift-state",
+            "shift-brake",
+            "shift-release",
+            "shift-source",
+            "shift-gear",
+            "shift-speed",
+            "shift-118",
+            "shift-virtual-p",
+            "shift-latch",
+            "shift-reason",
+            "shift-counters",
+            "shift-action-msg",
         )
         for element_id in ble_ids:
             self.assert_has_id(self.source, element_id)
@@ -244,7 +279,14 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
 
     def test_static_main_cards_use_native_accordion(self) -> None:
         self.assertIn('<body class="wifi-nag ui-phone ui-shell">', self.source)
-        self.assertEqual(self.source.count("card ui-main-card collapsed"), 4)
+        self.assertEqual(self.source.count("card ui-main-card collapsed"), 6)
+        order = [
+            self.source.index('id="config-card"'),
+            self.source.index('id="ble-card"'),
+            self.source.index('id="obstacle-shift-card"'),
+            self.source.index('id="wifi-config-card"'),
+        ]
+        self.assertEqual(order, sorted(order))
         for function in ("setMainCardExpanded", "initWifiNagAccordion"):
             self.assertIn(f"function {function}(", self.source)
         self.assertIn("wifiNagAccordionTouched", self.source)
