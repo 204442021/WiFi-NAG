@@ -553,7 +553,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
         <div class="status-line"><span>FSD 设备</span><b id="ble-device-state">未连接</b></div>
       </div>
       <div class="btn-row">
-        <button class="sniff-btn" id="ble-pair-btn" onclick="bleStartPairing()">开始配对（120 秒）</button>
+        <button class="sniff-btn" id="ble-pair-btn" onclick="bleStartPairing()">持续配对</button>
         <button class="sniff-btn" id="ble-unbind-btn" onclick="bleUnbind()">解除绑定</button>
         <button class="sniff-btn" onclick="bleLoadStatus()">刷新</button>
       </div>
@@ -1230,9 +1230,9 @@ async function bleLoadStatus(){
     const response=await fetch('/ble_status',{cache:'no-store',signal:controller.signal});
     const data=await response.json();
     if(!response.ok||data.ok===false)throw new Error(data.error||('HTTP '+response.status));
-    const enabled=bleElement('ble-enabled'),obstacle=bleElement('ble-obstacle'),shiftEnabled=bleElement('shift-enabled');
-    if(enabled)enabled.checked=!!data.enabled;if(obstacle)obstacle.checked=!!data.obstacleForwarding;if(shiftEnabled){shiftEnabled.checked=false;shiftEnabled.disabled=true;}
-    const device=data.pairing?'配对中 '+Math.ceil((data.pairingRemainingMs||0)/1000)+'s':(data.bridgeReady?'已连接':(data.connected?'握手中':(data.connecting?'连接中':(data.scanning?'扫描中':'离线'))));
+    const enabled=bleElement('ble-enabled'),obstacle=bleElement('ble-obstacle'),shiftEnabled=bleElement('shift-enabled'),pairButton=bleElement('ble-pair-btn'),unbindButton=bleElement('ble-unbind-btn');
+    if(enabled)enabled.checked=!!data.enabled;if(obstacle)obstacle.checked=!!data.obstacleForwarding;if(shiftEnabled){shiftEnabled.checked=false;shiftEnabled.disabled=true;}if(pairButton)pairButton.disabled=!data.enabled||!!data.peerDeviceId||!!data.pairing||!!data.unbindPending;if(unbindButton)unbindButton.disabled=!!data.unbindPending||!data.peerDeviceId;
+    const device=data.unbindPending?(data.connected?'正在同步解绑':'等待对端上线完成解绑'):(data.pairing?'持续配对中':(data.bridgeReady?'已连接':(data.connected?'握手中':(data.connecting?'连接中':(data.scanning?'扫描中':'离线')))));
     bleSetText('ble-card-meta',device);
     bleSetText('ble-main-card-meta',device);
     bleSetText('ble-device-state',device+(data.bonded?' · 已绑定':'')+(data.lastDisconnectReason?' · 原因 '+data.lastDisconnectReason:''));
@@ -1284,15 +1284,15 @@ async function bleStartPairing(){
   try{
     const response=await fetch('/ble_pair',{method:'POST'});const data=await response.json();
     if(!response.ok||!data.ok)throw new Error(data.error||'无法开始配对');
-    bleSetMessage('已开启 120 秒配对窗口',true);bleLoadStatus();
+    bleSetMessage('已开启持续配对，绑定成功前不会超时',true);bleLoadStatus();
   }catch(error){bleSetMessage(error&&error.message?error.message:'无法开始配对',false);}
 }
 async function bleUnbind(){
-  if(!confirm('确认解除 FSD 一对一绑定？解除后需重新配对。'))return;
+  if(!confirm('确认同步解除双方绑定？对端离线时会等待其上线后自动完成。'))return;
   try{
     const response=await fetch('/ble_unbind',{method:'POST'});const data=await response.json();
     if(!response.ok||!data.ok)throw new Error(data.error||'解除失败');
-    bleSetMessage('已提交解除绑定请求',true);setTimeout(bleLoadStatus,300);
+    bleSetMessage('已提交同步解绑请求',true);setTimeout(bleLoadStatus,300);
   }catch(error){bleSetMessage(error&&error.message?error.message:'解除失败',false);}
 }
 function initBleBridgeUi(){

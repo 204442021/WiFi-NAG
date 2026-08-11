@@ -179,6 +179,7 @@ static void bleBridgeHandleStatus()
     BLE_JSON_BOOL("subscribed", diagnostics.subscribed);
     BLE_JSON_BOOL("bridgeReady", diagnostics.bridgeReady);
     BLE_JSON_BOOL("pairing", diagnostics.pairing);
+    BLE_JSON_BOOL("unbindPending", diagnostics.unbindPending);
     BLE_JSON_BOOL("fresh255", diagnostics.fresh255);
     BLE_JSON_BOOL("fresh12B", diagnostics.fresh12B);
     BLE_JSON_BOOL("partyCanAlive", diagnostics.partyCanAlive);
@@ -218,6 +219,8 @@ static void bleBridgeHandleStatus()
     json += ",\"deviceId\":" + String(diagnostics.deviceId);
     json += ",\"bootId\":" + String(diagnostics.bootId);
     json += ",\"peerDeviceId\":" + String(diagnostics.peerDeviceId);
+    json += ",\"unbindPeerDeviceId\":" + String(diagnostics.unbindPeerDeviceId);
+    json += ",\"unbindTransactionId\":" + String(diagnostics.unbindTransactionId);
     json += ",\"peerBootId\":" + String(diagnostics.peerBootId);
     json += ",\"peerCapabilities\":" + String(diagnostics.peerCapabilities);
     json += ",\"rssi\":" + String(static_cast<int>(diagnostics.rssi));
@@ -307,14 +310,14 @@ static void bleBridgeHandlePair()
                     "{\"ok\":false,\"error\":\"请先解除现有绑定\"}");
         return;
     }
-    dashLog("[BLE] 120-second pairing window started");
+    dashLog("[BLE] continuous pairing active until bonded");
     server.send(200, "application/json", "{\"ok\":true}");
 }
 
 static void bleBridgeHandleUnbind()
 {
     bleBridgeClient.unbind();
-    dashLog("[BLE] peer unbind requested");
+    dashLog("[BLE] synchronized peer unbind requested");
     server.send(200, "application/json", "{\"ok\":true}");
 }
 

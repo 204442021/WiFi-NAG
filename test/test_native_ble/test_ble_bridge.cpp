@@ -61,6 +61,52 @@ void test_ble_packet_rejects_crc_corruption()
                                                         BleBridgeProtocol::kPacketSize));
 }
 
+void test_unbind_packets_preserve_transaction_and_identity()
+{
+    BleBridgeProtocol::Packet request = BleBridgeProtocol::makePacket(
+        BleBridgeProtocol::MSG_UNBIND_REQUEST, 0, 7);
+    BleBridgeProtocol::encodeUnbindPayload(request, 0x11223344, 0x55667788, 0);
+    BleBridgeProtocol::finalize(request);
+
+    BleBridgeProtocol::Packet decodedRequest;
+    TEST_ASSERT_TRUE(BleBridgeProtocol::copyPacket(
+        decodedRequest, request.bytes, BleBridgeProtocol::kPacketSize));
+    BleBridgeProtocol::UnbindPayload requestPayload;
+    TEST_ASSERT_TRUE(BleBridgeProtocol::decodeUnbindPayload(
+        decodedRequest, requestPayload));
+    TEST_ASSERT_EQUAL_HEX32(0x11223344, requestPayload.transactionId);
+    TEST_ASSERT_EQUAL_HEX32(0x55667788, requestPayload.deviceId);
+    TEST_ASSERT_EQUAL_UINT8(0, requestPayload.result);
+
+    BleBridgeProtocol::Packet ack = BleBridgeProtocol::makePacket(
+        BleBridgeProtocol::MSG_UNBIND_ACK, 0, 8);
+    BleBridgeProtocol::encodeUnbindPayload(ack, 0x11223344, 0x99AABBCC, 1);
+    BleBridgeProtocol::finalize(ack);
+    BleBridgeProtocol::UnbindPayload ackPayload;
+    TEST_ASSERT_TRUE(BleBridgeProtocol::decodeUnbindPayload(ack, ackPayload));
+    TEST_ASSERT_EQUAL_HEX32(0x11223344, ackPayload.transactionId);
+    TEST_ASSERT_EQUAL_HEX32(0x99AABBCC, ackPayload.deviceId);
+    TEST_ASSERT_EQUAL_UINT8(1, ackPayload.result);
+    TEST_ASSERT_TRUE(BleBridgeProtocol::isKnownMessageType(
+        BleBridgeProtocol::MSG_UNBIND_REQUEST));
+    TEST_ASSERT_TRUE(BleBridgeProtocol::isKnownMessageType(
+        BleBridgeProtocol::MSG_UNBIND_ACK));
+}
+
+void test_unbind_packet_rejects_zero_identity_and_wrong_result()
+{
+    BleBridgeProtocol::Packet packet = BleBridgeProtocol::makePacket(
+        BleBridgeProtocol::MSG_UNBIND_REQUEST, 0, 9);
+    BleBridgeProtocol::UnbindPayload payload;
+
+    BleBridgeProtocol::encodeUnbindPayload(packet, 0, 0x1234, 0);
+    TEST_ASSERT_FALSE(BleBridgeProtocol::decodeUnbindPayload(packet, payload));
+    BleBridgeProtocol::encodeUnbindPayload(packet, 1, 0, 0);
+    TEST_ASSERT_FALSE(BleBridgeProtocol::decodeUnbindPayload(packet, payload));
+    BleBridgeProtocol::encodeUnbindPayload(packet, 1, 0x1234, 1);
+    TEST_ASSERT_FALSE(BleBridgeProtocol::decodeUnbindPayload(packet, payload));
+}
+
 void test_brake_state_contract_and_capabilities()
 {
     TEST_ASSERT_TRUE(BleBridgeProtocol::isKnownMessageType(0x12));
@@ -408,6 +454,8 @@ int main()
     UNITY_BEGIN();
     RUN_TEST(test_ble_packet_crc_round_trip);
     RUN_TEST(test_ble_packet_rejects_crc_corruption);
+    RUN_TEST(test_unbind_packets_preserve_transaction_and_identity);
+    RUN_TEST(test_unbind_packet_rejects_zero_identity_and_wrong_result);
     RUN_TEST(test_brake_state_contract_and_capabilities);
     RUN_TEST(test_brake_state_active_payload_decodes);
     RUN_TEST(test_brake_state_release_payload_decodes);

@@ -62,6 +62,9 @@ struct BleBridgeDiagnostics
     bool bridgeReady = false;
     bool pairing = false;
     uint32_t pairingRemainingMs = 0;
+    bool unbindPending = false;
+    uint32_t unbindPeerDeviceId = 0;
+    uint32_t unbindTransactionId = 0;
 
     uint32_t deviceId = 0;
     uint32_t bootId = 0;

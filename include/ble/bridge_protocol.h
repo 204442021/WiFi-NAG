@@ -25,6 +25,8 @@ enum MessageType : uint8_t
     MSG_NAG_STATE = 0x20,
     MSG_HELLO = 0x30,
     MSG_HELLO_ACK = 0x31,
+    MSG_UNBIND_REQUEST = 0x32,
+    MSG_UNBIND_ACK = 0x33,
 };
 
 enum DecodeError : uint8_t
@@ -156,6 +158,37 @@ inline const uint8_t *payload(const Packet &packet)
     return packet.bytes + kPayloadOffset;
 }
 
+struct UnbindPayload
+{
+    uint32_t transactionId = 0;
+    uint32_t deviceId = 0;
+    uint8_t result = 0;
+};
+
+inline void encodeUnbindPayload(Packet &packet, uint32_t transactionId,
+                                uint32_t deviceId, uint8_t result)
+{
+    uint8_t *body = payload(packet);
+    writeLe32(body, transactionId);
+    writeLe32(body + 4, deviceId);
+    body[8] = result;
+    body[9] = 0;
+}
+
+inline bool decodeUnbindPayload(const Packet &packet, UnbindPayload &out)
+{
+    const uint8_t type = packet.bytes[2];
+    if (type != MSG_UNBIND_REQUEST && type != MSG_UNBIND_ACK)
+        return false;
+    const uint8_t *body = payload(packet);
+    out.transactionId = readLe32(body);
+    out.deviceId = readLe32(body + 4);
+    out.result = body[8];
+    if (out.transactionId == 0 || out.deviceId == 0 || body[9] != 0)
+        return false;
+    return type == MSG_UNBIND_REQUEST ? out.result == 0 : out.result == 1;
+}
+
 inline Packet makePacket(MessageType type, uint8_t flags, uint32_t sequence)
 {
     Packet packet;
@@ -196,6 +229,8 @@ inline bool isKnownMessageType(uint8_t type)
     case MSG_NAG_STATE:
     case MSG_HELLO:
     case MSG_HELLO_ACK:
+    case MSG_UNBIND_REQUEST:
+    case MSG_UNBIND_ACK:
         return true;
     default:
         return false;
