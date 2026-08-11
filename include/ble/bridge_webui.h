@@ -373,14 +373,14 @@ static void bleBridgeAfterDashboardSetup()
         dashHandler->onFrame = bleBridgeFrameObserver;
     if (dashDriver)
     {
-        static constexpr uint32_t observedIds[] = {0x370, 0x255, 0x12B, 0x118};
+        static constexpr uint32_t observedIds[] = {0x370, 0x255, 0x12B};
         dashDriver->setFilters(observedIds,
                                static_cast<uint8_t>(sizeof(observedIds) /
                                                     sizeof(observedIds[0])));
     }
 
     bleBridgeClient.begin();
-    dashLog("[BOOT] BLE bridge ready: 0x255/0x12B/0x118 observer + authoritative NAG sync");
+    dashLog("[BOOT] BLE bridge ready: 0x255/0x12B observer + authoritative NAG sync");
 }
 
 #endif // ESP_PLATFORM && BLE_BRIDGE

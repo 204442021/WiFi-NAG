@@ -43,9 +43,10 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
         self.assertIn('persistBool("shift_dr", false)', self.client)
         self.assertIn("setObstacleShiftEnabled", self.header)
 
-    def test_ble_filter_includes_118_without_changing_base_nag_filter(self):
+    def test_ble_filter_excludes_118_without_changing_base_nag_filter(self):
         handler = (ROOT / "include/handlers_base.h").read_text(encoding="utf-8")
-        self.assertIn("{0x370, 0x255, 0x12B, 0x118}", self.bridge)
+        self.assertIn("{0x370, 0x255, 0x12B}", self.bridge)
+        self.assertNotIn("{0x370, 0x255, 0x12B, 0x118}", self.bridge)
         self.assertIn("static constexpr uint32_t ids[] = {880};", handler)
 
     def test_can_loop_owns_condition_tick_and_frame_observation(self):
@@ -133,18 +134,18 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
         self.assertIn('bleBridgeArgEnabled("shift"', self.bridge)
         self.assertIn("setObstacleShiftEnabled", self.bridge)
 
-    def test_dashboard_renders_continuous_injection_status(self):
-        self.assertIn("shift:bleElement('shift-enabled').checked?'1':'0'", self.source)
+    def test_dashboard_keeps_obstacle_shift_visibly_forced_off(self):
+        self.assertIn("功能已强制关闭", self.source)
+        self.assertIn('id="shift-enabled" disabled', self.source)
+        self.assertIn("shiftEnabled.checked=false", self.source)
+        self.assertIn("shiftEnabled.disabled=true", self.source)
+        self.assertIn("shift:'0'", self.source)
+        self.assertNotIn("shift:bleElement('shift-enabled').checked?'1':'0'", self.source)
         for token in (
-            "data.shiftEnabled",
-            "data.shiftStateName",
             "data.physicalPressed",
             "data.brakeStateAgeMs",
-            "data.virtualParkActive",
             "data.shiftReasonName",
             "data.activationCount",
-            "持续注入",
-            "松开刹车立即停止",
         ):
             self.assertIn(token, self.source)
         for token in (

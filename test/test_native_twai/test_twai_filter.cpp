@@ -20,18 +20,19 @@ void test_wifi_nag_single_id_rejects_neighbor_ids()
     TEST_ASSERT_FALSE(twaiHardwareFilterAccepts(f, 881));
 }
 
-void test_ble_filter_contains_four_required_ids()
+void test_ble_filter_contains_three_required_ids_and_excludes_0x118()
 {
-    const uint32_t ids[] = {0x370, 0x255, 0x12B, 0x118};
-    const TwaiFilterResult filter = computeTwaiFilter(ids, 4);
+    const uint32_t ids[] = {0x370, 0x255, 0x12B};
+    const TwaiFilterResult filter = computeTwaiFilter(ids, 3);
     for (const uint32_t id : ids)
     {
         TEST_ASSERT_TRUE(twaiHardwareFilterAccepts(filter, id));
-        TEST_ASSERT_TRUE(exactCanIdMatches(ids, 4, id));
+        TEST_ASSERT_TRUE(exactCanIdMatches(ids, 3, id));
     }
-    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 4, 0x117));
-    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 4, 0x119));
-    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 4, 0x371));
+    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 3, 0x118));
+    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 3, 0x117));
+    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 3, 0x119));
+    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 3, 0x371));
 }
 
 void test_wifi_nag_single_id_mask_is_exact()
@@ -56,6 +57,6 @@ int main()
     RUN_TEST(test_wifi_nag_single_id_rejects_neighbor_ids);
     RUN_TEST(test_wifi_nag_single_id_mask_is_exact);
     RUN_TEST(test_empty_count_returns_zero);
-    RUN_TEST(test_ble_filter_contains_four_required_ids);
+    RUN_TEST(test_ble_filter_contains_three_required_ids_and_excludes_0x118);
     return UNITY_END();
 }

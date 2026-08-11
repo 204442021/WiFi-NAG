@@ -9,6 +9,7 @@ UI_WRAPPER_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.h"
 DASH_FILE = ROOT / "include" / "web" / "mcp2515_dashboard.h"
 GATEWAY_FILE = ROOT / "include" / "web" / "dash_gateway.h"
 RUNTIME_FILE = ROOT / "src" / "espidf_runtime.cpp"
+PROFILE_EXAMPLE_FILE = ROOT / "platformio_profile.example.h"
 
 
 class WifiNagRegressionTests(unittest.TestCase):
@@ -19,6 +20,7 @@ class WifiNagRegressionTests(unittest.TestCase):
         cls.dash = DASH_FILE.read_text(encoding="utf-8")
         cls.gateway = GATEWAY_FILE.read_text(encoding="utf-8")
         cls.runtime = RUNTIME_FILE.read_text(encoding="utf-8")
+        cls.profile_example = PROFILE_EXAMPLE_FILE.read_text(encoding="utf-8")
 
     def assertHasUiId(self, element_id: str) -> None:
         pattern = rf'\bid=(?:"{re.escape(element_id)}"|{re.escape(element_id)}\b)'
@@ -61,6 +63,17 @@ class WifiNagRegressionTests(unittest.TestCase):
         for route in required_routes:
             with self.subTest(route=route):
                 self.assertIn(route, self.dash)
+
+    def test_default_wifi_and_ota_passwords_are_12345678(self) -> None:
+        defaults = dict(
+            re.findall(
+                r'^#define\s+(DASH_PASS|DASH_OTA_PASS)\s+"([^"]+)"',
+                self.profile_example,
+                re.MULTILINE,
+            )
+        )
+        self.assertEqual(defaults.get("DASH_PASS"), "12345678")
+        self.assertEqual(defaults.get("DASH_OTA_PASS"), "12345678")
 
     def test_gateway_dns_routes_exist(self) -> None:
         required_routes = [

@@ -296,10 +296,16 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         )
         self.assertIn(initializer, re.sub(r"\s+", "", self.source))
 
-    def test_obstacle_shift_is_marked_test_only_before_device_validation(self) -> None:
-        shift = extract_element(self.source, "obstacle-shift-card")
-        self.assertIn("测试功能", shift)
-        self.assertIn("不能作为道路安全功能", shift)
+    def test_obstacle_shift_card_is_visible_but_forced_off(self) -> None:
+        for label, html in (("source", self.source), ("generated", self.generated_html)):
+            shift = extract_element(html, "obstacle-shift-card")
+            with self.subTest(file=label):
+                self.assertIn("功能已强制关闭", shift)
+                self.assertRegex(
+                    shift,
+                    r'<input\b(?=[^>]*\bid=(?:"shift-enabled"|\'shift-enabled\'|shift-enabled\b))(?=[^>]*\bdisabled\b)[^>]*>',
+                )
+                self.assertNotIn('onchange="bleSaveConfig()"', shift)
 
     def test_generated_wrapper_and_payload_are_current(self) -> None:
         base_include = '#include "web/mcp2515_dashboard_ui.base.h"'

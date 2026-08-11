@@ -4,9 +4,9 @@
 // platformio_profile.h is ignored by git.
 
 #define DASH_SSID "EVtools"      // WiFi AP name
-#define DASH_PASS "changeme"     // WiFi password, min 8 chars
+#define DASH_PASS "12345678"     // WiFi password, min 8 chars
 #define DASH_OTA_USER "admin"    // Manual OTA username
-#define DASH_OTA_PASS "changeme" // Manual OTA password
+#define DASH_OTA_PASS "12345678" // Manual OTA password
 
 // Optional: start CAN Write enabled after boot. Default is off.
 // #define DASH_INJECTION_ON_BOOT
