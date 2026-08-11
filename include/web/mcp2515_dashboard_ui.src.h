@@ -141,6 +141,7 @@ body.ui-shell .subsec.collapsed .subsec-body{display:block}
 body.ui-shell #status-panel{margin:16px;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
 body.ui-shell #status-panel .stat,body.ui-shell #status-panel>.btn{border-radius:12px;background:var(--bg2);border:1px solid var(--bd);box-shadow:none}
 body.ui-shell #system-card>.sys-grid{margin:0 16px 16px}
+#obstacle-shift-card{display:none!important}
 body.ui-shell #obstacle-shift-card>.subsec-body{margin:16px}
 body.ui-shell #firmware-update-card>.sys-grid{margin:16px 16px 12px}
 body.ui-shell #firmware-update-card>.firmware-body{margin:0 16px 16px}

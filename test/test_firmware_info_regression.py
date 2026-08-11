@@ -28,8 +28,8 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
         cls.ui_base = UI_BASE_FILE.read_text(encoding="utf-8-sig")
         cls.ui_wrapper = UI_WRAPPER_FILE.read_text(encoding="utf-8-sig")
 
-    def test_version_file_is_single_v1_0_8_source(self) -> None:
-        self.assertEqual(self.version, "V1.0.8")
+    def test_version_file_is_single_v1_0_9_source(self) -> None:
+        self.assertEqual(self.version, "V1.0.9")
         self.assertNotIn("3.0.0-beta.5", self.version)
 
     def test_v1_0_7_release_notes_match_internal_version(self) -> None:
@@ -116,6 +116,7 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
                 self.assertNotIn("V1.0.4", text)
                 self.assertNotIn("V1.0.5", text)
                 self.assertNotIn("V1.0.6", text)
+                self.assertNotIn("V1.0.8", text)
 
 
 if __name__ == "__main__":
