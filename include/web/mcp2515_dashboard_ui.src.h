@@ -380,15 +380,111 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
   body.ui-shell #system-card>.sys-grid,body.ui-shell #firmware-update-card>.sys-grid{margin-left:11px;margin-right:11px}
   body.ui-shell #firmware-update-card>.firmware-body{margin-left:11px;margin-right:11px}
 }
+
+/* Albert FSD mobile control center */
+[data-theme="dark"]{
+  --bg:#080b10;--bg2:#0d1118;--card:#121720;--card2:#18202b;
+  --bd:#273140;--bd2:#3a4759;--tx:#f5f7fb;--tx2:#b8c1cf;--tx3:#7f8a9a;
+  --acc:#4b8dff;--accBg:rgba(75,141,255,.12);--accBd:rgba(75,141,255,.32);
+  --shadow:0 14px 36px rgba(0,0,0,.28)
+}
+[data-theme="light"]{
+  --bg:#f5f7fb;--bg2:#eef2f7;--card:#fff;--card2:#f4f7fb;
+  --bd:#d8e0ea;--bd2:#bac6d6;--tx:#101722;--tx2:#526071;--tx3:#7c8999;
+  --acc:#2563eb;--accBg:rgba(37,99,235,.09);--accBd:rgba(37,99,235,.24);
+  --shadow:0 12px 28px rgba(27,42,66,.09)
+}
+body.ui-shell{padding-bottom:96px;background:var(--bg)}
+body.ui-shell .shell-header{
+  width:min(100%,920px);margin:0 auto;padding:18px 16px 12px;min-height:0;
+  display:grid;grid-template-columns:minmax(120px,1fr) auto minmax(120px,1fr);
+  align-items:center;border:0;background:var(--bg)
+}
+body.ui-shell .shell-header .brand{grid-column:2;justify-self:center;text-align:center;display:block}
+body.ui-shell .shell-header .brand-copy{display:block}
+body.ui-shell .shell-header .brand-title{font-size:21px;font-weight:850;letter-spacing:.15px;white-space:nowrap}
+body.ui-shell .shell-header .brand-sub{justify-content:center;margin-top:6px}
+body.ui-shell .shell-header .shell-actions{grid-column:3;justify-self:end}
+.version-badge{padding:2px 7px;border:1px solid var(--bd);border-radius:999px;color:var(--tx3)}
+.top-status-console{
+  width:min(calc(100% - 28px),892px);margin:0 auto 16px;padding:15px 16px;
+  display:grid;grid-template-columns:1.35fr repeat(3,minmax(0,1fr));
+  background:var(--card);border:1px solid var(--bd);border-radius:18px;box-shadow:var(--shadow)
+}
+.top-status-item{min-width:0;padding:0 14px;border-left:1px solid var(--bd)}
+.top-status-item:first-child{padding-left:0;border-left:0}.top-status-item:last-child{padding-right:0}
+.top-status-label{display:block;margin-bottom:6px;font-size:11px;color:var(--tx3)}
+.top-status-item b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-status-item small{display:block;margin-top:3px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.ui-shell #wifi-nag-main{width:min(100%,920px);margin:0 auto;padding:0 0 18px}
+.page-intro{padding:2px 16px 14px}.page-intro h1{margin:0;font-size:22px;line-height:1.25}
+.page-intro p{margin:5px 0 0;color:var(--tx3);font-size:12px}
+.ui-screen{display:none}.ui-screen.active{display:block}
+body.ui-shell .card.ui-main-card{margin:0 14px 14px;border-radius:18px;background:var(--card);border-color:var(--bd);box-shadow:var(--shadow)}
+body.ui-shell .ui-main-card>.card-hdr{min-height:76px;padding:15px 17px;background:var(--card)}
+body.ui-shell .ui-main-card>.card-hdr .card-title{font-size:17px}
+body.ui-shell .ui-main-card>.card-hdr .card-meta{max-width:150px}
+body.ui-shell .subsec{margin:14px 16px 16px;padding:0;border:0;background:transparent}
+body.ui-shell .subsec-head{padding:0 0 12px;margin:0;border-bottom:1px solid var(--bd)}
+body.ui-shell .subsec-title{font-size:14px}
+body.ui-shell .setting-row{padding:14px 0}
+.status-list,.status-line{border-top:1px solid var(--bd)}
+.status-line{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0}
+.status-line:first-child{border-top:0}.status-line span{color:var(--tx3)}.status-line b{text-align:right}
+.diagnostic-overview{padding-top:2px!important}
+#advanced-diagnostics{margin-top:14px;border-top:1px solid var(--bd)}
+#advanced-diagnostics>summary{padding:15px 0;cursor:pointer;font-weight:750;color:var(--tx)}
+.diag-group{padding:14px 0;border-top:1px solid var(--bd)}.diag-group:first-of-type{border-top:0}
+.diag-group h3{margin:0 0 10px;font-size:13px;color:var(--tx2)}
+#advanced-diagnostics .sys-grid{margin:0}
+#advanced-diagnostics #gw-diag{margin:10px 0!important}
+#advanced-diagnostics #debug-log-section{margin:0!important}
+#advanced-diagnostics #debug-log-section .subsec-head{display:none}
+.device-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0}
+.danger-action{color:var(--err);border-color:var(--errBd)}
+.bottom-nav{
+  position:fixed;left:50%;bottom:max(8px,env(safe-area-inset-bottom));transform:translateX(-50%);
+  z-index:50;width:min(calc(100% - 20px),900px);padding:7px;
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;
+  background:rgba(14,18,25,.96);border:1px solid var(--accBd);border-radius:18px;
+  box-shadow:0 16px 42px rgba(0,0,0,.38)
+}
+[data-theme="light"] .bottom-nav{background:rgba(255,255,255,.96)}
+.bottom-nav-btn{
+  min-width:0;padding:7px 4px 6px;border:0;border-radius:12px;background:transparent;color:var(--tx3);
+  display:flex;flex-direction:column;align-items:center;gap:3px;font:700 11px/1.2 inherit;cursor:pointer
+}
+.bottom-nav-btn.active{background:var(--accBg);color:var(--acc)}
+.nav-icon{width:20px;height:20px;display:block}.nav-icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
+@media(max-width:650px){
+  body.ui-shell .shell-header{grid-template-columns:1fr;gap:10px}
+  body.ui-shell .shell-header .brand{grid-column:1}
+  body.ui-shell .shell-header .shell-actions{grid-column:1;justify-self:center}
+  .top-status-console{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 0}
+  .top-status-item{padding:0 12px}.top-status-item:nth-child(odd){padding-left:0;border-left:0}
+  .top-status-item:nth-child(even){padding-right:0}.top-status-item:nth-child(n+3){padding-top:12px;border-top:1px solid var(--bd)}
+}
+@media(max-width:420px){
+  body.ui-shell .shell-header .brand-title{font-size:19px}
+  body.ui-shell .shell-header .shell-actions{gap:6px}
+  body.ui-shell .shell-btn{padding:7px 9px;font-size:11px}
+  .top-status-console{width:calc(100% - 22px);padding:14px}
+  body.ui-shell .card.ui-main-card{margin-left:11px;margin-right:11px}
+  body.ui-shell .ui-main-card>.card-hdr{grid-template-columns:minmax(0,1fr) auto 24px;padding:14px}
+  body.ui-shell .ui-main-card>.card-hdr .card-meta{max-width:84px}
+  .setting-row{align-items:flex-start}.nag-range-grid{width:100%;grid-template-columns:1fr 1fr}.nag-range-grid .sniff-btn{grid-column:span 2}
+  .device-action-grid{grid-template-columns:1fr}.bottom-nav{width:calc(100% - 12px);bottom:max(5px,env(safe-area-inset-bottom))}
+}
+
 </style>
 </head>
 <body class="wifi-nag ui-phone ui-shell">
 <header class="shell-header" id="wifi-nag-header">
   <div class="brand">
-    <div class="brand-mark">W</div>
     <div class="brand-copy">
-      <div class="brand-title">WiFi-NAG</div>
-      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">Waiting for CAN frames</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
+      <div class="brand-title" id="brand-title">Albert FSD辅助系统</div>
+      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V1.0.9</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
     </div>
   </div>
   <div class="shell-actions">
@@ -397,79 +493,64 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
     <button class="shell-btn reboot" id="reboot-btn" type="button" onclick="reboot()">重启</button>
   </div>
 </header>
-
+<section class="top-status-console" aria-label="设备状态总览">
+  <div class="top-status-item"><span class="top-status-label">设备连接</span><b id="top-can-state">等待连接</b><small>CAN 线状态</small></div>
+  <div class="top-status-item"><span class="top-status-label">NAG</span><b id="top-nag-state">已开启</b><small id="top-nag-note">模式 A</small></div>
+  <div class="top-status-item"><span class="top-status-label">温度</span><b id="top-temp-state">--</b><small>设备温度</small></div>
+  <div class="top-status-item"><span class="top-status-label">上网连接</span><b id="top-wifi-state">未配置</b><small>Wi-Fi 状态</small></div>
+</section>
 <main id="wifi-nag-main">
-<section class="card ui-main-card collapsed" id="config-card" data-ui-kind="nag">
+  <div class="page-intro"><h1 id="page-title">功能</h1><p id="page-copy">方向盘提醒与工作模式设置</p></div>
+  <div class="ui-screen active" data-page="features"><section class="card ui-main-card collapsed" id="config-card" data-ui-kind="nag">
   <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
-    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"/><path d="M9 12l2 2 4-5"/></svg></span><span>NAG 配置</span></div>
-    <div class="card-meta">NAG / CAN</div>
+    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"/><path d="M9 12l2 2 4-5"/></svg></span><span>NAG 功能</span></div>
+    <div class="card-meta" id="nag-card-meta">已开启</div>
     <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
   </div>
-
   <div class="subsec" id="config-hardware-section" data-subkey="config-hardware">
-    <div class="subsec-head">
-      <div class="subsec-title">Nag / CAN Write <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Read-only monitoring when off; Nag 0x370 echo writes when on.">i</span></div>
-      <div class="subsec-meta">WIFI-NAG</div>
-    </div>
+    <div class="subsec-head"><div class="subsec-title">NAG 设置</div><div class="subsec-meta">方向盘提醒</div></div>
     <div class="subsec-body">
       <div class="setting-row" id="can-write-row">
-        <div class="setting-info">
-          <div class="setting-name">CAN Write</div>
-          <div class="setting-desc">OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes. <span id="nag-echo-meta">echo: --</span></div>
-        </div>
-        <label class="tgl"><input type="checkbox" id="can-write-tgl" onchange="saveCanWrite()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+        <div class="setting-info"><div class="setting-name">NAG 功能</div><div class="setting-desc">关闭后仅监测，不执行 NAG。</div></div>
+        <label class="tgl"><input type="checkbox" id="can-write-tgl" onchange="saveCanWrite()" checked><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
       <div class="setting-row nag-only" id="nag-mode-row">
-        <div class="setting-info">
-          <div class="setting-name">Nag Mode</div>
-          <div class="setting-desc" id="nag-mode-meta">A = fixed +1.80 Nm. A_V2 random-sweeps inside the range every 2000 ms.</div>
-        </div>
+        <div class="setting-info"><div class="setting-name">工作模式</div><div class="setting-desc" id="nag-mode-meta">A 为固定模式；A_V2 在设定范围内变化。</div></div>
         <div class="hw-seg nag-mode-control" id="nag-mode-seg">
           <button class="hw-btn active" data-v="0" onclick="setNagMode(0)">A</button>
           <button class="hw-btn" data-v="4" onclick="setNagMode(4)">A_V2</button>
         </div>
       </div>
       <div class="setting-row nag-only" id="nag-av2-row">
-        <div class="setting-info">
-          <div class="setting-name">A_V2 Range</div>
-          <div class="setting-desc">Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.
-            <span class="nag-torque-status">
-              <span class="nag-status-pill" id="nag-live-meta">实时: --</span>
-              <span class="nag-status-pill" id="nag-write-meta">写入: --</span>
-              <span class="nag-status-pill" id="nag-av2-meta">skip: --</span>
-            </span>
-          </div>
-        </div>
+        <div class="setting-info"><div class="setting-name">A_V2 范围</div><div class="setting-desc">设置扭矩变化范围（-1.80 至 +1.80 Nm）。</div></div>
         <div class="nag-range-grid">
           <input class="sniff-input" id="nag-av2-min" type="number" min="-1.8" max="1.8" step="0.01" value="1.50" onchange="saveNagAv2()">
           <input class="sniff-input" id="nag-av2-max" type="number" min="-1.8" max="1.8" step="0.01" value="1.80" onchange="saveNagAv2()">
-          <button class="sniff-btn" onclick="saveNagAv2()">Save</button>
+          <button class="sniff-btn" onclick="saveNagAv2()">保存</button>
         </div>
       </div>
     </div>
   </div>
-</section>
-
-<section class="card ui-main-card collapsed" id="ble-card" data-ui-kind="ble">
+</section></div>
+  <div class="ui-screen" data-page="ble"><section class="card ui-main-card collapsed" id="ble-card" data-ui-kind="ble">
   <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
     <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18M8 7l8 10M16 7L8 17"/></svg></span><span>BLE 联动</span></div>
     <div class="card-meta" id="ble-main-card-meta">未连接</div>
     <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
   </div>
   <div class="subsec" id="ble-bridge-section" data-subkey="ble-bridge">
-    <div class="subsec-head">
-      <div class="subsec-title">BLE 联动 <span class="title-help" title="与 T2CAN-FSD 一对一绑定，转发 0x255/0x12B、接收刹车状态，并同步 NAG 权威状态。">i</span></div>
-      <div class="subsec-meta" id="ble-card-meta">未连接</div>
-    </div>
+    <div class="subsec-head"><div class="subsec-title">蓝牙设置</div><div class="subsec-meta" id="ble-card-meta">未连接</div></div>
     <div class="subsec-body">
-      <div class="info-box">BLE 为独立低优先级旁路。关闭或断线不会改变本地 NAG，也不会阻塞 0x370 快速路径。</div>
       <div class="setting-row">
-        <div class="setting-info"><div class="setting-name">BLE 联动总开关</div><div class="setting-desc">关闭后停止扫描、连接和状态同步，本地 NAG 保持原状态。</div></div>
+        <div class="setting-info"><div class="setting-name">BLE 联动</div><div class="setting-desc">关闭后停止扫描、连接和状态同步。</div></div>
         <label class="tgl"><input type="checkbox" id="ble-enabled" onchange="bleSaveConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
       <div class="setting-row">
-        <div class="setting-info"><div class="setting-name">障碍物数据转发</div><div class="setting-desc">每 50 ms 发送最新 0x255 / 0x12B；不补发历史帧。</div></div>
+        <div class="setting-info"><div class="setting-name">障碍物数据转发</div><div class="setting-desc">只转发最新数据，不补发历史数据。</div></div>
         <label class="tgl"><input type="checkbox" id="ble-obstacle" onchange="bleSaveConfig()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+      </div>
+      <div class="status-list">
+        <div class="status-line"><span>FSD 设备</span><b id="ble-device-state">未连接</b></div>
       </div>
       <div class="btn-row">
         <button class="sniff-btn" id="ble-pair-btn" onclick="bleStartPairing()">开始配对（120 秒）</button>
@@ -477,53 +558,12 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
         <button class="sniff-btn" onclick="bleLoadStatus()">刷新</button>
       </div>
       <div id="ble-action-msg" class="setting-desc" style="margin-top:8px"></div>
-      <div class="sys-grid" style="margin-top:12px">
-        <div class="sys-item"><div class="sys-lbl">FSD 设备</div><div class="sys-val" id="ble-device-state">--</div></div>
-        <div class="sys-item"><div class="sys-lbl">协议状态</div><div class="sys-val" id="ble-protocol">--</div></div>
-        <div class="sys-item"><div class="sys-lbl">本机 / 对端 ID</div><div class="sys-val" id="ble-peer-id">--</div></div>
-        <div class="sys-item"><div class="sys-lbl">RSSI / 最后通信</div><div class="sys-val" id="ble-radio">--</div></div>
-        <div class="sys-item"><div class="sys-lbl">NAG 配置</div><div class="sys-val" id="ble-nag-config">--</div></div>
-        <div class="sys-item"><div class="sys-lbl">NAG 运行</div><div class="sys-val" id="ble-nag-runtime">--</div></div>
-        <div class="sys-item"><div class="sys-lbl">FSD 同步</div><div class="sys-val" id="ble-nag-sync">--</div></div>
-        <div class="sys-item"><div class="sys-lbl">Revision / 命令</div><div class="sys-val" id="ble-nag-revision">--</div></div>
-        <div class="sys-item"><div class="sys-lbl">0x255</div><div class="sys-val" id="ble-255">--</div></div>
-        <div class="sys-item"><div class="sys-lbl">0x12B</div><div class="sys-val" id="ble-12b">--</div></div>
-        <div class="sys-item"><div class="sys-lbl">当前方向摘要</div><div class="sys-val" id="ble-summary">--</div></div>
-        <div class="sys-item"><div class="sys-lbl">FSD 接收 / 最后发送</div><div class="sys-val" id="ble-fsd-rx">--</div></div>
-        <div class="sys-item sys-wide"><div class="sys-lbl">诊断计数</div><div class="sys-val" id="ble-counters">--</div></div>
-      </div>
     </div>
   </div>
-</section>
-
-<section class="card ui-main-card collapsed" id="obstacle-shift-card" data-ui-kind="obstacle-shift">
+</section></div>
+  <div class="ui-screen" data-page="network"><section class="card ui-main-card collapsed" id="wifi-config-card" data-ui-kind="wifi">
   <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
-    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5zM8 8h4a3 3 0 0 1 0 6H8zM15 8v8M15 8h3"/></svg></span><span>障碍物换挡</span></div>
-    <div class="card-meta" id="shift-card-meta">功能已强制关闭</div>
-    <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
-  </div>
-  <div class="subsec-body">
-    <div class="info-box"><strong>功能已强制关闭：</strong>后台会拒绝所有开启请求并始终保持关闭。此卡片仅保留状态查看，当前不会执行障碍物换挡或发送虚拟 P。</div>
-    <div class="setting-row">
-      <div class="setting-info"><div class="setting-name">障碍物换挡</div><div class="setting-desc">功能已强制关闭，开关不可操作。</div></div>
-      <label class="tgl"><input type="checkbox" id="shift-enabled" disabled aria-disabled="true"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
-    </div>
-    <div class="sys-grid" style="margin-top:12px">
-      <div class="sys-item"><div class="sys-lbl">状态机</div><div class="sys-val" id="shift-state">--</div></div>
-      <div class="sys-item"><div class="sys-lbl">T2CAN 物理刹车</div><div class="sys-val" id="shift-brake">--</div></div>
-      <div class="sys-item"><div class="sys-lbl">T2CAN 挡位</div><div class="sys-val" id="shift-gear">--</div></div>
-      <div class="sys-item"><div class="sys-lbl">车辆状态</div><div class="sys-val" id="shift-speed">--</div></div>
-      <div class="sys-item"><div class="sys-lbl">0x118 实时模板</div><div class="sys-val" id="shift-118">--</div></div>
-      <div class="sys-item"><div class="sys-lbl">虚拟 P</div><div class="sys-val" id="shift-virtual-p">--</div></div>
-      <div class="sys-item"><div class="sys-lbl">原因</div><div class="sys-val" id="shift-reason">--</div></div>
-      <div class="sys-item sys-wide"><div class="sys-lbl">计数</div><div class="sys-val" id="shift-counters">--</div></div>
-    </div>
-  </div>
-</section>
-
-<section class="card ui-main-card collapsed" id="wifi-config-card" data-ui-kind="wifi">
-  <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
-    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.5 10.5a12 12 0 0 1 15 0"/><path d="M8 14a7 7 0 0 1 8 0"/><path d="M12 18h.01"/></svg></span><span>Wi-Fi 配置</span></div>
+    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.5 10.5a12 12 0 0 1 15 0"/><path d="M8 14a7 7 0 0 1 8 0"/><path d="M12 18h.01"/></svg></span><span>网络设置</span></div>
     <div class="card-meta">热点 · 上网 · 网关</div>
     <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
   </div>
@@ -533,53 +573,51 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       <div class="subsec-meta"><span id="ap-stored" style="margin-right:8px"></span><span id="ap-clients">0 clients</span></div>
     </div>
     <div class="subsec-body">
-      <div id="ap-info" class="info-box" style="display:none">
-        Stored in NVS (non-volatile storage). The SSID and password survive firmware updates and reboots. Only a full factory erase via USB clears them.
-      </div>
-      <div class="setting-desc" style="margin-bottom:8px">Change the WiFi hotspot name and password</div>
+      <div id="ap-info" class="info-box" style="display:none">热点名称和密码会保存在设备中，重启和升级后仍会保留。</div>
+      <div class="setting-desc" style="margin-bottom:8px">设置设备热点名称和密码</div>
       <div style="display:flex;gap:6px;margin-bottom:6px">
-        <input class="sniff-input" id="ap-ssid" placeholder="Hotspot Name" style="flex:1">
-        <input class="sniff-input" id="ap-pass" placeholder="New Password (min 8)" type="password" style="flex:1">
+        <input class="sniff-input" id="ap-ssid" placeholder="热点名称" style="flex:1">
+        <input class="sniff-input" id="ap-pass" placeholder="新密码（至少 8 位）" type="password" style="flex:1">
       </div>
       <div class="setting-row" style="padding:8px 0">
         <div class="setting-info">
-          <div class="setting-name">Hide SSID</div>
-          <div class="setting-desc">Don't broadcast the hotspot name &mdash; clients must enter it manually</div>
+          <div class="setting-name">隐藏热点名称</div>
+          <div class="setting-desc">连接时需要手动输入热点名称</div>
         </div>
         <label class="tgl"><input type="checkbox" id="ap-hidden"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
-        <button class="sniff-btn" onclick="saveAP()">Save</button>
+        <button class="sniff-btn" onclick="saveAP()">保存</button>
         <span style="font-size:11px;color:var(--tx3)" id="ap-status"></span>
       </div>
-      <div style="font-size:10px;color:var(--tx3);margin-top:6px">Changes take effect after reboot. Leave password empty to keep current.</div>
+      <div style="font-size:10px;color:var(--tx3);margin-top:6px">修改将在重启后生效；密码留空会保留当前密码。</div>
     </div>
   </div>
 
   <div class="subsec" id="wifi-internet-section" data-subkey="config-wifi-internet">
     <div class="subsec-head">
-      <div class="subsec-title">WiFi Internet <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Up to 4 saved networks. The device tries each in turn until one connects.">i</span></div>
+      <div class="subsec-title">Wi-Fi 上网</div>
       <div class="subsec-meta"><span id="wifi-status">Not configured</span></div>
     </div>
     <div class="subsec-body">
-      <div class="setting-desc" style="margin-bottom:8px">Save up to 4 networks (e.g. home + phone hotspot). Device tries each in turn. Stored in NVS &mdash; survives firmware updates.</div>
+      <div class="setting-desc" style="margin-bottom:8px">最多保存 4 个网络，设备会自动尝试连接。</div>
       <div id="wifi-saved-list" style="margin-bottom:8px"></div>
       <div id="wifi-add-wrap">
-        <div class="setting-desc" style="margin-bottom:6px"><b>Add network</b> <span id="wifi-slot-count" style="color:var(--tx3)">(0/4)</span></div>
+        <div class="setting-desc" style="margin-bottom:6px"><b>添加网络</b> <span id="wifi-slot-count" style="color:var(--tx3)">(0/4)</span></div>
         <div style="display:flex;gap:6px;margin-bottom:6px">
-          <input class="sniff-input" id="wifi-ssid" placeholder="WiFi SSID" style="flex:1">
-          <button class="sniff-btn" onclick="scanWifi()" id="scan-btn">Scan</button>
+          <input class="sniff-input" id="wifi-ssid" placeholder="Wi-Fi 名称" style="flex:1">
+          <button class="sniff-btn" onclick="scanWifi()" id="scan-btn">扫描</button>
         </div>
         <div id="wifi-nets" style="display:none;margin-bottom:6px;max-height:140px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;background:var(--bg2)"></div>
         <div style="display:flex;gap:6px;margin-bottom:6px">
-          <input class="sniff-input" id="wifi-pass" placeholder="Password" type="password" style="flex:1">
-          <button class="sniff-btn" onclick="saveWifi()" id="wifi-save-btn">Save &amp; Connect</button>
+          <input class="sniff-input" id="wifi-pass" placeholder="密码" type="password" style="flex:1">
+          <button class="sniff-btn" onclick="saveWifi()" id="wifi-save-btn">保存并连接</button>
         </div>
         <details style="margin-top:4px">
-          <summary style="font-size:11px;color:var(--acc);cursor:pointer;user-select:none">Static IP (optional) <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Set a fixed IP configuration instead of using DHCP.">i</span></summary>
+          <summary style="font-size:11px;color:var(--acc);cursor:pointer;user-select:none">固定 IP（可选） <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Set a fixed IP configuration instead of using DHCP.">i</span></summary>
           <div style="margin-top:6px">
             <label style="font-size:11px;color:var(--tx3);display:flex;align-items:center;gap:6px;margin-bottom:6px">
-              <input type="checkbox" id="wifi-static" onchange="toggleStaticIP()"> Use static IP
+              <input type="checkbox" id="wifi-static" onchange="toggleStaticIP()"> 使用固定 IP
             </label>
             <div id="static-fields" style="display:none">
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
@@ -598,38 +636,28 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
 
   <div class="subsec" id="gateway-section" data-subkey="config-gateway">
     <div class="subsec-head">
-      <div class="subsec-title">STA-AP Gateway <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Routes hotspot clients through the configured WiFi Internet uplink, with DNS filtering.">i</span></div>
+      <div class="subsec-title">网络共享</div>
       <div class="subsec-meta"><span id="gw-status">Gateway status unavailable</span></div>
     </div>
     <div class="subsec-body">
       <div class="setting-row" style="padding:8px 0">
         <div class="setting-info">
           <div class="setting-name">Gateway</div>
-          <div class="setting-desc">Enable STA-AP NAT routing for hotspot clients when WiFi Internet is connected</div>
+          <div class="setting-desc">让连接设备热点的设备使用上网网络</div>
         </div>
         <label class="tgl"><input type="checkbox" id="gw-enabled" onchange="saveGatewayDns()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
       <div class="setting-row" style="padding:8px 0">
         <div class="setting-info">
-          <div class="setting-name">Network Performance Mode</div>
-          <div class="setting-desc">Reduce WebUI polling while AP+STA+NAPT is forwarding traffic</div>
-          <div id="net-perf-status" style="font-size:10px;color:var(--tx3);margin-top:3px">ON: status 5s, network diagnostics 30s, heavy lists manual only</div>
+          <div class="setting-name">网络性能模式</div>
+          <div class="setting-desc">转发网络流量时降低页面刷新频率</div>
+          
         </div>
         <label class="tgl"><input type="checkbox" id="net-perf-tgl" onchange="setNetworkPerformanceMode(this.checked,true)"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
-      <div id="gw-diag" style="margin:2px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:11px">
-        <div><span style="color:var(--tx3)">AP</span> <span id="gw-diag-ap">--</span></div>
-        <div><span style="color:var(--tx3)">STA</span> <span id="gw-diag-sta">--</span></div>
-        <div><span style="color:var(--tx3)">NAT</span> <span id="gw-diag-nat">--</span></div>
-        <div><span style="color:var(--tx3)">Radio</span> <span id="gw-diag-radio">--</span></div>
-        <div><span style="color:var(--tx3)">DNS</span> <span id="gw-diag-dns">--</span></div>
-        <div><span style="color:var(--tx3)">DNS Slow</span> <span id="gw-diag-slow">--</span></div>
-        <div><span style="color:var(--tx3)">Pending</span> <span id="gw-diag-pending">--</span></div>
-        <div><span style="color:var(--tx3)">Upstream</span> <span id="gw-diag-upstream">--</span></div>
-        <div><span style="color:var(--tx3)">AP Clients</span> <span id="gw-diag-clients">--</span></div>
-      </div>
+      
       <div style="margin:4px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2)">
-        <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:6px">Upstream DNS</div>
+        <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:6px">上游 DNS</div>
         <input type="hidden" id="gw-upstream-mode" value="0">
         <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:6px">
           <button type="button" class="sniff-btn gateway-upstream-btn" data-mode="0" onclick="setGatewayUpstreamMode(0,true)">Auto</button>
@@ -642,22 +670,22 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
           <button class="sniff-btn modal-btn-primary" onclick="saveGatewayDns()">Save DNS</button>
           <button class="sniff-btn" onclick="resetGatewayDnsStats()">Reset DNS Stats</button>
         </div>
-        <div id="gw-upstream-hint" style="font-size:10px;color:var(--tx3);margin-top:5px">Auto uses DHCP DNS from the connected WiFi; public DNS can avoid stale slow/fail counters from a bad router DNS.</div>
+        <div id="gw-upstream-hint" style="font-size:10px;color:var(--tx3);margin-top:5px">自动使用当前网络提供的 DNS，也可选择公共或自定义 DNS。</div>
       </div>
       <div style="margin:4px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2)">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
           <button class="sniff-btn gateway-profile-btn" id="gw-profile-safe" onclick="applyGatewayProfile('safe')">Conservative Mode</button>
           <button class="sniff-btn gateway-profile-btn" id="gw-profile-aggressive" onclick="applyGatewayProfile('aggressive')">Aggressive Mode</button>
         </div>
-        <div id="gw-profile-desc" style="font-size:11px;color:var(--tx3);line-height:1.45">Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.</div>
+        <div id="gw-profile-desc" style="font-size:11px;color:var(--tx3);line-height:1.45">保守模式：保留常用上网、导航、通知、音乐和语音功能。</div>
       </div>
       <div style="margin-bottom:10px">
-        <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:4px">Blacklist</div>
-        <textarea class="sniff-input" id="gw-blacklist" rows="5" placeholder="Blocked domains, one per line" style="width:100%;resize:vertical"></textarea>
+        <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:4px">黑名单</div>
+        <textarea class="sniff-input" id="gw-blacklist" rows="5" placeholder="禁止访问的域名，每行一个" style="width:100%;resize:vertical"></textarea>
       </div>
       <div style="margin-bottom:10px">
-        <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:4px">Whitelist</div>
-        <textarea class="sniff-input" id="gw-whitelist" rows="5" placeholder="Allowed domains, one per line" style="width:100%;resize:vertical"></textarea>
+        <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:4px">白名单</div>
+        <textarea class="sniff-input" id="gw-whitelist" rows="5" placeholder="允许访问的域名，每行一个" style="width:100%;resize:vertical"></textarea>
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
         <button class="sniff-btn modal-btn-primary" onclick="saveGatewayDns()">Save DNS</button>
@@ -666,10 +694,10 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       </div>
       <div style="margin-bottom:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div style="font-size:12px;font-weight:600;color:var(--tx2)">Filter List</div>
+          <div style="font-size:12px;font-weight:600;color:var(--tx2)">过滤记录</div>
           <div style="display:flex;gap:6px">
-            <button class="sniff-btn" onclick="loadGatewayBlocked()" style="padding:3px 8px;font-size:10px">Refresh</button>
-            <button class="sniff-btn" onclick="clearGatewayBlocked()" style="padding:3px 8px;font-size:10px">Clear</button>
+            <button class="sniff-btn" onclick="loadGatewayBlocked()" style="padding:3px 8px;font-size:10px">刷新</button>
+            <button class="sniff-btn" onclick="clearGatewayBlocked()" style="padding:3px 8px;font-size:10px">清空</button>
           </div>
         </div>
         <div id="gw-blocked-list" class="dns-modal-list" style="margin-top:0;max-height:240px"></div>
@@ -677,8 +705,8 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
         <div id="gw-blocked-msg" style="font-size:10px;color:var(--tx3);margin-top:2px"></div>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:6px">
-        <input class="sniff-input" id="gw-test-domain" placeholder="Test domain">
-        <button class="sniff-btn" onclick="testGatewayDns()">Test DNS</button>
+        <input class="sniff-input" id="gw-test-domain" placeholder="输入测试域名">
+        <button class="sniff-btn" onclick="testGatewayDns()">测试 DNS</button>
       </div>
       <div id="gw-test-result" style="font-size:11px;color:var(--tx3);margin-bottom:8px"></div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -686,25 +714,85 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       </div>
     </div>
   </div>
-</section>
-
-<section class="card ui-main-card collapsed" id="system-card" data-ui-kind="system">
+</section></div>
+  <div class="ui-screen" data-page="diagnostics"><section class="card ui-main-card collapsed" id="system-card" data-ui-kind="system">
   <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
-    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9L7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></span><span>系统状态</span></div>
-    <div class="card-meta sys-monitor"><span id="sys-summary">Monitoring off</span><label class="tgl" title="Enable live hardware status sampling"><input type="checkbox" id="sys-monitor-tgl" onchange="toggleSystemMonitor()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label></div>
+    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9L7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></span><span>设备状态</span></div>
+    <div class="card-meta" id="sys-summary">监测关闭</div>
     <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
   </div>
-  <div class="stat-grid" id="status-panel">
-    <div class="stat can-only"><div class="stat-lbl">CAN Bus</div><div class="stat-val" id="s-can">Offline</div></div>
-    <div class="stat can-only"><div class="stat-lbl" id="s-inj-lbl">CAN TX</div><div class="stat-val v-dim" id="s-inj">--</div></div>
-    <div class="stat can-only"><div class="stat-lbl" title="Frames received per second / total RX">CAN Frames</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
-    <div class="stat can-only"><div class="stat-lbl">RX</div><div class="stat-val v-acc" id="s-rx">0</div></div>
-    <div class="stat can-only"><div class="stat-lbl">TX</div><div class="stat-val v-acc" id="s-tx">0</div></div>
-    <div class="stat can-only"><div class="stat-lbl">TX Errors</div><div class="stat-val v-dim" id="s-txerr">0</div></div>
-    <div class="stat"><div class="stat-lbl">Uptime</div><div class="stat-val v-dim" id="s-up">0s</div></div>
-    <button class="btn can-only" id="btn-can-toggle" onclick="toggleCanWriteTopButton()">CAN Write On</button>
-  </div>
+  <div class="subsec diagnostic-overview">
+    <div class="setting-row">
+      <div class="setting-info"><div class="setting-name">实时状态监控</div><div class="setting-desc">开启后读取设备运行信息。</div></div>
+      <label class="tgl"><input type="checkbox" id="sys-monitor-tgl" onchange="toggleSystemMonitor()"><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
+    </div>
+    <div class="stat-grid" id="status-panel">
+      <div class="stat"><div class="stat-lbl">设备连接</div><div class="stat-val" id="s-can">离线</div></div>
+      <div class="stat"><div class="stat-lbl" id="s-inj-lbl">NAG</div><div class="stat-val v-dim" id="s-inj">已开启</div></div>
+      <div class="stat"><div class="stat-lbl">蓝牙</div><div class="stat-val v-dim" id="diag-ble-state">未连接</div></div>
+      <div class="stat"><div class="stat-lbl">Wi-Fi</div><div class="stat-val v-dim" id="diag-wifi-state">未配置</div></div>
+      <div class="stat"><div class="stat-lbl">温度</div><div class="stat-val v-dim" id="sys-temp">--</div></div>
+      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V1.0.9</div></div>
+    </div>
+    <details id="advanced-diagnostics">
+      <summary>高级诊断</summary>
+      <div class="diag-group">
+        <h3>NAG 运行数据</h3>
+        <div class="sys-grid">
+          <div class="sys-item"><div class="sys-lbl">Echo 回显</div><div class="sys-val" id="nag-echo-meta">echo: --</div></div>
+          <div class="sys-item"><div class="sys-lbl">实时扭矩</div><div class="sys-val" id="nag-live-meta">实时: --</div></div>
+          <div class="sys-item"><div class="sys-lbl">写入扭矩</div><div class="sys-val" id="nag-write-meta">写入: --</div></div>
+          <div class="sys-item"><div class="sys-lbl">A_V2</div><div class="sys-val" id="nag-av2-meta">skip: --</div></div>
+        </div>
+      </div>
+      <div class="diag-group">
+        <h3>CAN 运行数据</h3>
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-lbl">CAN Frames</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
+          <div class="stat"><div class="stat-lbl">RX</div><div class="stat-val v-acc" id="s-rx">0</div></div>
+          <div class="stat"><div class="stat-lbl">TX</div><div class="stat-val v-acc" id="s-tx">0</div></div>
+          <div class="stat"><div class="stat-lbl">TX Errors</div><div class="stat-val v-dim" id="s-txerr">0</div></div>
+          <div class="stat"><div class="stat-lbl">Uptime</div><div class="stat-val v-dim" id="s-up">0s</div></div>
+          <button class="btn" id="btn-can-toggle" onclick="toggleCanWriteTopButton()">CAN Write On</button>
+        </div>
+      </div>
+      <div class="diag-group">
+  <h3>BLE 联动数据</h3>
   <div class="sys-grid">
+    <div class="sys-item"><div class="sys-lbl">协议状态</div><div class="sys-val" id="ble-protocol">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">本机 / 对端 ID</div><div class="sys-val" id="ble-peer-id">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">RSSI / 最后通信</div><div class="sys-val" id="ble-radio">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">NAG 配置</div><div class="sys-val" id="ble-nag-config">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">NAG 运行</div><div class="sys-val" id="ble-nag-runtime">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">FSD 同步</div><div class="sys-val" id="ble-nag-sync">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">Revision / 命令</div><div class="sys-val" id="ble-nag-revision">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">0x255</div><div class="sys-val" id="ble-255">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">0x12B</div><div class="sys-val" id="ble-12b">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">当前方向摘要</div><div class="sys-val" id="ble-summary">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">FSD 接收 / 最后发送</div><div class="sys-val" id="ble-fsd-rx">--</div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">诊断计数</div><div class="sys-val" id="ble-counters">--</div></div>
+  </div>
+</div>
+      <div class="diag-group">
+        <h3>网络运行数据</h3>
+        <div class="setting-desc" id="wifi-diag-detail">--</div>
+        <div class="setting-desc" id="ap-diag-detail">--</div>
+        <div class="setting-desc" id="net-perf-status">--</div>
+        <div id="gw-diag" style="margin:2px 0 10px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:11px">
+        <div><span style="color:var(--tx3)">AP</span> <span id="gw-diag-ap">--</span></div>
+        <div><span style="color:var(--tx3)">STA</span> <span id="gw-diag-sta">--</span></div>
+        <div><span style="color:var(--tx3)">NAT</span> <span id="gw-diag-nat">--</span></div>
+        <div><span style="color:var(--tx3)">Radio</span> <span id="gw-diag-radio">--</span></div>
+        <div><span style="color:var(--tx3)">DNS</span> <span id="gw-diag-dns">--</span></div>
+        <div><span style="color:var(--tx3)">DNS Slow</span> <span id="gw-diag-slow">--</span></div>
+        <div><span style="color:var(--tx3)">Pending</span> <span id="gw-diag-pending">--</span></div>
+        <div><span style="color:var(--tx3)">Upstream</span> <span id="gw-diag-upstream">--</span></div>
+        <div><span style="color:var(--tx3)">AP Clients</span> <span id="gw-diag-clients">--</span></div>
+      </div>
+      </div>
+      <div class="diag-group">
+        <h3>硬件与内存</h3>
+          <div class="sys-grid">
     <div class="sys-item"><div class="sys-lbl">Chip</div><div class="sys-val" id="sys-chip">--</div></div>
     <div class="sys-item"><div class="sys-lbl">CPU</div><div class="sys-val" id="sys-cpu">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">Clock / Bus</div><div class="sys-val" id="sys-clocks">--</div></div>
@@ -713,7 +801,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       <div class="sys-bar"><div class="sys-fill" id="sys-cpu0-fill"></div></div>
       <div class="sys-bar" style="margin-top:4px"><div class="sys-fill" id="sys-cpu1-fill"></div></div>
     </div>
-    <div class="sys-item"><div class="sys-lbl">Temperature</div><div class="sys-val" id="sys-temp">--</div></div>
+    
     <div class="sys-item"><div class="sys-lbl">Reset</div><div class="sys-val" id="sys-reset">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">Board Specs</div><div class="sys-val" id="sys-board">--</div></div>
     <div class="sys-item"><div class="sys-lbl">Uptime / Core</div><div class="sys-val" id="sys-runtime">--</div></div>
@@ -732,8 +820,10 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
     <div class="sys-item sys-wide"><div class="sys-lbl">Wireless</div><div class="sys-val" id="sys-wireless">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">MAC / Firmware</div><div class="sys-val" id="sys-fw">--</div></div>
   </div>
-
-  <div class="subsec" id="debug-log-section" data-subkey="config-dashboard-log" style="margin-top:14px">
+      </div>
+      <div class="diag-group">
+        <h3>调试日志</h3>
+          <div class="subsec" id="debug-log-section" data-subkey="config-dashboard-log" style="margin-top:14px">
     <div class="subsec-head">
       <div class="subsec-title">Debug Log <span class="title-help" aria-label="Help" onclick="return toggleHelp(this,event)" title="Shows recent WebUI and firmware log lines.">i</span></div>
       <div class="subsec-meta">Recent debug output</div>
@@ -750,9 +840,12 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
       <div class="log-box" id="log">Waiting...</div>
     </div>
   </div>
-</section>
 
-<section class="card ui-main-card collapsed" id="firmware-update-card" data-ui-kind="firmware">
+      </div>
+    </details>
+  </div>
+</section></div>
+  <div class="ui-screen" data-page="settings"><section class="card ui-main-card collapsed" id="firmware-update-card" data-ui-kind="firmware">
   <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
     <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M5 19h14"/></svg></span><span>固件更新</span></div>
     <div class="card-meta" id="fw-ver">Manual OTA</div>
@@ -767,22 +860,40 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
     <div class="ota-drop" id="ota-drop" onclick="$('ota-file').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
       <input type="file" id="ota-file" accept=".bin" onchange="fileSelected(this.files[0])">
       <div class="ota-icon">&#8679;</div>
-      <div class="ota-text">Tap to select firmware .bin</div>
-      <div class="ota-sub">Or drag and drop a file here</div>
+      <div class="ota-text">点击选择 OTA 固件 .bin</div>
+      <div class="ota-sub">也可以将文件拖到这里</div>
     </div>
     <div class="ota-progress" id="ota-progress">
       <div class="ota-bar"><div class="ota-fill" id="ota-fill"></div></div>
       <div class="ota-status" id="ota-status">Uploading...</div>
     </div>
-    <button class="ota-btn" id="ota-upload-btn" onclick="uploadFirmware()">Flash Firmware</button>
-    <button class="sniff-btn" id="ota-reset-btn" onclick="resetOtaCredentials()" style="width:100%;margin-top:6px">Reset OTA Credentials</button>
-    <div style="margin-top:10px;font-size:11px;color:var(--tx3);line-height:1.7">
-      Use the generated PlatformIO firmware.bin for this board.<br>
-      Current build path: <span style="color:var(--acc);font-family:monospace">.pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin</span>
+    <button class="ota-btn" id="ota-upload-btn" onclick="uploadFirmware()">开始升级</button>
+    <button class="sniff-btn" id="ota-reset-btn" onclick="resetOtaCredentials()" style="width:100%;margin-top:6px">重置 OTA 凭据</button>
+    <div class="setting-desc" style="margin-top:10px">请选择为本设备生成的 .bin 固件。</div>
+  </div>
+</section><section class="card ui-main-card collapsed" id="device-actions-card" data-ui-kind="system">
+  <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
+    <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9L7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></span><span>设备操作</span></div>
+    <div class="card-meta">界面与设备</div>
+    <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
+  </div>
+  <div class="subsec">
+    <div class="btn-row device-action-grid">
+      <button class="sniff-btn" type="button" onclick="toggleLanguage()">切换语言</button>
+      <button class="sniff-btn" type="button" onclick="toggleTheme()">切换主题</button>
+      <button class="sniff-btn" type="button" onclick="showSafetyNotice()">使用声明</button>
+      <button class="sniff-btn danger-action" type="button" onclick="reboot()">重启设备</button>
     </div>
   </div>
-</section>
+</section></div>
 </main>
+<nav class="bottom-nav" id="bottom-nav" aria-label="底部导航">
+  <button class="bottom-nav-btn active" type="button" data-page-target="features" aria-current="page"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"/><path d="M9 12l2 2 4-5"/></svg></span><span>功能</span></button>
+  <button class="bottom-nav-btn" type="button" data-page-target="ble"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18M8 7l8 10M16 7L8 17"/></svg></span><span>蓝牙</span></button>
+  <button class="bottom-nav-btn" type="button" data-page-target="network"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.5 10.5a12 12 0 0 1 15 0"/><path d="M8 14a7 7 0 0 1 8 0"/><path d="M12 18h.01"/></svg></span><span>网络</span></button>
+  <button class="bottom-nav-btn" type="button" data-page-target="diagnostics"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 18V9M10 18V5M16 18v-7M22 18V3"/></svg></span><span>诊断</span></button>
+  <button class="bottom-nav-btn" type="button" data-page-target="settings"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9L7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></span><span>设置</span></button>
+</nav>
 <div class="warn-bar">CAN bus writes affect vehicle behavior. Remove device immediately if unexpected behavior occurs. Not affiliated with any vehicle manufacturer.</div>
 
 <div class="modal-backdrop" id="safety-modal">
@@ -825,7 +936,7 @@ const I18N_ZH={
   'Read-only monitoring when off; Nag 0x370 echo writes when on.':'关闭时仅监听；开启时发送 Nag 0x370 echo。','OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'关闭 = 只读 CAN 监听。开启 = 允许 Nag 880 (0x370) 计数器 +1 echo 写入。','A = fixed +1.80 Nm. A_V2 random-sweeps inside the range every 2000 ms.':'A = 固定 +1.80 Nm。A_V2 每 2000 ms 在范围内伪随机扫动。','Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.':'Nm 端点限制在 -1.80 到 +1.80；如果填反会自动交换。','A_V2: random sweep':'A_V2：随机扫动','A: fixed +1.80 Nm echo':'A：固定 +1.80 Nm echo','echo':'echo','skip':'跳过',
   'Save':'保存','Saved':'已保存','Saving...':'保存中...','Save failed':'保存失败','CAN write save failed':'CAN 写入保存失败','Nag mode save failed':'Nag 模式保存失败','A_V2 range save failed':'A_V2 范围保存失败',
   'System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','Chip':'芯片','CPU':'CPU','Clock / Bus':'时钟 / 总线','CPU Load':'CPU 负载','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Uptime / Core':'运行时间 / 核心','Heap RAM':'堆内存','Internal RAM':'内部 RAM','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','Flash / App':'Flash / 应用','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','warming up':'采样中','unavailable':'不可用','offline':'离线','not enabled':'未启用','enabled':'已启用','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','STA online':'STA 在线','STA offline':'STA 离线','on':'开启','off':'关闭','unknown':'未知','fixed':'固定',
-  'WiFi Hotspot':'WiFi 热点','Configure the device hotspot name, password and visibility. Saved in NVS.':'配置设备热点名称、密码和可见性，保存到 NVS。','Stored in NVS (non-volatile storage). The SSID and password survive firmware updates and reboots. Only a full factory erase via USB clears them.':'保存在 NVS（非易失存储）中。SSID 和密码在固件更新、重启后仍保留，只有通过 USB 完整恢复出厂才会清除。','Change the WiFi hotspot name and password':'修改 WiFi 热点名称和密码','Hotspot Name':'热点名称','New Password (min 8)':'新密码（至少 8 位）','Hide SSID':'隐藏 SSID','Don\'t broadcast the hotspot name \u2014 clients must enter it manually':'不广播热点名称，客户端需要手动输入','Changes take effect after reboot. Leave password empty to keep current.':'修改将在重启后生效。密码留空则保持当前密码。','Enter hotspot name':'请输入热点名称','Password min 8 chars':'密码至少 8 位','Saved! AP starts on CH1 and auto matches STA after WiFi connects.':'已保存！AP 从 CH1 启动，WiFi 连接后自动匹配 STA 信道。','firmware default':'固件默认值','sync':'同步','ok':'成功',
+  'WiFi Hotspot':'WiFi 热点','Configure the device hotspot name, password and visibility. Saved in NVS.':'配置设备热点名称、密码和可见性，保存到 NVS。','Stored in NVS (non-volatile storage). The SSID and password survive firmware updates and reboots. Only a full factory erase via USB clears them.':'保存在 NVS（非易失存储）中。SSID 和密码在固件更新、重启后仍保留，只有通过 USB 完整恢复出厂才会清除。','Change the WiFi hotspot name and password':'修改 WiFi 热点名称和密码','Hotspot Name':'热点名称','New Password (min 8)':'新密码（至少 8 位）','Hide SSID':'隐藏 SSID','Don\'t broadcast the hotspot name \u2014 clients must enter it manually':'不广播热点名称，客户端需要手动输入','Changes take effect after reboot. Leave password empty to keep current.':'修改将在重启后生效。密码留空则保持当前密码。','Enter hotspot name':'请输入热点名称','Password min 8 chars':'密码至少 8 位','Saved! AP starts on CH1 and auto matches STA after WiFi connects.':'已保存！AP 从 CH1 启动，WiFi 连接后自动匹配 STA 信道。','Hotspot ready':'热点运行正常','firmware default':'固件默认值','sync':'同步','ok':'成功',
   'WiFi Internet':'WiFi 上网','Up to 4 saved networks. The device tries each in turn until one connects.':'最多保存 4 个网络，设备会按顺序尝试直到连接成功。','Not configured':'未配置','Save up to 4 networks (e.g. home + phone hotspot). Device tries each in turn. Stored in NVS \u2014 survives firmware updates.':'最多保存 4 个网络（例如家里 WiFi + 手机热点）。设备会按顺序尝试，配置保存在 NVS 中，固件更新后仍保留。','Add network':'添加网络','WiFi SSID':'WiFi SSID','Scan':'扫描','Scanning...':'扫描中...','Scan failed':'扫描失败','No networks found':'未发现网络','Password':'密码','Save & Connect':'保存并连接','Static IP (optional)':'静态 IP（可选）','Set a fixed IP configuration instead of using DHCP.':'使用固定 IP 配置，而不是 DHCP。','Use static IP':'使用静态 IP','IP (e.g. 192.168.1.100)':'IP（如 192.168.1.100）','Gateway (e.g. 192.168.1.1)':'网关（如 192.168.1.1）','Mask (255.255.255.0)':'掩码（255.255.255.0）','DNS (e.g. 8.8.8.8)':'DNS（如 8.8.8.8）','No networks saved.':'未保存网络。','connected':'已连接','trying':'尝试中','saved':'已保存','[static]':'[静态]','[connected]':'[已连接]','[trying]':'[连接中]','Reconnect':'重新连接','Connect':'连接','Edit':'编辑','Delete':'删除','Save Changes':'保存修改','Leave empty to keep current':'留空则保持当前密码','Delete WiFi':'删除 WiFi','Delete failed':'删除失败','Enter SSID':'请输入 SSID','Connect failed':'连接失败','connect failed':'连接失败','save failed':'保存失败','retry in':'后重试','switch to that WiFi and open this IP':'切换到该 WiFi 后打开此 IP',
   'STA-AP Gateway':'STA-AP 网关','Routes hotspot clients through the configured WiFi Internet uplink, with DNS filtering.':'通过已配置的 WiFi 上网链路转发热点客户端流量，并进行 DNS 过滤。','Gateway':'网关','Gateway status unavailable':'网关状态不可用','Enable STA-AP NAT routing for hotspot clients when WiFi Internet is connected':'WiFi 上网连接后，为热点客户端启用 STA-AP NAT 路由','Network Performance Mode':'网络性能模式','Reduce WebUI polling while AP+STA+NAPT is forwarding traffic':'AP+STA+NAPT 转发流量时降低 WebUI 轮询频率','ON: status 5s, network diagnostics 30s, heavy lists manual only':'开启：状态 5 秒，网络诊断 30 秒，重列表仅手动刷新','OFF: status 2s, network diagnostics 10s, DNS/filter lists auto refresh':'关闭：状态 2 秒，网络诊断 10 秒，DNS/过滤列表自动刷新','Car UI: status 7s, network diagnostics 45s, heavy lists manual only':'车机界面：状态 7 秒，网络诊断 45 秒，重列表仅手动刷新','Radio':'信道','DNS Slow':'DNS 慢请求','Pending':'待处理','Upstream':'上游','Upstream DNS':'上游 DNS','Custom':'自定义','223.5.5.5 Ali':'223.5.5.5 阿里','119.29.29.29 Tencent':'119.29.29.29 腾讯','Custom DNS, e.g. 8.8.8.8':'自定义 DNS，如 8.8.8.8','Save DNS':'保存 DNS','Reset DNS Stats':'清零 DNS 统计','Auto uses DHCP DNS from the connected WiFi; public DNS can avoid stale slow/fail counters from a bad router DNS.':'自动模式使用已连接 WiFi 的 DHCP DNS；公共 DNS 可避免路由器 DNS 异常导致的慢/失败计数。','Using Ali DNS 223.5.5.5.':'使用阿里 DNS 223.5.5.5。','Using Tencent DNS 119.29.29.29.':'使用腾讯 DNS 119.29.29.29。','Enter a custom upstream DNS IPv4 address.':'输入自定义上游 DNS IPv4 地址。','Conservative Mode':'保守模式','Aggressive Mode':'激进模式','Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.':'保守模式：WiFi 上网 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 语音助手。','Aggressive Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant / app vehicle control.':'激进模式：WiFi 上网 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 语音助手 / App 车辆控制。','Custom DNS profile':'自定义 DNS 方案','Blacklist':'黑名单','Whitelist':'白名单','Blocked domains, one per line':'拦截域名，每行一个','Allowed domains, one per line':'放行域名，每行一个','Filter List':'过滤清单','Refresh':'刷新','Clear':'清空','Test domain':'测试域名','Test DNS':'测试 DNS','Gateway ON':'网关开启','Gateway OFF':'网关关闭','READY':'就绪','WAITING':'等待中','blocked':'已拦截','pending FULL':'待处理已满','DNS cache':'DNS 缓存','compiled':'已编译','not compiled':'未编译','same':'同信道','cross':'跨信道','task':'任务运行','no task':'无任务','bind ok':'绑定正常','bind wait':'等待绑定','last':'最近','avg':'平均','max':'最大','full':'已满','timeout':'超时','fail':'失败','none':'无','custom':'自定义','Gateway not available':'网关不可用','Remote DNS list changed. Finish editing or save to overwrite.':'远端 DNS 列表已变化。请完成编辑或保存以覆盖。','Resetting DNS stats...':'正在清零 DNS 统计...','DNS stats reset':'DNS 统计已清零','Whitelist allows specific subdomain exceptions; blocked root domains cannot be reopened.':'白名单允许特定子域例外；已拦截的根域不能重新放行。','items':'项','No blocked domains recorded':'暂无被拦截域名记录','Already in blacklist':'已在黑名单','Already whitelisted':'已在白名单','Not allowed':'不允许','Add to Whitelist':'加入白名单','DNS filter list unavailable':'DNS 过滤列表不可用','empty domain':'域名为空','would be blocked':'将被拦截','would be allowed':'将被放行','gateway disabled':'网关未启用','DNS test failed':'DNS 测试失败','cannot add domain':'无法添加域名','Cleared':'已清空','matched whitelist':'命中白名单','matched blacklist':'命中黑名单','not in blacklist':'不在黑名单','domain is blocked root':'该域名是被拦截根域','whitelist full (max 200)':'白名单已满（最多 200）',
   'Debug Log':'调试日志','Debug logging':'调试日志','Recent debug output':'最近调试输出','Shows recent WebUI and firmware log lines.':'显示最近的 WebUI 和固件日志。','Turns WebUI debug log output on or off.':'开启或关闭 WebUI 调试日志输出。','Toggle WebUI and firmware debug output':'开启或关闭 WebUI 与固件调试日志输出',
@@ -844,6 +955,21 @@ Object.assign(I18N_ZH,{
 });
 const I18N_EN={};Object.keys(I18N_ZH).forEach(k=>I18N_EN[I18N_ZH[k]]=k);
 Object.assign(I18N_EN,{});
+Object.assign(I18N_EN,{
+  '功能':'Features','蓝牙':'Bluetooth','网络':'Network','诊断':'Diagnostics','设置':'Settings',
+  '方向盘提醒与工作模式设置':'Steering reminder and operating mode settings',
+  '配对、连接与数据转发设置':'Pairing, connection and data forwarding settings',
+  '设备热点、上网连接与网络共享':'Device hotspot, internet and network sharing',
+  '设备状态与高级诊断信息':'Device status and advanced diagnostics',
+  '固件更新与设备操作':'Firmware update and device actions',
+  '设备连接':'Device connection','等待连接':'Waiting','等待设备连接':'Waiting for device',
+  '设备已连接':'Device connected','NAG 功能':'NAG','工作模式':'Operating mode',
+  '已开启':'Enabled','已关闭':'Disabled','温度':'Temperature','上网连接':'Internet',
+  '实时状态监控':'Live status monitoring','高级诊断':'Advanced diagnostics',
+  '设备操作':'Device actions','切换语言':'Switch language','切换主题':'Switch theme',
+  '使用声明':'Safety notice','重启设备':'Reboot device','模式':'Mode'
+});
+Object.entries(I18N_EN).forEach(([zh,en])=>{if(!I18N_ZH[en])I18N_ZH[en]=zh;});
 const I18N_RX=[
   [/^Connection to (.+) lost\. Reload after reconnecting\.$/,'与 $1 的连接已断开。重连后请刷新页面。'],
   [/^Connection to (.+) lost\. Switch to your normal WiFi and open (.+)$/,'与 $1 的连接已断开。请切回常用 WiFi 并打开 $2'],
@@ -881,9 +1007,7 @@ function clientCountText(n){
   n=Number(n)||0;
   return dashLang==='zh'?(n+' 个客户端'):(n+' client'+(n===1?'':'s'));
 }
-function injectionStatusLabel(armed){
-  return armed?(dashLang==='zh'?'\u5199\u5165\u5f00\u542f':'CAN WRITE ON'):(dashLang==='zh'?'\u53ea\u8bfb\u6a21\u5f0f':'READ ONLY');
-}
+function injectionStatusLabel(armed){return armed?trText('Enabled'):trText('Disabled');}
 let state={can:true,nagMode:0,nagAv2Min:1.5,nagAv2Max:1.8};
 let otaFile=null;
 let otaUser=localStorage.getItem('otaU')||'',otaPass=localStorage.getItem('otaP')||'';
@@ -961,9 +1085,9 @@ function updateUiModeUi(){
 function applyWifiNagMode(){
   document.body.classList.add('wifi-nag','ui-shell','ui-phone');
   document.body.classList.remove('ui-car');
-  const title=document.querySelector('.brand-title');if(title)title.textContent='WiFi-NAG';
+  const title=document.querySelector('.brand-title');if(title)title.textContent='Albert FSD辅助系统';
   setText('hw-badge','WIFI-NAG');
-  setText('s-inj-lbl','CAN Write');
+  setText('s-inj-lbl','NAG');
 }
 function applyUiMode(){
   uiModeSetting=normalizeUiMode(uiModeSetting);
@@ -1137,6 +1261,7 @@ async function bleLoadStatus(){
     bleSetText('shift-virtual-p','未注入');
     bleSetText('shift-reason',data.shiftReasonName||shiftStateName);
     bleSetText('shift-counters','0x118 RX '+data.real118RxCount+' · P TX '+data.virtualParkTxCount+' · TX fail '+data.virtualParkTxFailCount+' · Activations '+data.activationCount+' · Brake bad '+data.badBrakeStateCount+' · Seq old '+data.duplicateOrOldSequenceCount+' / gap '+data.sequenceGapCount);
+    syncDashboardSummary();
     const pair=bleElement('ble-pair-btn'),unbind=bleElement('ble-unbind-btn');
     if(pair)pair.disabled=!!data.peerDeviceId||!!data.pairing;if(unbind)unbind.disabled=!data.peerDeviceId;
   }catch(error){
@@ -1181,6 +1306,47 @@ function setMainCardExpanded(card,expanded){
   const header=card.querySelector(':scope > .card-hdr');
   if(header)header.setAttribute('aria-expanded',expanded?'true':'false');
 }
+
+const WIFI_NAG_PAGE_META={
+  features:['功能','方向盘提醒与工作模式设置'],
+  ble:['蓝牙','配对、连接与数据转发设置'],
+  network:['网络','设备热点、上网连接与网络共享'],
+  diagnostics:['诊断','设备状态与高级诊断信息'],
+  settings:['设置','固件更新与设备操作']
+};
+function setWifiNagPage(page){
+  if(!WIFI_NAG_PAGE_META[page])page='features';
+  document.querySelectorAll('.ui-screen').forEach(screen=>screen.classList.toggle('active',screen.dataset.page===page));
+  document.querySelectorAll('.bottom-nav-btn').forEach(btn=>{
+    const active=btn.dataset.pageTarget===page;
+    btn.classList.toggle('active',active);
+    if(active)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current');
+  });
+  const meta=WIFI_NAG_PAGE_META[page];
+  setText('page-title',meta[0]);setText('page-copy',meta[1]);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function initWifiNagNavigation(){
+  document.querySelectorAll('.bottom-nav-btn').forEach(btn=>btn.addEventListener('click',()=>setWifiNagPage(btn.dataset.pageTarget)));
+  setWifiNagPage('features');
+}
+function mirrorDashboardText(sourceId,targetId,fallback){
+  const source=$(sourceId),target=$(targetId);if(!target)return;
+  target.textContent=source&&source.textContent?source.textContent:fallback;
+  if(source&&source.style&&source.style.color)target.style.color=source.style.color;
+}
+function syncDashboardSummary(){
+  mirrorDashboardText('s-can','top-can-state',trText('Waiting'));
+  mirrorDashboardText('s-inj','top-nag-state',trText('Enabled'));
+  mirrorDashboardText('sys-temp','top-temp-state','--');
+  mirrorDashboardText('wifi-status','top-wifi-state',trText('Not configured'));
+  mirrorDashboardText('ble-main-card-meta','diag-ble-state',trText('Offline'));
+  mirrorDashboardText('wifi-status','diag-wifi-state',trText('Not configured'));
+  mirrorDashboardText('fw-version','diag-version','V1.0.9');
+  mirrorDashboardText('s-inj','nag-card-meta',trText('Enabled'));
+  const note=$('top-nag-note');if(note)note.textContent=trText('Mode')+' '+(state.nagMode===4?'A_V2':'A');
+}
+
 function initWifiNagAccordion(){
   const cards=Array.from(document.querySelectorAll('.ui-main-card'));
   cards.forEach(card=>{
@@ -1313,6 +1479,36 @@ function dashConfirm(message,title,okText,cancelText){
   });
 }
 
+function closeHelpPanels(root){
+  (root||document).querySelectorAll('[data-help-open="1"]').forEach(panel=>{
+    panel.dataset.helpOpen='0';
+    panel.classList.remove('show');
+    panel.style.display='none';
+  });
+  (root||document).querySelectorAll('.title-help[aria-expanded="true"]').forEach(trigger=>trigger.setAttribute('aria-expanded','false'));
+}
+function toggleHelp(trigger,event){
+  if(event){event.preventDefault();event.stopPropagation();}
+  const wasOpen=trigger.getAttribute('aria-expanded')==='true';
+  closeHelpPanels(document);
+  if(wasOpen)return false;
+  let panel=trigger.dataset.helpTarget?$(trigger.dataset.helpTarget):null;
+  if(!panel){
+    panel=trigger.nextElementSibling;
+    if(!panel||!panel.classList.contains('inline-help-panel')){
+      panel=document.createElement('span');
+      panel.className='inline-help-panel';
+      panel.textContent=trText(trigger.getAttribute('title')||trText('Help'));
+      trigger.insertAdjacentElement('afterend',panel);
+    }
+  }
+  panel.dataset.helpOpen='1';
+  panel.classList.add('show');
+  panel.style.display='block';
+  trigger.setAttribute('aria-expanded','true');
+  return false;
+}
+
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     if(dashConfirmState)dashConfirmResolve(false);
@@ -1345,7 +1541,7 @@ function applyTheme(theme,manual){
 function refreshAutoTheme(){
   const mode=localStorage.getItem('themeMode')||'auto';
   if(mode==='manual')return;
-  applyTheme(autoThemeByTime(),false);
+  applyTheme('dark',false);
 }
 function i18nSkip(el){
   return !el||['SCRIPT','STYLE','TEXTAREA','INPUT','OPTION'].includes(el.nodeName);
@@ -1397,7 +1593,7 @@ function acceptSafetyNotice(){
 }
 (function(){
   const mode=localStorage.getItem('themeMode')||'auto';
-  const t=mode==='manual'?(localStorage.getItem('theme')||autoThemeByTime()):autoThemeByTime();
+  const t=mode==='manual'?(localStorage.getItem('theme')||'dark'):'dark';
   document.documentElement.setAttribute('data-theme',t);
   // will be updated after DOM ready
   window.addEventListener('DOMContentLoaded',()=>{
@@ -1578,6 +1774,7 @@ function resetSystemStatusUi(){
   setText('sys-summary',trText('Monitoring off'));
   setText('sys-cpu-load',trText('off'));
   ['sys-cpu0-fill','sys-cpu1-fill','sys-heap-fill','sys-internal-fill','sys-psram-fill','sys-app-fill','sys-spiffs-fill'].forEach(id=>setFill(id,0));
+  syncDashboardSummary();
 }
 function startSystemMonitor(){
   if(systemStatusEnabled)return;
@@ -1648,6 +1845,7 @@ async function loadSystemStatus(){
       setFill('sys-psram-fill',pct(psramUsed,d.psram_total),70,85);
       setFill('sys-app-fill',pct(appUsed,d.app_size),70,90);
       setFill('sys-spiffs-fill',pct(spiffsUsed,d.spiffs_total),70,90);
+      syncDashboardSummary();
     }catch(e){
       setText('sys-summary','System status unavailable');
     }
@@ -1659,10 +1857,12 @@ async function loadFirmwareInfo(){
     setText('fw-version',d.firmware||'unknown');
     setText('fw-partition',d.ota_partition||d.app_label||'unknown');
     setText('fw-ota-time',d.ota_time||'Not recorded');
+    syncDashboardSummary();
   }catch(e){
     setText('fw-version','unknown');
     setText('fw-partition','unknown');
     setText('fw-ota-time','Not recorded');
+    syncDashboardSummary();
   }
 }
 function formatOtaLocalTime(date){
@@ -1751,7 +1951,7 @@ async function poll(){
       const on=!!d.can,armed=!!d.ci,fpsVal=Number(d.fps||0);
       const hdrDesc=$('hdr-desc');
       const rxTotal=Number(d.rx||0);
-      if(hdrDesc)hdrDesc.textContent=on?(trText('CAN running')+' \u2022 '+fpsVal.toFixed(1)+' Hz \u2022 RX '+rxTotal):trText('Waiting for CAN frames');
+      if(hdrDesc)hdrDesc.textContent=on?trText('Device connected'):trText('Waiting for device');
       state.can=armed;
       updateFsdControl(d);
       updateInjectButtons(armed);
@@ -1770,6 +1970,7 @@ async function poll(){
       setFill('fps-fill',Math.min(fpsVal/20*100,100));
       setText('hw-badge','WIFI-NAG');
       const eprn=$('tgl-eprn');if(eprn&&typeof d.eprn!=='undefined')eprn.checked=d.eprn;
+      syncDashboardSummary();
       if(!dashboardInitialLoaded){
         dashboardInitialLoaded=true;
         loadWifiNetworks();loadWifiStatus();loadApStatus();loadGatewayDns();loadGatewayStatus();if(!isCarUiActive())loadGatewayBlocked();
@@ -1824,7 +2025,9 @@ async function loadApStatus(){
     if(typeof d.hidden!=='undefined')$('ap-hidden').checked=!!d.hidden;
     if($('ap-status')){
       const sync=d.last_channel_sync_ms?(' \u2022 '+trText('sync')+' '+trText(d.last_channel_sync_ok?'ok':'fail')+' CH'+(d.last_channel_sync_target||'?')):'';
-      $('ap-status').textContent=trText('AP CH'+(d.channel||'?')+' \u2022 auto match STA'+sync);
+      const detail=trText('AP CH'+(d.channel||'?')+' \u2022 auto match STA'+sync);
+      if($('ap-diag-detail'))$('ap-diag-detail').textContent=detail;
+      $('ap-status').textContent=trText('Hotspot ready');
       $('ap-status').style.color='var(--tx3)';
     }
     if(d.stored){$('ap-stored').textContent=trText('saved');$('ap-stored').style.color='var(--ok)';}
@@ -1926,16 +2129,17 @@ async function loadWifiStatus(){
     const stCode=d.wifi_status===undefined?'?':d.wifi_status;
     const age=d.attempt_age_s===undefined?'':(' \u2022 '+d.attempt_age_s+'s');
     const reason=(d.disconnect_reason_name&&d.disconnect_reason_name!=='none')?(' \u2022 '+d.disconnect_reason_name+'('+d.disconnect_reason+')'):'';
+    const detail=(d.connected?((d.ssid||'--')+' \u2022 '+(d.ip||'0.0.0.0')+' \u2022 '):'')+stName+'('+stCode+')'+age+reason;
+    if($('wifi-diag-detail'))$('wifi-diag-detail').textContent=detail;
     if(d.connected){
-      setText('wifi-status',(d.ip&&d.ip!==location.hostname)?('Connected: '+(d.ssid||'')+' \u2022 '+d.ip+' \u2022 switch to that WiFi and open this IP'):('Connected: '+(d.ssid||'')+' \u2022 '+d.ip));
+      setText('wifi-status','Connected: '+(d.ssid||''));
       $('wifi-status').style.color='var(--ok)';
     }
     else if(d.connecting&&d.ssid){
-      setText('wifi-status','Connecting to '+d.ssid+age+' \u2022 '+stName+'('+stCode+')'+reason);$('wifi-status').style.color='var(--warn)';
+      setText('wifi-status','Connecting to '+d.ssid);$('wifi-status').style.color='var(--warn)';
     }
     else if(d.count>0){
-      const retry=d.retry_in_s!==undefined?(' \u2022 retry in '+d.retry_in_s+'s'):'';
-      setText('wifi-status',d.count+' saved'+retry+' \u2022 '+stName+'('+stCode+')'+reason);
+      setText('wifi-status',d.count+' saved');
       $('wifi-status').style.color='var(--tx3)';
     }
     else{
@@ -2215,8 +2419,8 @@ async function loadGatewayStatus(){
       var statusText=trText(d.enabled?'Gateway ON':'Gateway OFF')+' \u2022 NAT '+trText(d.nat?'READY':'WAITING')+' \u2022 '+trText('AP Clients')+' '+clients+' \u2022 '+trText('blocked')+' '+(d.blocked||0);
       if((d.dns_pending_full||0)>0)statusText+=' \u2022 '+trText('pending FULL')+' '+d.dns_pending_full;
       if(d.dns_resp_cache)statusText+=' \u2022 '+trText('DNS cache')+' '+(d.dns_resp_hits||0)+'/'+((d.dns_resp_hits||0)+(d.dns_resp_misses||0));
-      $('gw-status').textContent=statusText;
-      $('gw-status').style.color=!d.enabled?'var(--tx3)':((d.dns_pending_full||0)>0?'var(--err)':(d.nat?'var(--ok)':'var(--warn)'));
+      $('gw-status').textContent=trText(d.enabled?'Enabled':'Disabled')+' · '+clientCountText(clients);
+      $('gw-status').style.color=!d.enabled?'var(--tx3)':(d.nat?'var(--ok)':'var(--warn)');
       const apCh=d.ap_channel?('CH'+d.ap_channel):'CH?';
       const staCh=d.sta_channel?('CH'+d.sta_channel):'CH?';
       const staRssi=(d.sta_rssi===null||d.sta_rssi===undefined)?'RSSI ?':('RSSI '+d.sta_rssi+' dBm');
@@ -2350,6 +2554,7 @@ async function clearGatewayBlocked(){
   }catch(e){}
 }
 applyWifiNagMode();
+initWifiNagNavigation();
 startDashboardPolling();
 document.addEventListener('visibilitychange',()=>{
   if(!dashboardVisible())return;
@@ -2357,7 +2562,7 @@ document.addEventListener('visibilitychange',()=>{
   if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
   pollLog();
 });
-initWifiNagAccordion();initBleBridgeUi();initSystemMonitor();loadFirmwareInfo();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();poll();
+initWifiNagAccordion();initBleBridgeUi();initSystemMonitor();syncDashboardSummary();loadFirmwareInfo();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();poll();
 </script>
 </body>
 </html>
