@@ -418,7 +418,7 @@ public:
     void setSleep(bool enabled);
     bool softAPConfig(IPAddress local, IPAddress gateway, IPAddress subnet);
     bool softAP(const char *ssid, const char *pass, int channel, int hidden, int maxConn);
-    void begin(const char *ssid, const char *pass);
+    void begin(const char *ssid, const char *pass, uint8_t channel = 0);
     wl_status_t status();
     uint8_t lastDisconnectReason() const;
     const char *lastDisconnectReasonName() const;

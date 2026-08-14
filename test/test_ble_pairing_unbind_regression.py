@@ -35,15 +35,24 @@ class BlePairingUnbindRegression(unittest.TestCase):
             IMPL,
         )
 
-    def test_offline_unbind_is_persistent_and_peer_scoped(self):
+    def test_local_unbind_clears_state_and_resumes_pairing_without_peer_ack(self):
         self.assertIn('"unbind_pending"', IMPL)
         self.assertIn('"unbind_txn"', IMPL)
         self.assertIn('"unbind_peer"', IMPL)
-        self.assertIn("sendUnbindRequest", IMPL)
-        self.assertIn("payload.deviceId != peer", IMPL)
+        self.assertNotIn("sendUnbindRequest", IMPL)
+        self.assertNotIn("sendUnbindAck", IMPL)
+        self.assertNotIn("decodeUnbindPayload", IMPL)
+        self.assertIn("void completeLocalUnbind()", IMPL)
+        self.assertIn("p.remove(\"unbind_pending\")", IMPL)
+        self.assertIn("p.remove(\"unbind_txn\")", IMPL)
+        self.assertIn("p.remove(\"unbind_peer\")", IMPL)
+        self.assertIn("g.pairing = static_cast<bool>(g.enabled);", IMPL)
         self.assertIn("unbindPending", CLIENT)
         self.assertIn('"unbindPending"', WEB)
-        self.assertIn("等待对端上线完成解绑", UI)
+        self.assertNotIn("等待对端上线完成解绑", UI)
+        self.assertIn("确认解除本机绑定？解绑后本机会立即进入持续配对。", UI)
+        self.assertIn("本机已解除绑定，正在持续配对", UI)
+        self.assertIn("[BLE] local unbind requested", WEB)
 
 
 if __name__ == "__main__":

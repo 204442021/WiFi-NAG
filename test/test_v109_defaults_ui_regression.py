@@ -21,7 +21,7 @@ class V109DefaultsAndUiRegressionTests(unittest.TestCase):
         cls.ble_client = BLE_CLIENT_FILE.read_text(encoding="utf-8")
 
     def test_internal_version_is_v1_0_9(self) -> None:
-        self.assertEqual(self.version, "V1.0.9")
+        self.assertEqual(self.version, "V2.0")
 
     def test_nag_defaults_on_without_overriding_saved_choice(self) -> None:
         self.assertRegex(

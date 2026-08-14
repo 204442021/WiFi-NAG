@@ -159,6 +159,7 @@ struct DashWifiNetwork
     char gw[16];
     char mask[16];
     char dns[16];
+    uint8_t channel;
 };
 static DashWifiNetwork wifiNetworks[kDashMaxWifiNetworks] = {};
 static uint8_t wifiNetworkCount = 0;
@@ -167,8 +168,12 @@ static int8_t wifiNextRotateSlot = 0; // next slot to try when rotating
 static unsigned long staConnectStartedAt = 0;
 static unsigned long staRetryAt = 0;
 static uint8_t staConsecutiveFailures = 0; // diagnostics only; retry interval is fixed
+static bool staAttemptUsedSavedChannel = false;
+static bool staForceFullScan = false;
 static constexpr unsigned long kDashStaBootDelayMs = 1000;
-static constexpr unsigned long kDashStaSavedPollMs = 5000;
+static constexpr unsigned long kDashStaUnknownChannelBootDelayMs = 5000;
+static constexpr unsigned long kDashStaDirectedRetryMs = 15000;
+static constexpr unsigned long kDashStaSavedPollMs = 60000;
 static constexpr unsigned long kDashStaConnectTimeoutMs = 10000;
 // kDashStaRetryMs kept for backward compat with older references.
 static constexpr unsigned long kDashStaRetryMs = kDashStaSavedPollMs;
@@ -194,6 +199,7 @@ static void dashClearWifiNetwork(DashWifiNetwork &n)
     n.gw[0] = 0;
     n.mask[0] = 0;
     n.dns[0] = 0;
+    n.channel = 0;
 }
 static void dashRotateAndConnect();
 static void dashApplyRuntimeState();
@@ -665,6 +671,7 @@ static void dashLoadPrefs()
             continue;
         strlcpy(n.ssid, s.c_str(), sizeof(n.ssid));
         strlcpy(n.pass, p.c_str(), sizeof(n.pass));
+        n.channel = prefs.getUChar(dashWifiKey(i, "c").c_str(), 0);
         n.useStatic = prefs.getBool(dashWifiKey(i, "t").c_str(), false);
         if (n.useStatic)
         {
@@ -1134,11 +1141,25 @@ static void dashBeginSTA()
     // 100.100.1.1 momentarily see the AP go away). eraseAP=false keeps the
     // soft-AP up; wifioff=false keeps the radio on.
     WiFi.disconnect(false, false);
-    WiFi.begin(staSSID, staPass);
+    uint8_t channel = 0;
+    if (!staForceFullScan && wifiActiveSlot >= 0 &&
+        wifiActiveSlot < static_cast<int8_t>(wifiNetworkCount))
+    {
+        const uint8_t savedChannel = wifiNetworks[wifiActiveSlot].channel;
+        if (savedChannel >= 1 && savedChannel <= 14)
+            channel = savedChannel;
+    }
+    staAttemptUsedSavedChannel = channel != 0;
+    staForceFullScan = false;
+    WiFi.begin(staSSID, staPass, channel);
     staConnectAttemptActive = true;
     staConnectStartedAt = millis();
     staRetryAt = 0;
-    dashLog("[WIFI] Connecting to " + String(staSSID) + "...");
+    if (channel)
+        dashLog("[WIFI] Connecting to " + String(staSSID) +
+                " on saved CH" + String(channel) + "...");
+    else
+        dashLog("[WIFI] Connecting to " + String(staSSID) + " with full scan...");
 }
 
 static void dashPrepareStaReconnect()
@@ -1150,6 +1171,8 @@ static void dashPrepareStaReconnect()
     staConnectAttemptActive = false;
     staRetryAt = 0;
     staConsecutiveFailures = 0; // user-initiated reconnect resets diagnostics
+    staAttemptUsedSavedChannel = false;
+    staForceFullScan = false;
 }
 
 static void dashApplyWifiSlot(uint8_t slot)
@@ -1329,10 +1352,21 @@ static void dashCheckWifi()
         dashGatewayOnStaDisconnected(WiFi.apNetif());
         if (staConsecutiveFailures < 255)
             staConsecutiveFailures++;
-        staRetryAt = now + kDashStaSavedPollMs;
+        const bool retryWithFullScan = staAttemptUsedSavedChannel;
+        const unsigned long retryDelay = retryWithFullScan
+                                             ? kDashStaDirectedRetryMs
+                                             : kDashStaSavedPollMs;
+        if (retryWithFullScan)
+        {
+            staForceFullScan = true;
+            if (wifiActiveSlot >= 0 && wifiActiveSlot < static_cast<int8_t>(wifiNetworkCount))
+                wifiNextRotateSlot = static_cast<uint8_t>(wifiActiveSlot);
+        }
+        staRetryAt = now + retryDelay;
         dashLog("[WIFI] STA connect timed out; status=" + String(dashWifiStatusName(wifiStatus)) +
                 " reason=" + String(reasonName) + "(" + String(reason) + ")" +
-                " retry saved networks in " + String(kDashStaSavedPollMs / 1000) +
+                " retry " + String(retryWithFullScan ? "full scan" : "saved networks") +
+                " in " + String(retryDelay / 1000) +
                 "s, AP+STA stays up (fail#" + String(staConsecutiveFailures) + ")");
         connected = false;
     }
@@ -1344,6 +1378,8 @@ static void dashCheckWifi()
         {
             staConnectAttemptActive = false;
             staRetryAt = 0;
+            staAttemptUsedSavedChannel = false;
+            staForceFullScan = false;
             staConsecutiveFailures = 0; // reset diagnostics on successful connect
             dashLog("[WIFI] Connected to " + String(staSSID) + " IP: " + WiFi.localIP().toString());
             dashSyncApChannelToSta();
@@ -1352,7 +1388,16 @@ static void dashCheckWifi()
             // first. Avoids rotating through stale/dead networks on every boot.
             if (wifiActiveSlot >= 0 && wifiActiveSlot < (int8_t)wifiNetworkCount)
             {
+                wifi_ap_record_t staInfo = {};
                 prefs.begin(PREFS_NS, false);
+                if (esp_wifi_sta_get_ap_info(&staInfo) == ESP_OK &&
+                    staInfo.primary >= 1 && staInfo.primary <= 14 &&
+                    wifiNetworks[wifiActiveSlot].channel != staInfo.primary)
+                {
+                    wifiNetworks[wifiActiveSlot].channel = staInfo.primary;
+                    prefs.putUChar(dashWifiKey(static_cast<uint8_t>(wifiActiveSlot), "c").c_str(),
+                                   staInfo.primary);
+                }
                 if ((int8_t)prefs.getUChar("wn_pref", 0xFF) != wifiActiveSlot)
                     prefs.putUChar("wn_pref", static_cast<uint8_t>(wifiActiveSlot));
                 prefs.end();
@@ -1435,6 +1480,7 @@ static void dashPersistWifiSlot(uint8_t slot)
     prefs.putString(dashWifiKey(slot, "s").c_str(), String(n.ssid));
     prefs.putString(dashWifiKey(slot, "p").c_str(), String(n.pass));
     prefs.putBool(dashWifiKey(slot, "t").c_str(), n.useStatic);
+    prefs.putUChar(dashWifiKey(slot, "c").c_str(), n.channel);
     if (n.useStatic)
     {
         prefs.putString(dashWifiKey(slot, "i").c_str(), String(n.ip));
@@ -1460,6 +1506,7 @@ static void dashRemoveWifiSlotKeys(uint8_t slot)
     prefs.remove(dashWifiKey(slot, "g").c_str());
     prefs.remove(dashWifiKey(slot, "m").c_str());
     prefs.remove(dashWifiKey(slot, "d").c_str());
+    prefs.remove(dashWifiKey(slot, "c").c_str());
 }
 
 // Save to slot N (0..count). idx == count means append (new). Reconnect on save.
@@ -2318,7 +2365,14 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
 
     server.begin();
     if (strlen(staSSID) > 0)
-        dashScheduleSTAConnect(kDashStaBootDelayMs);
+    {
+        const bool hasSavedChannel = wifiActiveSlot >= 0 &&
+                                     wifiActiveSlot < static_cast<int8_t>(wifiNetworkCount) &&
+                                     wifiNetworks[wifiActiveSlot].channel >= 1 &&
+                                     wifiNetworks[wifiActiveSlot].channel <= 14;
+        dashScheduleSTAConnect(hasSavedChannel ? kDashStaBootDelayMs
+                                               : kDashStaUnknownChannelBootDelayMs);
+    }
 #if CONFIG_FREERTOS_UNICORE
     xTaskCreate(webTask, "web", 8192, nullptr, 1, nullptr);
 #else

@@ -54,9 +54,6 @@ Shared<uint32_t> nextScan{0}, handshakeAt{0}, lastHello{0}, lastPacket{0};
 Shared<uint32_t> lastSend{0}, lastObstacle{0}, lastState{0}, lastStateGen{0}, lastRssi{0};
 Shared<uint32_t> txSeq{1}, lastRxSeq{0};
 Shared<bool> haveRxSeq{false}, unbindRequested{false}, forceState{false};
-Shared<bool> unbindPending{false}, unbindClearPending{false};
-Shared<uint32_t> unbindTransaction{0}, unbindPeer{0};
-Shared<uint32_t> unbindLastTx{0}, unbindClearAt{0};
 Shared<uint8_t> peerCaps{0};
 Shared<int8_t> rssi{-127};
 Shared<uint32_t> reconnects{0}, disconnects{0}, obstacleTx{0}, obstacleFail{0}, stateTx{0};
@@ -96,16 +93,11 @@ writeU32(p, "peer_id", value);
 p.end();
 }
 }
-void persistUnbind(bool pending, uint32_t transactionId, uint32_t peerId)
+void clearLegacyUnbindPrefs(Preferences &p)
 {
-Preferences p;
-if (p.begin(kPrefs, false))
-{
-p.putBool("unbind_pending", pending);
-writeU32(p, "unbind_txn", pending ? transactionId : 0);
-writeU32(p, "unbind_peer", pending ? peerId : 0);
-p.end();
-}
+p.remove("unbind_pending");
+p.remove("unbind_txn");
+p.remove("unbind_peer");
 }
 void setStatus(BleBridgeProtocolStatus status)
 {
@@ -289,24 +281,7 @@ body[8] = BleBridgeProtocol::kAdvertisedCapabilities;
 body[9] = 0x01;
 return sendPacket(packet, false, false);
 }
-bool sendUnbindRequest()
-{
-auto packet = BleBridgeProtocol::makePacket(
-    BleBridgeProtocol::MSG_UNBIND_REQUEST, 0, nextSequence());
-BleBridgeProtocol::encodeUnbindPayload(
-    packet, static_cast<uint32_t>(g.unbindTransaction),
-    static_cast<uint32_t>(g.deviceId), 0);
-return sendPacket(packet, false, false);
-}
-bool sendUnbindAck(uint32_t transactionId)
-{
-auto packet = BleBridgeProtocol::makePacket(
-    BleBridgeProtocol::MSG_UNBIND_ACK, 0, nextSequence());
-BleBridgeProtocol::encodeUnbindPayload(
-    packet, transactionId, static_cast<uint32_t>(g.deviceId), 1);
-return sendPacket(packet, false, false);
-}
-void completeUnbind()
+void completeLocalUnbind()
 {
 if (static_cast<bool>(g.scanning))
 ble_gap_disc_cancel();
@@ -314,38 +289,19 @@ terminate();
 ble_store_clear();
 g.peerId = g.peerBoot = 0;
 g.peerCaps = 0;
-g.unbindPending = false;
-g.unbindClearPending = false;
-g.unbindTransaction = g.unbindPeer = 0;
-g.unbindLastTx = g.unbindClearAt = 0;
-persistPeer(0);
-persistUnbind(false, 0, 0);
+Preferences p;
+if (p.begin(kPrefs, false))
+{
+writeU32(p, "peer_id", 0);
+clearLegacyUnbindPrefs(p);
+p.end();
+}
 resetLink();
 g.pairing = static_cast<bool>(g.enabled);
 g.nextScan = millis();
 setStatus(static_cast<bool>(g.enabled)
               ? BLE_BRIDGE_PROTOCOL_IDLE
               : BLE_BRIDGE_PROTOCOL_DISABLED);
-}
-void beginLocalUnbind()
-{
-const uint32_t peer = static_cast<uint32_t>(g.peerId);
-if (!peer)
-{
-completeUnbind();
-return;
-}
-if (!static_cast<bool>(g.unbindPending) ||
-    static_cast<uint32_t>(g.unbindPeer) != peer ||
-    static_cast<uint32_t>(g.unbindTransaction) == 0)
-{
-g.unbindTransaction = randomNonZero();
-g.unbindPeer = peer;
-g.unbindPending = true;
-persistUnbind(true, static_cast<uint32_t>(g.unbindTransaction), peer);
-}
-g.pairing = false;
-g.unbindLastTx = 0;
 }
 bool sendNag(bool periodic)
 {
@@ -480,41 +436,6 @@ g.lastRxSeq = sequence;
 g.lastPacket = millis();
 if (!static_cast<bool>(g.ready))
 return;
-if (data[2] == BleBridgeProtocol::MSG_UNBIND_REQUEST ||
-    data[2] == BleBridgeProtocol::MSG_UNBIND_ACK)
-{
-BleBridgeProtocol::Packet packet;
-std::memcpy(packet.bytes, data, BleBridgeProtocol::kPacketSize);
-BleBridgeProtocol::UnbindPayload payload;
-if (!BleBridgeProtocol::decodeUnbindPayload(packet, payload))
-{
-g.unknown = static_cast<uint32_t>(g.unknown) + 1;
-return;
-}
-const uint32_t peer = static_cast<uint32_t>(g.peerId);
-if (payload.deviceId != peer)
-{
-g.peerReject = static_cast<uint32_t>(g.peerReject) + 1;
-return;
-}
-if (data[2] == BleBridgeProtocol::MSG_UNBIND_REQUEST)
-{
-if (sendUnbindAck(payload.transactionId))
-{
-g.unbindClearPending = true;
-g.unbindClearAt = millis() + 250;
-}
-return;
-}
-if (static_cast<bool>(g.unbindPending) &&
-    payload.transactionId == static_cast<uint32_t>(g.unbindTransaction) &&
-    payload.deviceId == static_cast<uint32_t>(g.unbindPeer))
-{
-g.unbindClearPending = true;
-g.unbindClearAt = millis() + 50;
-}
-return;
-}
 if (data[2] == BleBridgeProtocol::MSG_QUERY_NAG)
 {
 nagStateController.forceReport();
@@ -729,12 +650,9 @@ g.forceState = true;
 }
 if (static_cast<bool>(g.unbindRequested))
 {
-beginLocalUnbind();
+completeLocalUnbind();
 g.unbindRequested = false;
 }
-if (static_cast<bool>(g.unbindClearPending) &&
-    static_cast<int32_t>(now - static_cast<uint32_t>(g.unbindClearAt)) >= 0)
-completeUnbind();
 if (static_cast<bool>(g.stopping) || !static_cast<bool>(g.enabled))
 {
 if (static_cast<bool>(g.scanning))
@@ -775,13 +693,6 @@ if (!static_cast<bool>(g.ready))
 vTaskDelay(pdMS_TO_TICKS(20));
 continue;
 }
-if (static_cast<bool>(g.unbindPending) &&
-    (static_cast<uint32_t>(g.unbindLastTx) == 0 ||
-     now - static_cast<uint32_t>(g.unbindLastTx) >= 1000))
-{
-if (sendUnbindRequest())
-g.unbindLastTx = now;
-}
 const NagStateView state = nagStateController.view();
 if (static_cast<bool>(g.forceState) || state.reportGeneration != static_cast<uint32_t>(g.lastStateGen) ||
 now - static_cast<uint32_t>(g.lastState) >= kStateMs)
@@ -817,22 +728,14 @@ writeU32(p, "dev_id", id);
 }
 g.deviceId = id;
 g.peerId = readU32(p, "peer_id");
-const bool unbindPending = p.getBool("unbind_pending", false);
-const uint32_t unbindTransaction = readU32(p, "unbind_txn");
-const uint32_t unbindPeer = readU32(p, "unbind_peer");
-if (unbindPending && unbindTransaction != 0 && unbindPeer != 0 &&
-    unbindPeer == static_cast<uint32_t>(g.peerId))
+const bool legacyUnbindPending = p.getBool("unbind_pending", false);
+if (legacyUnbindPending)
 {
-g.unbindPending = true;
-g.unbindTransaction = unbindTransaction;
-g.unbindPeer = unbindPeer;
+g.peerId = 0;
+writeU32(p, "peer_id", 0);
 }
-else
-{
-p.putBool("unbind_pending", false);
-writeU32(p, "unbind_txn", 0);
-writeU32(p, "unbind_peer", 0);
-}
+clearLegacyUnbindPrefs(p);
+g.unbindRequested = legacyUnbindPending;
 g.pairing = static_cast<bool>(g.enabled) &&
             static_cast<uint32_t>(g.peerId) == 0;
 p.end();
@@ -881,8 +784,7 @@ persistBool("enabled", value);
 if (value)
 {
 g.stopping = false;
-g.pairing = static_cast<uint32_t>(g.peerId) == 0 &&
-            !static_cast<bool>(g.unbindPending);
+g.pairing = static_cast<uint32_t>(g.peerId) == 0;
 g.nextScan = millis();
 setStatus(BLE_BRIDGE_PROTOCOL_IDLE);
 }
@@ -950,9 +852,9 @@ out.subscribed = static_cast<bool>(g.subscribed);
 out.bridgeReady = static_cast<bool>(g.ready);
 out.pairing = static_cast<bool>(g.pairing);
 out.pairingRemainingMs = 0;
-out.unbindPending = static_cast<bool>(g.unbindPending);
-out.unbindPeerDeviceId = static_cast<uint32_t>(g.unbindPeer);
-out.unbindTransactionId = static_cast<uint32_t>(g.unbindTransaction);
+out.unbindPending = false;
+out.unbindPeerDeviceId = 0;
+out.unbindTransactionId = 0;
 out.deviceId = static_cast<uint32_t>(g.deviceId);
 out.bootId = static_cast<uint32_t>(g.bootId);
 out.peerDeviceId = static_cast<uint32_t>(g.peerId);

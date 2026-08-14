@@ -484,7 +484,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
   <div class="brand">
     <div class="brand-copy">
       <div class="brand-title" id="brand-title">Albert FSD辅助系统</div>
-      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V1.0.9</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
+      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V2.0</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
     </div>
   </div>
   <div class="shell-actions">
@@ -501,8 +501,8 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
 </section>
 <main id="wifi-nag-main">
   <div class="page-intro"><h1 id="page-title">功能</h1><p id="page-copy">方向盘提醒与工作模式设置</p></div>
-  <div class="ui-screen active" data-page="features"><section class="card ui-main-card collapsed" id="config-card" data-ui-kind="nag">
-  <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
+  <div class="ui-screen active" data-page="features"><section class="card ui-main-card" id="config-card" data-ui-kind="nag">
+  <div class="card-hdr" role="button" tabindex="0" aria-expanded="true">
     <div class="card-title"><span class="ui-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"/><path d="M9 12l2 2 4-5"/></svg></span><span>NAG 功能</span></div>
     <div class="card-meta" id="nag-card-meta">已开启</div>
     <button class="ui-chevron" type="button" aria-label="展开或收起">⌄</button>
@@ -732,7 +732,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
       <div class="stat"><div class="stat-lbl">蓝牙</div><div class="stat-val v-dim" id="diag-ble-state">未连接</div></div>
       <div class="stat"><div class="stat-lbl">Wi-Fi</div><div class="stat-val v-dim" id="diag-wifi-state">未配置</div></div>
       <div class="stat"><div class="stat-lbl">温度</div><div class="stat-val v-dim" id="sys-temp">--</div></div>
-      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V1.0.9</div></div>
+      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V2.0</div></div>
     </div>
     <details id="advanced-diagnostics">
       <summary>高级诊断</summary>
@@ -1021,6 +1021,8 @@ let dashboardPollStopped=false;
 let systemStatusTimer=null;
 let systemStatusEnabled=false;
 let wifiNagAccordionTouched=false;
+const systemMonitorStorageKey='sysMonitorEnabled';
+const wifiNagCardStoragePrefix='wifiNagMainCard:';
 let dashboardStaIp='';
 let networkPerformanceMode=localStorage.getItem('netPerfMode')!=='0';
 let uiModeSetting=localStorage.getItem('uiMode')||'auto';
@@ -1231,8 +1233,8 @@ async function bleLoadStatus(){
     const data=await response.json();
     if(!response.ok||data.ok===false)throw new Error(data.error||('HTTP '+response.status));
     const enabled=bleElement('ble-enabled'),obstacle=bleElement('ble-obstacle'),shiftEnabled=bleElement('shift-enabled'),pairButton=bleElement('ble-pair-btn'),unbindButton=bleElement('ble-unbind-btn');
-    if(enabled)enabled.checked=!!data.enabled;if(obstacle)obstacle.checked=!!data.obstacleForwarding;if(shiftEnabled){shiftEnabled.checked=false;shiftEnabled.disabled=true;}if(pairButton)pairButton.disabled=!data.enabled||!!data.peerDeviceId||!!data.pairing||!!data.unbindPending;if(unbindButton)unbindButton.disabled=!!data.unbindPending||!data.peerDeviceId;
-    const device=data.unbindPending?(data.connected?'正在同步解绑':'等待对端上线完成解绑'):(data.pairing?'持续配对中':(data.bridgeReady?'已连接':(data.connected?'握手中':(data.connecting?'连接中':(data.scanning?'扫描中':'离线')))));
+    if(enabled)enabled.checked=!!data.enabled;if(obstacle)obstacle.checked=!!data.obstacleForwarding;if(shiftEnabled){shiftEnabled.checked=false;shiftEnabled.disabled=true;}if(pairButton)pairButton.disabled=!data.enabled||!!data.peerDeviceId||!!data.pairing;if(unbindButton)unbindButton.disabled=!data.peerDeviceId;
+    const device=data.pairing?'持续配对中':(data.bridgeReady?'已连接':(data.connected?'握手中':(data.connecting?'连接中':(data.scanning?'扫描中':'离线'))));
     bleSetText('ble-card-meta',device);
     bleSetText('ble-main-card-meta',device);
     bleSetText('ble-device-state',device+(data.bonded?' · 已绑定':'')+(data.lastDisconnectReason?' · 原因 '+data.lastDisconnectReason:''));
@@ -1288,11 +1290,11 @@ async function bleStartPairing(){
   }catch(error){bleSetMessage(error&&error.message?error.message:'无法开始配对',false);}
 }
 async function bleUnbind(){
-  if(!confirm('确认同步解除双方绑定？对端离线时会等待其上线后自动完成。'))return;
+  if(!confirm('确认解除本机绑定？解绑后本机会立即进入持续配对。'))return;
   try{
     const response=await fetch('/ble_unbind',{method:'POST'});const data=await response.json();
     if(!response.ok||!data.ok)throw new Error(data.error||'解除失败');
-    bleSetMessage('已提交同步解绑请求',true);setTimeout(bleLoadStatus,300);
+    bleSetMessage('本机已解除绑定，正在持续配对',true);setTimeout(bleLoadStatus,300);
   }catch(error){bleSetMessage(error&&error.message?error.message:'解除失败',false);}
 }
 function initBleBridgeUi(){
@@ -1342,7 +1344,7 @@ function syncDashboardSummary(){
   mirrorDashboardText('wifi-status','top-wifi-state',trText('Not configured'));
   mirrorDashboardText('ble-main-card-meta','diag-ble-state',trText('Offline'));
   mirrorDashboardText('wifi-status','diag-wifi-state',trText('Not configured'));
-  mirrorDashboardText('fw-version','diag-version','V1.0.9');
+  mirrorDashboardText('fw-version','diag-version','V2.0');
   mirrorDashboardText('s-inj','nag-card-meta',trText('Enabled'));
   const note=$('top-nag-note');if(note)note.textContent=trText('Mode')+' '+(state.nagMode===4?'A_V2':'A');
 }
@@ -1350,16 +1352,19 @@ function syncDashboardSummary(){
 function initWifiNagAccordion(){
   const cards=Array.from(document.querySelectorAll('.ui-main-card'));
   cards.forEach(card=>{
-    setMainCardExpanded(card,false);
+    const key=wifiNagCardStoragePrefix+card.id;
+    const stored=localStorage.getItem(key);
+    const defaultExpanded=card.id==='config-card';
+    setMainCardExpanded(card,stored===null?defaultExpanded:stored==='1');
     const header=card.querySelector(':scope > .card-hdr');
     if(!header||header.dataset.uiAccordion==='1')return;
     header.dataset.uiAccordion='1';
     const toggle=event=>{
       if(event.target&&event.target.closest&&event.target.closest('.sys-monitor'))return;
       wifiNagAccordionTouched=true;
-      const expand=card.classList.contains('collapsed');
-      cards.forEach(item=>setMainCardExpanded(item,false));
-      if(expand)setMainCardExpanded(card,true);
+      const expanded=card.classList.contains('collapsed');
+      setMainCardExpanded(card,expanded);
+      localStorage.setItem(key,expanded?'1':'0');
     };
     header.addEventListener('click',toggle);
     header.addEventListener('keydown',event=>{
@@ -1791,10 +1796,12 @@ function stopSystemMonitor(){
 }
 function toggleSystemMonitor(){
   const t=$('sys-monitor-tgl');
+  localStorage.setItem(systemMonitorStorageKey,t&&t.checked?'1':'0');
   if(t&&t.checked)startSystemMonitor();else stopSystemMonitor();
 }
 function initSystemMonitor(){
-  stopSystemMonitor();
+  const enabled=localStorage.getItem(systemMonitorStorageKey)!=='0';
+  if(enabled)startSystemMonitor();else stopSystemMonitor();
 }
 function escapeHtml(s){
   return String(s===undefined?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

@@ -317,7 +317,7 @@ static void bleBridgeHandlePair()
 static void bleBridgeHandleUnbind()
 {
     bleBridgeClient.unbind();
-    dashLog("[BLE] synchronized peer unbind requested");
+    dashLog("[BLE] local unbind requested");
     server.send(200, "application/json", "{\"ok\":true}");
 }
 

@@ -581,7 +581,7 @@ bool WiFiClass::softAP(const char *ssid, const char *pass, int channelValue, int
     return true;
 }
 
-void WiFiClass::begin(const char *ssid, const char *pass)
+void WiFiClass::begin(const char *ssid, const char *pass, uint8_t channel)
 {
     ensure();
     wifiStaStatus = WL_IDLE_STATUS;
@@ -601,7 +601,8 @@ void WiFiClass::begin(const char *ssid, const char *pass)
     wifi_config_t cfg = {};
     std::snprintf(reinterpret_cast<char *>(cfg.sta.ssid), sizeof(cfg.sta.ssid), "%s", ssid ? ssid : "");
     std::snprintf(reinterpret_cast<char *>(cfg.sta.password), sizeof(cfg.sta.password), "%s", pass ? pass : "");
-    cfg.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+    cfg.sta.channel = channel;
+    cfg.sta.scan_method = channel ? WIFI_FAST_SCAN : WIFI_ALL_CHANNEL_SCAN;
     cfg.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
     cfg.sta.threshold.authmode = WIFI_AUTH_OPEN;
     cfg.sta.pmf_cfg.capable = true;
