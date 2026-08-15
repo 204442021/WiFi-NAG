@@ -12,10 +12,10 @@ UI = (ROOT / "include/web/mcp2515_dashboard_ui.src.h").read_text(encoding="utf-8
 
 class V20RestoreRegression(unittest.TestCase):
     def test_version_remains_v20(self):
-        self.assertEqual(VERSION, "V2.1")
-        self.assertIn('<span class="version-badge">V2.1</span>', UI)
-        self.assertIn('id="diag-version">V2.1</div>', UI)
-        self.assertIn("mirrorDashboardText('fw-version','diag-version','V2.1')", UI)
+        self.assertEqual(VERSION, "V2.2")
+        self.assertIn('<span class="version-badge">V2.2</span>', UI)
+        self.assertIn('id="diag-version">V2.2</div>', UI)
+        self.assertIn("mirrorDashboardText('fw-version','diag-version','V2.2')", UI)
 
     def test_wifi_channel_cache_is_loaded_saved_removed_and_relearned(self):
         self.assertIn("uint8_t channel;", DASH)

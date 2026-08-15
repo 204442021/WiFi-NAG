@@ -1,0 +1,117 @@
+name: WIFI-NAG V2.2 Firmware Build
+
+on:
+  push:
+    branches: ["B2.2"]
+    paths-ignore:
+      - ".github/build-results/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wifi-nag-v2.2-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout B2.2
+        uses: actions/checkout@v4
+
+      - name: Record build start
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::8}"
+          mkdir -p .github/build-results
+          printf 'status=running\nrun_id=%s\ncommit=%s\nartifact=WIFI-NAG-V2.2-%s-firmware\n' \
+            "${GITHUB_RUN_ID}" "${GITHUB_SHA}" "${SHORT_SHA}" \
+            > .github/build-results/B2.2-run.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/build-results/B2.2-run.txt
+          git commit -m "chore(ci): record V2.2 build start [skip ci]"
+          git push origin HEAD:B2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        run: pip install platformio==6.1.18
+
+      - name: Configure fixed credentials
+        run: cp platformio_profile.example.h platformio_profile.h
+
+      - name: Verify generated dashboard
+        run: |
+          pip install csscompressor==0.9.5 htmlmin==0.1.12 rjsmin==1.2.5
+          python scripts/minify_dashboard.py --check
+
+      - name: Run targeted OTA safety tests
+        run: |
+          python -m unittest \
+            test.test_v21_twai_ota_safety_regression \
+            test.test_can_restart_safety_regression \
+            test.test_firmware_info_regression \
+            test.test_v20_restore_regression \
+            test.test_v109_defaults_ui_regression \
+            test.test_wifi_settings_regression
+
+      - name: Build ESP32-S3 firmware
+        run: pio run -e wifi_nag_ESP32_S3_CAN
+
+      - name: Package OTA and 16MiB factory images
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::8}"
+          echo "SHORT_SHA=${SHORT_SHA}" >> "${GITHUB_ENV}"
+          mkdir -p dist
+          OTA="dist/WIFI-NAG-V2.2-${SHORT_SHA}-OTA.bin"
+          FACTORY="dist/WIFI-NAG-V2.2-${SHORT_SHA}-Factory-16MiB.bin"
+          BUILD_DIR=".pio/build/wifi_nag_ESP32_S3_CAN"
+          cp "${BUILD_DIR}/firmware.bin" "${OTA}"
+          python "${HOME}/.platformio/packages/tool-esptoolpy/esptool.py" \
+            --chip esp32s3 merge_bin \
+            -o "${FACTORY}" \
+            --flash_mode dio \
+            --flash_freq 80m \
+            --flash_size 16MB \
+            --fill-flash-size 16MB \
+            0x0 "${BUILD_DIR}/bootloader.bin" \
+            0x8000 "${BUILD_DIR}/partitions.bin" \
+            0x19000 "${BUILD_DIR}/ota_data_initial.bin" \
+            0x20000 "${BUILD_DIR}/firmware.bin"
+          test "$(stat -c%s "${FACTORY}")" -eq 16777216
+          cmp -n "$(stat -c%s "${BUILD_DIR}/partitions.bin")" -i $((0x8000)):0 "${FACTORY}" "${BUILD_DIR}/partitions.bin"
+          cmp -n "$(stat -c%s "${BUILD_DIR}/ota_data_initial.bin")" -i $((0x19000)):0 "${FACTORY}" "${BUILD_DIR}/ota_data_initial.bin"
+          cmp -n "$(stat -c%s "${BUILD_DIR}/firmware.bin")" -i $((0x20000)):0 "${FACTORY}" "${BUILD_DIR}/firmware.bin"
+          sha256sum "${OTA}" "${FACTORY}" > "dist/SHA256SUMS-V2.2-${SHORT_SHA}.txt"
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: WIFI-NAG-V2.2-${{ env.SHORT_SHA }}-firmware
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Record build result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::8}"
+          printf 'status=%s\nrun_id=%s\ncommit=%s\nartifact=WIFI-NAG-V2.2-%s-firmware\n' \
+            "${{ job.status }}" "${GITHUB_RUN_ID}" "${GITHUB_SHA}" "${SHORT_SHA}" \
+            > .github/build-results/B2.2-run.txt
+          git add .github/build-results/B2.2-run.txt
+          git commit -m "chore(ci): record V2.2 build result [skip ci]"
+          git push origin HEAD:B2.2

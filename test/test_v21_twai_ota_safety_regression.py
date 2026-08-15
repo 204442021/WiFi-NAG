@@ -25,13 +25,28 @@ class V21TwaiOtaSafetyRegressionTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-    def test_ota_quiesces_transmit_before_update_and_resumes_only_on_failure(self):
+    def test_ota_closes_tx_gate_without_waiting_before_update(self):
         start = self.dashboard.index("if (upload.status == UPLOAD_FILE_START)")
         begin = self.dashboard.index("Update.begin(UPDATE_SIZE_UNKNOWN)", start)
-        quiesce = self.dashboard.index("appPrepareCanForOta()", start)
-        self.assertLess(quiesce, begin)
-        self.assertIn("appDriver->quiesceTransmit(100)", self.app)
+        guard = self.dashboard.index("appPrepareCanForOta()", start)
+        self.assertLess(guard, begin)
+        ota_guard = self.app.rsplit("static bool appPrepareCanForOta()", 1)[1]
+        ota_guard = ota_guard.split("static void appResumeCanAfterOtaFailure", 1)[0]
+        self.assertIn("appDriver->setTransmitGate(false)", ota_guard)
+        self.assertNotIn("quiesceTransmit", ota_guard)
         self.assertIn("appResumeCanAfterOtaFailure()", self.dashboard)
+
+    def test_ota_response_completes_before_deferred_can_restart(self):
+        result = self.dashboard.split("static void handleOtaResult()", 1)[1]
+        result = result.split("static void handleOtaUpload()", 1)[0]
+        self.assertIn('server.send(ok ? 200 : 500', result)
+        self.assertIn("dashScheduleRestart(1200)", result)
+        self.assertNotIn("appPrepareCanForRestart()", result)
+        self.assertNotIn("\n        ESP.restart();", result)
+        web_task = self.dashboard.split("static void webTask(void *)", 1)[1]
+        web_task = web_task.split("static void mcpDashboardSetup", 1)[0]
+        self.assertIn("appPrepareCanForRestart()", web_task)
+        self.assertIn("ESP.restart()", web_task)
 
     def test_ota_boot_forces_nag_off_before_initial_twai_install(self):
         self.assertIn("dashPrepareCanBootPolicy()", (ROOT / "src/main.cpp").read_text())

@@ -169,13 +169,13 @@ static bool appPrepareCanForOta()
         return false;
     appCanOtaPreparing = true;
     nagKillerRuntime = false;
-    const bool idle = appDriver && appDriver->quiesceTransmit(100);
-    if (!idle)
-    {
-        appCanOtaPreparing = false;
-        appResetCanStability();
-    }
-    return idle;
+    // OTA reception must never depend on the hardware TX queue becoming
+    // idle. Closing the software gate is synchronous and prevents any new
+    // frame from entering the queue; final draining belongs to the deferred
+    // restart path after the HTTP response has completed.
+    if (appDriver)
+        appDriver->setTransmitGate(false);
+    return true;
 }
 
 static void appResumeCanAfterOtaFailure()

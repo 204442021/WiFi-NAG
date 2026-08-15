@@ -114,6 +114,8 @@ static bool canActive = kDashInjectionDefaultEnabled;
 static bool dashBootForcedNagOff = false;
 static bool dashBootNagRevisionPending = false;
 static bool dashOtaCanPrepared = false;
+static volatile bool dashRestartPending = false;
+static volatile uint32_t dashRestartAtMs = 0;
 static constexpr char kDashOtaNagForceOffKey[] = "ota_nag_off";
 static constexpr char kDashCanFirmwareAddressKey[] = "can_fw_addr";
 static constexpr char kDashCanFirmwareVersionKey[] = "can_fw_ver";
@@ -1130,12 +1132,16 @@ static void handleDisable()
     server.send(200, "text/plain", "Injection stopped.");
 }
 
+static void dashScheduleRestart(uint32_t delayMs)
+{
+    dashRestartAtMs = millis() + delayMs;
+    dashRestartPending = true;
+}
+
 static void handleReboot()
 {
-    appPrepareCanForRestart();
     server.send(200, "text/plain", "Rebooting...");
-    delay(200);
-    ESP.restart();
+    dashScheduleRestart(500);
 }
 
 static void handleOtaResult()
@@ -1151,10 +1157,12 @@ static void handleOtaResult()
     if (ok)
     {
         dashMarkOtaNagForceOff();
-        appPrepareCanForRestart();
-        dashLog("[OTA] Upload complete -- rebooting");
-        delay(300);
-        ESP.restart();
+        dashOtaCanPrepared = false;
+        dashLog("[OTA] Upload complete -- restart scheduled");
+        // Let the HTTP handler return and give the TCP response time to reach
+        // the browser. CAN queue draining and ESP.restart() run later in the
+        // dashboard task, never inside the OTA request callback.
+        dashScheduleRestart(1200);
     }
     else
     {
@@ -1176,7 +1184,7 @@ static void handleOtaUpload()
         dashOtaCanPrepared = appPrepareCanForOta();
         if (!dashOtaCanPrepared)
         {
-            dashLog("[OTA] CAN TX did not quiesce; upload rejected");
+            dashLog("[OTA] Restart already pending; upload rejected");
             Update.abort();
             return;
         }
@@ -2416,6 +2424,14 @@ static void webTask(void *)
     {
         ArduinoOTA.handle();
         server.handleClient();
+        if (dashRestartPending &&
+            static_cast<int32_t>(millis() - dashRestartAtMs) >= 0)
+        {
+            dashRestartPending = false;
+            appPrepareCanForRestart();
+            vTaskDelay(pdMS_TO_TICKS(50));
+            ESP.restart();
+        }
         dashCheckWifi();
         vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -2537,4 +2553,3 @@ static void mcpDashboardLoop()
 }
 
 #endif
-
