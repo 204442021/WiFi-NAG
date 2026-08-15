@@ -442,6 +442,9 @@ body.ui-shell .setting-row{padding:14px 0}
 #advanced-diagnostics #gw-diag{margin:10px 0!important}
 #advanced-diagnostics #debug-log-section{margin:0!important}
 #advanced-diagnostics #debug-log-section .subsec-head{display:none}
+.diag-task-list{margin-top:10px;border:1px solid var(--bd);border-radius:9px;background:var(--bg);overflow:hidden}
+.diag-task-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;padding:8px 10px;border-bottom:1px solid var(--bd);font-size:11px;align-items:center}
+.diag-task-row:last-child{border-bottom:0}.diag-task-name{font-weight:700;color:var(--tx);overflow:hidden;text-overflow:ellipsis}.diag-task-meta{color:var(--tx3);white-space:nowrap}.diag-action-msg{margin-top:8px;font-size:11px;color:var(--tx3)}
 .device-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0}
 .danger-action{color:var(--err);border-color:var(--errBd)}
 .bottom-nav{
@@ -486,7 +489,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
   <div class="brand">
     <div class="brand-copy">
       <div class="brand-title" id="brand-title">Albert FSD辅助系统</div>
-      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V2.2</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
+      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V2.3</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
     </div>
   </div>
   <div class="shell-actions">
@@ -739,7 +742,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
       <div class="stat"><div class="stat-lbl">蓝牙</div><div class="stat-val v-dim" id="diag-ble-state">未连接</div></div>
       <div class="stat"><div class="stat-lbl">Wi-Fi</div><div class="stat-val v-dim" id="diag-wifi-state">未配置</div></div>
       <div class="stat"><div class="stat-lbl">温度</div><div class="stat-val v-dim" id="sys-temp">--</div></div>
-      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V2.2</div></div>
+      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V2.3</div></div>
     </div>
     <details id="advanced-diagnostics">
       <summary>高级诊断</summary>
@@ -813,11 +816,15 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
     <div class="sys-item sys-wide"><div class="sys-lbl">Board Specs</div><div class="sys-val" id="sys-board">--</div></div>
     <div class="sys-item"><div class="sys-lbl">Uptime / Core</div><div class="sys-val" id="sys-runtime">--</div></div>
     <div class="sys-item"><div class="sys-lbl">Tasks</div><div class="sys-val" id="sys-tasks">--</div></div>
-    <div class="sys-item sys-wide"><div class="sys-lbl">Heap RAM</div><div class="sys-val" id="sys-heap">--</div><div class="sys-bar"><div class="sys-fill" id="sys-heap-fill"></div></div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">总堆（含 PSRAM）</div><div class="sys-val" id="sys-heap">--</div><div class="sys-bar"><div class="sys-fill" id="sys-heap-fill"></div></div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">Internal RAM</div><div class="sys-val" id="sys-internal">--</div><div class="sys-bar"><div class="sys-fill" id="sys-internal-fill"></div></div></div>
-    <div class="sys-item"><div class="sys-lbl">Largest Block</div><div class="sys-val" id="sys-largest">--</div></div>
-    <div class="sys-item"><div class="sys-lbl">Min Free Heap</div><div class="sys-val" id="sys-minheap">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">内部最大连续块</div><div class="sys-val" id="sys-largest">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">内部历史最低</div><div class="sys-val" id="sys-minheap">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">内部碎片率</div><div class="sys-val" id="sys-internal-frag">--</div></div>
+    <div class="sys-item"><div class="sys-lbl">内部分配 / 空闲块</div><div class="sys-val" id="sys-internal-blocks">--</div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">DMA 内部 RAM</div><div class="sys-val" id="sys-dma">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">PSRAM</div><div class="sys-val" id="sys-psram">--</div><div class="sys-bar"><div class="sys-fill" id="sys-psram-fill"></div></div></div>
+    <div class="sys-item sys-wide"><div class="sys-lbl">PSRAM 连续块 / 历史最低</div><div class="sys-val" id="sys-psram-detail">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">Flash / App</div><div class="sys-val" id="sys-flash">--</div><div class="sys-bar"><div class="sys-fill" id="sys-app-fill"></div></div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">SPIFFS</div><div class="sys-val" id="sys-spiffs">--</div><div class="sys-bar"><div class="sys-fill" id="sys-spiffs-fill"></div></div></div>
     <div class="sys-item"><div class="sys-lbl">WiFi RSSI</div><div class="sys-val" id="sys-rssi">--</div></div>
@@ -827,6 +834,25 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
     <div class="sys-item sys-wide"><div class="sys-lbl">Wireless</div><div class="sys-val" id="sys-wireless">--</div></div>
     <div class="sys-item sys-wide"><div class="sys-lbl">MAC / Firmware</div><div class="sys-val" id="sys-fw">--</div></div>
   </div>
+      </div>
+      <div class="diag-group">
+        <h3>内存诊断记录</h3>
+        <div class="sys-grid">
+          <div class="sys-item sys-wide"><div class="sys-lbl">自动判断</div><div class="sys-val" id="diag-memory-risk">--</div></div>
+          <div class="sys-item"><div class="sys-lbl">记录状态</div><div class="sys-val" id="diag-recording-state">--</div></div>
+          <div class="sys-item"><div class="sys-lbl">内存变化</div><div class="sys-val" id="diag-memory-delta">--</div></div>
+          <div class="sys-item sys-wide"><div class="sys-lbl">上次重启前快照</div><div class="sys-val" id="diag-previous-boot">--</div></div>
+        </div>
+        <div class="btn-row">
+          <button class="sniff-btn" type="button" onclick="loadDiagnosticsTasks()">刷新任务栈</button>
+          <button class="sniff-btn" type="button" onclick="markDiagnostics()">添加故障标记</button>
+        </div>
+        <div class="btn-row">
+          <button class="sniff-btn" id="diag-export-btn" type="button" onclick="downloadDiagnostics()">导出诊断 JSON</button>
+          <button class="sniff-btn" type="button" onclick="clearDiagnostics()">清空诊断记录</button>
+        </div>
+        <div class="diag-task-list" id="diag-task-list"><div class="diag-task-row"><span class="diag-task-name">点击“刷新任务栈”读取</span><span></span><span></span></div></div>
+        <div class="diag-action-msg" id="diag-action-msg">常驻记录使用 PSRAM 固定环形缓冲，不记录 Wi-Fi 密码、OTA 密码或 BLE 密钥。</div>
       </div>
       <div class="diag-group">
         <h3>调试日志</h3>
@@ -1351,7 +1377,7 @@ function syncDashboardSummary(){
   mirrorDashboardText('wifi-status','top-wifi-state',trText('Not configured'));
   mirrorDashboardText('ble-main-card-meta','diag-ble-state',trText('Offline'));
   mirrorDashboardText('wifi-status','diag-wifi-state',trText('Not configured'));
-  mirrorDashboardText('fw-version','diag-version','V2.2');
+  mirrorDashboardText('fw-version','diag-version','V2.3');
   mirrorDashboardText('s-inj','nag-card-meta',trText('Enabled'));
   const note=$('top-nag-note');if(note)note.textContent=trText('Mode')+' '+(state.nagMode===4?'A_V2':'A');
 }
@@ -1746,6 +1772,7 @@ function fmtBytes(n){
   if(n>=1024)return (n/1024).toFixed(n>=10240?0:1)+' KB';
   return n+' B';
 }
+function fmtSignedBytes(n){n=Number(n)||0;return (n>=0?'+':'-')+fmtBytes(Math.abs(n));}
 function pct(used,total){
   total=Number(total)||0;used=Number(used)||0;
   return total>0?Math.max(0,Math.min(100,used*100/total)):0;
@@ -1782,7 +1809,7 @@ function fmtAddr(n){
   return n?'0x'+n.toString(16).toUpperCase():'--';
 }
 function resetSystemStatusUi(){
-  ['sys-chip','sys-cpu','sys-clocks','sys-board','sys-temp','sys-reset','sys-runtime','sys-heap','sys-internal','sys-largest','sys-minheap','sys-psram','sys-tasks','sys-flash','sys-spiffs','sys-rssi','sys-wifi-mode','sys-apclients','sys-ble','sys-wireless','sys-fw'].forEach(id=>setText(id,'--'));
+  ['sys-chip','sys-cpu','sys-clocks','sys-board','sys-temp','sys-reset','sys-runtime','sys-heap','sys-internal','sys-largest','sys-minheap','sys-internal-frag','sys-internal-blocks','sys-dma','sys-psram','sys-psram-detail','sys-tasks','sys-flash','sys-spiffs','sys-rssi','sys-wifi-mode','sys-apclients','sys-ble','sys-wireless','sys-fw','diag-memory-risk','diag-recording-state','diag-memory-delta','diag-previous-boot'].forEach(id=>setText(id,'--'));
   setText('sys-summary',trText('Monitoring off'));
   setText('sys-cpu-load',trText('off'));
   ['sys-cpu0-fill','sys-cpu1-fill','sys-heap-fill','sys-internal-fill','sys-psram-fill','sys-app-fill','sys-spiffs-fill'].forEach(id=>setFill(id,0));
@@ -1793,7 +1820,7 @@ function startSystemMonitor(){
   systemStatusEnabled=true;
   const t=$('sys-monitor-tgl');if(t)t.checked=true;
   loadSystemStatus();
-  systemStatusTimer=setInterval(loadSystemStatus,1000);
+  systemStatusTimer=setInterval(loadSystemStatus,5000);
 }
 function stopSystemMonitor(){
   systemStatusEnabled=false;
@@ -1842,9 +1869,13 @@ async function loadSystemStatus(){
       setText('sys-runtime',fmtUp(d.uptime||0)+' \u2022 running on core '+(d.core===undefined?'?':d.core));
       setText('sys-heap',fmtBytes(d.heap_free)+' free / '+fmtBytes(d.heap_total)+' total \u2022 used '+Math.round(pct(heapUsed,d.heap_total))+'%');
       setText('sys-internal',internalTotal?(fmtBytes(internalFree)+' free / '+fmtBytes(internalTotal)+' total \u2022 used '+Math.round(pct(internalUsed,internalTotal))+'%'):trText('unavailable'));
-      setText('sys-largest',fmtBytes(d.heap_largest));
-      setText('sys-minheap',fmtBytes(d.heap_min));
+      setText('sys-largest',fmtBytes(d.internal_largest));
+      setText('sys-minheap',fmtBytes(d.internal_min));
+      setText('sys-internal-frag',(d.internal_fragmentation===undefined?'--':d.internal_fragmentation+'%'));
+      setText('sys-internal-blocks',(d.internal_allocated_blocks||0)+' / '+(d.internal_free_blocks||0)+' \u2022 total '+(d.internal_total_blocks||0));
+      setText('sys-dma',fmtBytes(d.dma_free)+' free / '+fmtBytes(d.dma_total)+' total \u2022 largest '+fmtBytes(d.dma_largest)+' \u2022 min '+fmtBytes(d.dma_min));
       setText('sys-psram',(d.psram_total||0)?(fmtBytes(d.psram_free)+' free / '+fmtBytes(d.psram_total)+' total \u2022 used '+Math.round(pct(psramUsed,d.psram_total))+'%'):trText('not enabled'));
+      setText('sys-psram-detail',(d.psram_total||0)?(fmtBytes(d.psram_largest)+' / '+fmtBytes(d.psram_min)):trText('not enabled'));
       setText('sys-tasks',(d.tasks||'?')+' tasks');
       setText('sys-flash',fmtBytes(d.flash_size)+' flash \u2022 '+((d.flash_speed||0)/1000000||80)+' MHz \u2022 '+(d.app_label||'?')+' '+fmtBytes(appUsed)+' / '+fmtBytes(d.app_size)+' @ '+fmtAddr(d.app_addr));
       setText('sys-spiffs',d.spiffs_ok?(fmtBytes(spiffsUsed)+' used / '+fmtBytes(d.spiffs_total)+' \u2022 '+Math.round(pct(spiffsUsed,d.spiffs_total))+'%'):'SPIFFS '+trText('unavailable'));
@@ -1853,7 +1884,18 @@ async function loadSystemStatus(){
       setText('sys-apclients',(d.ap_clients||0)+' client'+((d.ap_clients||0)===1?'':'s'));
       setText('sys-ble',(d.ble_supported?trText('supported'):trText('not supported'))+' \u2022 '+(d.ble_enabled?trText('enabled'):trText('firmware disabled')));
       setText('sys-wireless',(d.wifi_standard||'2.4GHz Wi-Fi')+' \u2022 '+(d.wifi_max_mbps||150)+' Mbps max \u2022 BLE 5 LE');
-      setText('sys-fw',(d.mac||'--')+' \u2022 '+(d.firmware||'unknown')+' \u2022 IDF '+(d.idf||'?'));
+      setText('sys-fw',(d.mac||'--')+' \u2022 '+(d.firmware||'unknown')+' \u2022 '+(d.git_sha||'unknown')+' \u2022 IDF '+(d.idf||'?'));
+      const delta10=Number(d.diag_delta_10m||0),deltaBoot=Number(d.diag_delta_boot||0),frag=Number(d.internal_fragmentation||0),allocFails=Number(d.diag_alloc_failures||0);
+      let risk='记录正常，暂未发现持续下降';let riskClass='v-ok';
+      if(allocFails>0){risk='检测到 '+allocFails+' 次内存申请失败';riskClass='v-err';}
+      else if(internalFree<60*1024){risk='内部 RAM 严重不足';riskClass='v-err';}
+      else if(internalFree<80*1024){risk='内部 RAM 余量偏低';riskClass='v-warn';}
+      else if(delta10<-8*1024){risk='最近10分钟持续下降，疑似泄漏';riskClass='v-warn';}
+      else if(frag>=60){risk='内部最大连续块偏小，疑似碎片化';riskClass='v-warn';}
+      setText('diag-memory-risk',risk);setClass('diag-memory-risk','sys-val '+riskClass);
+      setText('diag-recording-state',(d.diag_recording?'记录中':'不可用')+' \u2022 '+(d.diag_samples||0)+'/'+(d.diag_sample_capacity||0)+' 样本 \u2022 '+(d.diag_events||0)+' 事件');
+      setText('diag-memory-delta','10分钟 '+fmtSignedBytes(delta10)+' \u2022 启动后 '+fmtSignedBytes(deltaBoot));
+      setText('diag-previous-boot',d.diag_previous_boot?'已保留，可在导出文件中查看':'本次未发现可用快照');
       setFill('sys-heap-fill',pct(heapUsed,d.heap_total),70,85);
       setFill('sys-internal-fill',pct(internalUsed,internalTotal),70,85);
       setFill('sys-psram-fill',pct(psramUsed,d.psram_total),70,85);
@@ -1864,6 +1906,34 @@ async function loadSystemStatus(){
       setText('sys-summary','System status unavailable');
     }
   });
+}
+async function loadDiagnosticsTasks(){
+  const list=$('diag-task-list'),msg=$('diag-action-msg');
+  if(msg)msg.textContent='正在读取任务栈…';
+  try{
+    const response=await fetch('/diagnostics_tasks',{cache:'no-store'});const d=await response.json();
+    if(!response.ok||d.ok===false)throw new Error(d.error||('HTTP '+response.status));
+    if(list){
+      list.innerHTML=(d.tasks||[]).map(task=>'<div class="diag-task-row"><span class="diag-task-name">'+escapeHtml(task.name||'?')+'</span><span class="diag-task-meta">P'+Number(task.priority||0)+' · '+escapeHtml(task.state||'?')+'</span><span class="diag-task-meta">最低剩余 '+fmtBytes(task.stack_min_free_bytes||0)+'</span></div>').join('')||'<div class="diag-task-row"><span class="diag-task-name">没有任务数据</span><span></span><span></span></div>';
+    }
+    if(msg)msg.textContent='任务栈快照已刷新。数值越小，任务越接近栈溢出。';
+  }catch(error){if(msg)msg.textContent='任务栈读取失败：'+(error&&error.message?error.message:'未知错误');}
+}
+async function markDiagnostics(){
+  const msg=$('diag-action-msg');
+  try{const response=await fetch('/diagnostics_mark',{method:'POST'});if(!response.ok)throw new Error('HTTP '+response.status);if(msg)msg.textContent='已添加故障标记，可以复现下一步操作后导出。';loadSystemStatus();}
+  catch(error){if(msg)msg.textContent='添加标记失败：'+(error&&error.message?error.message:'未知错误');}
+}
+function downloadDiagnostics(){
+  const msg=$('diag-action-msg');if(msg)msg.textContent='正在生成诊断文件，请保持页面打开…';
+  window.location.href='/diagnostics_export';
+  setTimeout(()=>{if(msg)msg.textContent='诊断文件已请求下载。';},1200);
+}
+async function clearDiagnostics(){
+  if(!confirm('确认清空当前两小时诊断记录？'))return;
+  const msg=$('diag-action-msg');
+  try{const response=await fetch('/diagnostics_clear',{method:'POST'});if(!response.ok)throw new Error('HTTP '+response.status);if(msg)msg.textContent='诊断记录已清空，并已建立新的起始样本。';loadSystemStatus();}
+  catch(error){if(msg)msg.textContent='清空失败：'+(error&&error.message?error.message:'未知错误');}
 }
 async function loadFirmwareInfo(){
   try{

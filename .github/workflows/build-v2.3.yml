@@ -1,0 +1,100 @@
+name: WIFI-NAG V2.3 Firmware Build
+
+on:
+  push:
+    branches: ["V2.3"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wifi-nag-v2.3-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout V2.3
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          pip install platformio==6.1.18
+          pip install csscompressor==0.9.5 htmlmin==0.1.12 rjsmin==1.2.5
+
+      - name: Configure fixed credentials
+        run: cp platformio_profile.example.h platformio_profile.h
+
+      - name: Verify dashboard and targeted regressions
+        run: |
+          python scripts/minify_dashboard.py --check
+          PYTHONPATH=test python -m unittest \
+            test_v23_diagnostics_regression \
+            test_v21_twai_ota_safety_regression \
+            test_can_restart_safety_regression \
+            test_firmware_info_regression \
+            test_v20_restore_regression \
+            test_v109_defaults_ui_regression \
+            test_wifi_settings_regression
+
+      - name: Build ESP32-S3 firmware
+        run: pio run -e wifi_nag_ESP32_S3_CAN
+
+      - name: Package OTA and 16MiB factory images
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::8}"
+          echo "SHORT_SHA=${SHORT_SHA}" >> "${GITHUB_ENV}"
+          mkdir -p dist
+          OTA="dist/WIFI-NAG-V2.3-${SHORT_SHA}-OTA.bin"
+          FACTORY="dist/WIFI-NAG-V2.3-${SHORT_SHA}-Factory-16MiB.bin"
+          BUILD_DIR=".pio/build/wifi_nag_ESP32_S3_CAN"
+          cp "${BUILD_DIR}/firmware.bin" "${OTA}"
+          python "${HOME}/.platformio/packages/tool-esptoolpy/esptool.py" \
+            --chip esp32s3 merge_bin \
+            -o "${FACTORY}" \
+            --flash_mode dio \
+            --flash_freq 80m \
+            --flash_size 16MB \
+            --fill-flash-size 16MB \
+            0x0 "${BUILD_DIR}/bootloader.bin" \
+            0x8000 "${BUILD_DIR}/partitions.bin" \
+            0x19000 "${BUILD_DIR}/ota_data_initial.bin" \
+            0x20000 "${BUILD_DIR}/firmware.bin"
+          test "$(stat -c%s "${FACTORY}")" -eq 16777216
+          cmp -n "$(stat -c%s "${BUILD_DIR}/partitions.bin")" -i $((0x8000)):0 "${FACTORY}" "${BUILD_DIR}/partitions.bin"
+          cmp -n "$(stat -c%s "${BUILD_DIR}/ota_data_initial.bin")" -i $((0x19000)):0 "${FACTORY}" "${BUILD_DIR}/ota_data_initial.bin"
+          cmp -n "$(stat -c%s "${BUILD_DIR}/firmware.bin")" -i $((0x20000)):0 "${FACTORY}" "${BUILD_DIR}/firmware.bin"
+          sha256sum "${OTA}" "${FACTORY}" > "dist/SHA256SUMS-V2.3-${SHORT_SHA}.txt"
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WIFI-NAG-V2.3-${{ env.SHORT_SHA }}-firmware
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish retrievable firmware branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -R dist /tmp/wifi-nag-v2.3-dist
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan "build/V2.3-${SHORT_SHA}"
+          git rm -rf .
+          cp -R /tmp/wifi-nag-v2.3-dist dist
+          git add dist
+          git commit -m "build: V2.3 ${SHORT_SHA} firmware artifacts"
+          git push --force origin HEAD:"build/V2.3-${SHORT_SHA}"

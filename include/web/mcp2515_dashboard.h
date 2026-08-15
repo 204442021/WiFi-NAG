@@ -12,6 +12,7 @@
 #include <Update.h>
 #endif
 #include <esp_task_wdt.h>
+#include <cstdarg>
 #ifdef ESP_PLATFORM
 #include <driver/temperature_sensor.h>
 #include <esp_app_desc.h>
@@ -40,6 +41,7 @@
 #include "handlers.h"
 #include "can_helpers.h"
 #include <ArduinoJson.h>
+#include "web/memory_diagnostics.h"
 #include "web/mcp2515_dashboard_ui.h"
 
 #if !defined(PRODUCT_WIFI_NAG)
@@ -48,6 +50,9 @@
 
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "unknown"
+#endif
+#ifndef FIRMWARE_GIT_SHA
+#define FIRMWARE_GIT_SHA "unknown"
 #endif
 
 #ifndef DASH_SSID
@@ -895,6 +900,48 @@ static WebServer server(80);
 
 #include "web/dash_gateway.h"
 
+static DashMemoryDiagnostics dashMemoryDiagnostics;
+
+static DashDiagRuntimeState dashBuildDiagnosticsRuntimeState()
+{
+    DashDiagRuntimeState state;
+    wifi_mode_t wifiMode = WIFI_MODE_NULL;
+    esp_wifi_get_mode(&wifiMode);
+    state.wifiMode = static_cast<uint8_t>(wifiMode);
+    state.wifiStatus = static_cast<uint8_t>(WiFi.status());
+    state.apClients = WiFi.softAPgetStationNum();
+    wifi_ap_record_t apInfo = {};
+    if (esp_wifi_sta_get_ap_info(&apInfo) == ESP_OK)
+        state.wifiRssi = apInfo.rssi;
+#if defined(BLE_BRIDGE)
+    const BleBridgeDiagnostics ble = bleBridgeClient.diagnostics();
+    state.bleProtocol = static_cast<uint8_t>(ble.protocolStatus);
+    state.bleFlags = (ble.enabled ? 0x01U : 0U) |
+                     (ble.scanning ? 0x02U : 0U) |
+                     (ble.connecting ? 0x04U : 0U) |
+                     (ble.connected ? 0x08U : 0U) |
+                     (ble.bridgeReady ? 0x10U : 0U) |
+                     (ble.pairing ? 0x20U : 0U);
+    state.bleRssi = ble.rssi;
+    state.bleDisconnectReason = ble.lastDisconnectReason;
+    state.bleReconnectCount = ble.reconnectCount;
+    state.bleDisconnectCount = ble.disconnectCount;
+#endif
+#if defined(DASH_STA_AP_GATEWAY)
+    state.gatewayPending = dashGatewayPendingCount();
+    state.gatewayPendingMax = gatewayDnsPendingMax;
+    state.gatewayPendingFull = gatewayDnsPendingFull;
+    state.gatewayTimeouts = gatewayDnsTimeouts;
+#endif
+    state.rxCount = static_cast<uint32_t>(rxCount);
+    state.txCount = static_cast<uint32_t>(txCount);
+    state.txErrorCount = static_cast<uint32_t>(txErrCount);
+    state.otaRunning = Update.isRunning();
+    state.canOnline = canOnline;
+    state.canWriteEnabled = canActive;
+    return state;
+}
+
 #if defined(NAG_KILLER)
 static bool dashApplyNagConfigArgs()
 {
@@ -1140,6 +1187,8 @@ static void dashScheduleRestart(uint32_t delayMs)
 
 static void handleReboot()
 {
+    dashMemoryDiagnostics.recordEvent(DASH_DIAG_EVENT_RESTART_REQUESTED,
+                                      dashBuildDiagnosticsRuntimeState());
     server.send(200, "text/plain", "Rebooting...");
     dashScheduleRestart(500);
 }
@@ -1156,6 +1205,8 @@ static void handleOtaResult()
     server.send(ok ? 200 : 500, "text/plain", ok ? "OK" : Update.errorString());
     if (ok)
     {
+        dashMemoryDiagnostics.recordEvent(DASH_DIAG_EVENT_OTA_END,
+                                          dashBuildDiagnosticsRuntimeState());
         dashMarkOtaNagForceOff();
         dashOtaCanPrepared = false;
         dashLog("[OTA] Upload complete -- restart scheduled");
@@ -1166,6 +1217,8 @@ static void handleOtaResult()
     }
     else
     {
+        dashMemoryDiagnostics.recordEvent(DASH_DIAG_EVENT_OTA_FAIL,
+                                          dashBuildDiagnosticsRuntimeState());
         dashLog("[OTA] Upload FAILED: " + String(Update.errorString()));
         Update.abort();
         dashOtaCanPrepared = false;
@@ -1180,6 +1233,8 @@ static void handleOtaUpload()
     HTTPUpload &upload = server.upload();
     if (upload.status == UPLOAD_FILE_START)
     {
+        dashMemoryDiagnostics.recordEvent(DASH_DIAG_EVENT_OTA_START,
+                                          dashBuildDiagnosticsRuntimeState());
         dashLog("[OTA] Receiving: " + String(upload.filename.c_str()));
         dashOtaCanPrepared = appPrepareCanForOta();
         if (!dashOtaCanPrepared)
@@ -1191,6 +1246,8 @@ static void handleOtaUpload()
         esp_task_wdt_deinit();
         if (!Update.begin(UPDATE_SIZE_UNKNOWN))
         {
+            dashMemoryDiagnostics.recordEvent(DASH_DIAG_EVENT_OTA_FAIL,
+                                              dashBuildDiagnosticsRuntimeState());
             dashLog("[OTA] Begin failed: " + String(Update.errorString()));
             dashOtaCanPrepared = false;
             appResumeCanAfterOtaFailure();
@@ -1202,6 +1259,9 @@ static void handleOtaUpload()
             return;
         if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
         {
+            dashMemoryDiagnostics.recordEvent(DASH_DIAG_EVENT_OTA_FAIL,
+                                              dashBuildDiagnosticsRuntimeState(),
+                                              static_cast<uint32_t>(upload.currentSize));
             dashLog("[OTA] Write error: " + String(Update.errorString()));
             Update.abort();
             dashOtaCanPrepared = false;
@@ -1212,12 +1272,18 @@ static void handleOtaUpload()
     {
         if (upload.totalSize > 0 && Update.end(true) && Update.isFinished())
         {
+            dashMemoryDiagnostics.recordEvent(DASH_DIAG_EVENT_OTA_END,
+                                              dashBuildDiagnosticsRuntimeState(),
+                                              static_cast<uint32_t>(upload.totalSize));
             dashPersistOtaTime(server.arg("ota_time"));
             dashMarkOtaNagForceOff();
             dashLog("[OTA] Done: " + String(upload.totalSize) + " bytes");
         }
         else
         {
+            dashMemoryDiagnostics.recordEvent(DASH_DIAG_EVENT_OTA_FAIL,
+                                              dashBuildDiagnosticsRuntimeState(),
+                                              static_cast<uint32_t>(upload.totalSize));
             dashLog("[OTA] End failed: " + String(Update.errorString()));
             Update.abort();
             dashOtaCanPrepared = false;
@@ -1226,6 +1292,9 @@ static void handleOtaUpload()
     }
     else if (upload.status == UPLOAD_FILE_ABORTED)
     {
+        dashMemoryDiagnostics.recordEvent(DASH_DIAG_EVENT_OTA_FAIL,
+                                          dashBuildDiagnosticsRuntimeState(),
+                                          static_cast<uint32_t>(upload.totalSize));
         dashLog("[OTA] Upload aborted");
         Update.abort();
         dashOtaCanPrepared = false;
@@ -2054,6 +2123,9 @@ static void dashReadCpuLoad(uint8_t &core0Load, uint8_t &core1Load, bool &valid)
 static void handleSystemStatus()
 {
 #ifdef ESP_PLATFORM
+    dashMemoryDiagnostics.poll(dashBuildDiagnosticsRuntimeState());
+    const DashDiagHeapSnapshot memory = dashMemoryDiagnostics.heapSnapshot();
+    const DashDiagAllocationFailure allocationFailure = dashMemoryDiagnostics.allocationFailure();
     esp_chip_info_t chip;
     esp_chip_info(&chip);
 
@@ -2129,6 +2201,7 @@ static void handleSystemStatus()
     dashReadCpuLoad(cpu0Load, cpu1Load, hasCpuLoad);
 
     String j = "{\"chip\":\"ESP32-S3\"";
+    j.reserve(3200);
     j += ",\"module\":\"ESP32-S3R8\"";
     j += ",\"target\":\"" CONFIG_IDF_TARGET "\"";
     j += ",\"cores\":" + String(chip.cores);
@@ -2152,6 +2225,7 @@ static void handleSystemStatus()
     j += ",\"rom_bytes\":393216";
     j += ",\"idf\":\"" IDF_VER "\"";
     j += ",\"firmware\":\"" + jsonEscape(String(dashFirmwareVersion())) + "\"";
+    j += ",\"git_sha\":\"" FIRMWARE_GIT_SHA "\"";
     j += ",\"ota_partition\":\"" + String(dashOtaPartitionName(running)) + "\"";
     j += ",\"ota_time\":\"" + jsonEscape(lastOtaUploadTime) + "\"";
     j += ",\"mac\":\"" + String(macText) + "\"";
@@ -2159,14 +2233,35 @@ static void handleSystemStatus()
     j += ",\"uptime\":" + String((millis() - startMs) / 1000);
     j += ",\"tasks\":" + String(uxTaskGetNumberOfTasks());
     j += ",\"core\":" + String(xPortGetCoreID());
-    j += ",\"heap_total\":" + String(heap_caps_get_total_size(MALLOC_CAP_8BIT));
-    j += ",\"heap_free\":" + String(heap_caps_get_free_size(MALLOC_CAP_8BIT));
-    j += ",\"heap_min\":" + String(heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
-    j += ",\"heap_largest\":" + String(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-    j += ",\"internal_total\":" + String(heap_caps_get_total_size(MALLOC_CAP_INTERNAL));
-    j += ",\"internal_free\":" + String(heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-    j += ",\"psram_total\":" + String(heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
-    j += ",\"psram_free\":" + String(heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    j += ",\"heap_total\":" + String(memory.combined.total);
+    j += ",\"heap_free\":" + String(memory.combined.free);
+    j += ",\"heap_min\":" + String(memory.combined.minimum);
+    j += ",\"heap_largest\":" + String(memory.combined.largest);
+    j += ",\"internal_total\":" + String(memory.internal.total);
+    j += ",\"internal_free\":" + String(memory.internal.free);
+    j += ",\"internal_min\":" + String(memory.internal.minimum);
+    j += ",\"internal_largest\":" + String(memory.internal.largest);
+    j += ",\"internal_allocated\":" + String(memory.internal.allocated);
+    j += ",\"internal_allocated_blocks\":" + String(memory.internal.allocatedBlocks);
+    j += ",\"internal_free_blocks\":" + String(memory.internal.freeBlocks);
+    j += ",\"internal_total_blocks\":" + String(memory.internal.totalBlocks);
+    j += ",\"internal_fragmentation\":" + String(DashMemoryDiagnostics::fragmentationPercent(memory.internal.free, memory.internal.largest));
+    j += ",\"dma_total\":" + String(memory.dma.total);
+    j += ",\"dma_free\":" + String(memory.dma.free);
+    j += ",\"dma_min\":" + String(memory.dma.minimum);
+    j += ",\"dma_largest\":" + String(memory.dma.largest);
+    j += ",\"psram_total\":" + String(memory.psram.total);
+    j += ",\"psram_free\":" + String(memory.psram.free);
+    j += ",\"psram_min\":" + String(memory.psram.minimum);
+    j += ",\"psram_largest\":" + String(memory.psram.largest);
+    j += ",\"diag_recording\":" + String(dashMemoryDiagnostics.initialized() ? "true" : "false");
+    j += ",\"diag_samples\":" + String(dashMemoryDiagnostics.sampleCount());
+    j += ",\"diag_sample_capacity\":" + String(dashMemoryDiagnostics.sampleCapacity());
+    j += ",\"diag_events\":" + String(dashMemoryDiagnostics.eventCount());
+    j += ",\"diag_delta_10m\":" + String(dashMemoryDiagnostics.tenMinuteInternalDelta());
+    j += ",\"diag_delta_boot\":" + String(dashMemoryDiagnostics.startupInternalDelta());
+    j += ",\"diag_alloc_failures\":" + String(allocationFailure.sequence / 2U);
+    j += ",\"diag_previous_boot\":" + String(dashMemoryDiagnostics.hasPreviousBoot() ? "true" : "false");
     j += ",\"flash_size\":" + String(flashSize);
     j += ",\"flash_speed\":" + String(80000000UL);
     j += ",\"app_addr\":" + String(running ? running->address : 0);
@@ -2210,6 +2305,396 @@ static void handleSystemStatus()
     server.send(200, "application/json", "{\"chip\":\"native\",\"cores\":1}");
 #endif
 }
+
+#ifdef ESP_PLATFORM
+static constexpr char kDashDiagExportPath[] = "/wifi_nag_diag.tmp";
+static constexpr char kDashDiagTasksPath[] = "/wifi_nag_tasks.tmp";
+
+static bool dashDiagFilePrintf(File &file, const char *format, ...)
+{
+    char buffer[1024];
+    va_list args;
+    va_start(args, format);
+    const int length = vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    if (length < 0 || static_cast<size_t>(length) >= sizeof(buffer))
+        return false;
+    return file.write(reinterpret_cast<const uint8_t *>(buffer),
+                      static_cast<size_t>(length)) == static_cast<size_t>(length);
+}
+
+static bool dashDiagWriteJsonString(File &file, const char *text)
+{
+    if (!dashDiagFilePrintf(file, "\""))
+        return false;
+    const char *value = text ? text : "";
+    for (size_t i = 0; value[i]; i++)
+    {
+        const unsigned char c = static_cast<unsigned char>(value[i]);
+        char escaped[7] = {};
+        const char *out = escaped;
+        size_t length = 0;
+        if (c == '\"' || c == '\\')
+        {
+            escaped[0] = '\\';
+            escaped[1] = static_cast<char>(c);
+            length = 2;
+        }
+        else if (c == '\n' || c == '\r' || c == '\t')
+        {
+            escaped[0] = '\\';
+            escaped[1] = c == '\n' ? 'n' : (c == '\r' ? 'r' : 't');
+            length = 2;
+        }
+        else if (c < 0x20)
+        {
+            snprintf(escaped, sizeof(escaped), "\\u%04x", c);
+            length = 6;
+        }
+        else
+        {
+            escaped[0] = static_cast<char>(c);
+            length = 1;
+        }
+        if (file.write(reinterpret_cast<const uint8_t *>(out), length) != length)
+            return false;
+    }
+    return dashDiagFilePrintf(file, "\"");
+}
+
+static const char *dashDiagEventName(uint8_t code)
+{
+    switch (code)
+    {
+    case DASH_DIAG_EVENT_BOOT: return "boot";
+    case DASH_DIAG_EVENT_WIFI_STATE: return "wifi_state";
+    case DASH_DIAG_EVENT_AP_CLIENTS: return "ap_clients";
+    case DASH_DIAG_EVENT_BLE_STATE: return "ble_state";
+    case DASH_DIAG_EVENT_OTA_START: return "ota_start";
+    case DASH_DIAG_EVENT_OTA_END: return "ota_end";
+    case DASH_DIAG_EVENT_OTA_FAIL: return "ota_fail";
+    case DASH_DIAG_EVENT_TASK_COUNT: return "task_count";
+    case DASH_DIAG_EVENT_MEMORY_WARNING: return "memory_warning";
+    case DASH_DIAG_EVENT_MEMORY_CRITICAL: return "memory_critical";
+    case DASH_DIAG_EVENT_MEMORY_RECOVERED: return "memory_recovered";
+    case DASH_DIAG_EVENT_ALLOC_FAILED: return "allocation_failed";
+    case DASH_DIAG_EVENT_MANUAL_MARK: return "manual_mark";
+    case DASH_DIAG_EVENT_RECORDS_CLEARED: return "records_cleared";
+    case DASH_DIAG_EVENT_RESTART_REQUESTED: return "restart_requested";
+    default: return "unknown";
+    }
+}
+
+static const char *dashDiagTaskStateName(eTaskState state)
+{
+    switch (state)
+    {
+    case eRunning: return "running";
+    case eReady: return "ready";
+    case eBlocked: return "blocked";
+    case eSuspended: return "suspended";
+    case eDeleted: return "deleted";
+    default: return "invalid";
+    }
+}
+
+static bool dashDiagWriteTaskArray(File &file)
+{
+    UBaseType_t capacity = uxTaskGetNumberOfTasks() + 4;
+    if (capacity > 64)
+        capacity = 64;
+    TaskStatus_t *tasks = static_cast<TaskStatus_t *>(
+        heap_caps_calloc(capacity, sizeof(TaskStatus_t),
+                         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!tasks)
+        return dashDiagFilePrintf(file, "[]");
+
+    configRUN_TIME_COUNTER_TYPE totalRuntime = 0;
+    const UBaseType_t count = uxTaskGetSystemState(tasks, capacity, &totalRuntime);
+    bool ok = dashDiagFilePrintf(file, "[");
+    for (UBaseType_t i = 0; ok && i < count; i++)
+    {
+        ok = dashDiagFilePrintf(file,
+                                "%s{\"name\":",
+                                i == 0 ? "" : ",");
+        ok = ok && dashDiagWriteJsonString(file, tasks[i].pcTaskName);
+        ok = ok && dashDiagFilePrintf(
+                       file,
+                       ",\"number\":%lu,\"state\":\"%s\",\"priority\":%lu,"
+                       "\"base_priority\":%lu,\"stack_min_free_bytes\":%lu,\"runtime\":%llu}",
+                       static_cast<unsigned long>(tasks[i].xTaskNumber),
+                       dashDiagTaskStateName(tasks[i].eCurrentState),
+                       static_cast<unsigned long>(tasks[i].uxCurrentPriority),
+                       static_cast<unsigned long>(tasks[i].uxBasePriority),
+                       static_cast<unsigned long>(tasks[i].usStackHighWaterMark),
+                       static_cast<unsigned long long>(tasks[i].ulRunTimeCounter));
+    }
+    ok = ok && dashDiagFilePrintf(file, "]");
+    heap_caps_free(tasks);
+    return ok;
+}
+
+static bool dashWriteDiagnosticsExport(File &file)
+{
+    if (!file)
+        return false;
+    const DashDiagRuntimeState runtime = dashBuildDiagnosticsRuntimeState();
+    dashMemoryDiagnostics.poll(runtime, true);
+    const DashDiagHeapSnapshot heap = dashMemoryDiagnostics.heapSnapshot();
+    const DashDiagAllocationFailure failure = dashMemoryDiagnostics.allocationFailure();
+    const DashDiagPreviousBoot &previous = dashMemoryDiagnostics.previousBoot();
+
+    bool ok = dashDiagFilePrintf(
+        file,
+        "{\"schema\":\"wifi-nag-diagnostics-v1\",\"meta\":{"
+        "\"firmware\":\"%s\",\"git_sha\":\"%s\",\"idf\":\"%s\","
+        "\"chip\":\"ESP32-S3R8\",\"reset\":\"%s\",\"uptime_ms\":%lu,"
+        "\"sample_interval_ms\":%lu,\"sensitive_fields_removed\":true},",
+        dashFirmwareVersion(), FIRMWARE_GIT_SHA, IDF_VER,
+        dashResetReasonName(esp_reset_reason()),
+        static_cast<unsigned long>(millis() - startMs),
+        static_cast<unsigned long>(DashMemoryDiagnostics::kSampleIntervalMs));
+
+    ok = ok && dashDiagFilePrintf(
+                   file,
+                   "\"summary\":{\"internal_total\":%lu,\"internal_free\":%lu,"
+                   "\"internal_min\":%lu,\"internal_largest\":%lu,"
+                   "\"internal_allocated\":%lu,\"internal_allocated_blocks\":%lu,"
+                   "\"internal_free_blocks\":%lu,\"internal_total_blocks\":%lu,"
+                   "\"internal_fragmentation\":%u,\"dma_total\":%lu,"
+                   "\"dma_free\":%lu,\"dma_min\":%lu,\"dma_largest\":%lu,"
+                   "\"psram_total\":%lu,\"psram_free\":%lu,\"psram_min\":%lu,"
+                   "\"psram_largest\":%lu,\"delta_10m\":%ld,\"delta_boot\":%ld,"
+                   "\"sample_count\":%lu,\"sample_capacity\":%lu,"
+                   "\"event_count\":%lu,\"allocation_failure_count\":%lu},",
+                   static_cast<unsigned long>(heap.internal.total),
+                   static_cast<unsigned long>(heap.internal.free),
+                   static_cast<unsigned long>(heap.internal.minimum),
+                   static_cast<unsigned long>(heap.internal.largest),
+                   static_cast<unsigned long>(heap.internal.allocated),
+                   static_cast<unsigned long>(heap.internal.allocatedBlocks),
+                   static_cast<unsigned long>(heap.internal.freeBlocks),
+                   static_cast<unsigned long>(heap.internal.totalBlocks),
+                   DashMemoryDiagnostics::fragmentationPercent(heap.internal.free, heap.internal.largest),
+                   static_cast<unsigned long>(heap.dma.total),
+                   static_cast<unsigned long>(heap.dma.free),
+                   static_cast<unsigned long>(heap.dma.minimum),
+                   static_cast<unsigned long>(heap.dma.largest),
+                   static_cast<unsigned long>(heap.psram.total),
+                   static_cast<unsigned long>(heap.psram.free),
+                   static_cast<unsigned long>(heap.psram.minimum),
+                   static_cast<unsigned long>(heap.psram.largest),
+                   static_cast<long>(dashMemoryDiagnostics.tenMinuteInternalDelta()),
+                   static_cast<long>(dashMemoryDiagnostics.startupInternalDelta()),
+                   static_cast<unsigned long>(dashMemoryDiagnostics.sampleCount()),
+                   static_cast<unsigned long>(dashMemoryDiagnostics.sampleCapacity()),
+                   static_cast<unsigned long>(dashMemoryDiagnostics.eventCount()),
+                   static_cast<unsigned long>(failure.sequence / 2U));
+
+    ok = ok && dashDiagFilePrintf(
+                   file,
+                   "\"runtime\":{\"wifi_mode\":%u,\"wifi_status\":%u,"
+                   "\"ap_clients\":%u,\"wifi_rssi\":%d,\"ble_protocol\":%u,"
+                   "\"ble_flags\":%u,\"ble_rssi\":%d,\"ble_disconnect_reason\":%u,"
+                   "\"ble_reconnect_count\":%lu,\"ble_disconnect_count\":%lu,"
+                   "\"gateway_pending\":%u,\"gateway_pending_max\":%u,"
+                   "\"gateway_pending_full\":%lu,\"gateway_timeouts\":%lu,"
+                   "\"ota_running\":%s,\"can_online\":%s,\"can_write_enabled\":%s,"
+                   "\"rx\":%lu,\"tx\":%lu,\"tx_error\":%lu},",
+                   runtime.wifiMode, runtime.wifiStatus, runtime.apClients,
+                   static_cast<int>(runtime.wifiRssi), runtime.bleProtocol,
+                   runtime.bleFlags, static_cast<int>(runtime.bleRssi),
+                   runtime.bleDisconnectReason,
+                   static_cast<unsigned long>(runtime.bleReconnectCount),
+                   static_cast<unsigned long>(runtime.bleDisconnectCount),
+                   runtime.gatewayPending, runtime.gatewayPendingMax,
+                   static_cast<unsigned long>(runtime.gatewayPendingFull),
+                   static_cast<unsigned long>(runtime.gatewayTimeouts),
+                   runtime.otaRunning ? "true" : "false",
+                   runtime.canOnline ? "true" : "false",
+                   runtime.canWriteEnabled ? "true" : "false",
+                   static_cast<unsigned long>(runtime.rxCount),
+                   static_cast<unsigned long>(runtime.txCount),
+                   static_cast<unsigned long>(runtime.txErrorCount));
+
+    ok = ok && dashDiagFilePrintf(file, "\"previous_boot\":");
+    if (dashMemoryDiagnostics.hasPreviousBoot())
+    {
+        ok = ok && dashDiagFilePrintf(
+                       file,
+                       "{\"uptime_ms\":%lu,\"internal_free\":%lu,\"internal_min\":%lu,"
+                       "\"internal_largest\":%lu,\"task_count\":%lu,"
+                       "\"runtime_flags\":%lu,\"last_event\":\"%s\"},",
+                       static_cast<unsigned long>(previous.uptimeMs),
+                       static_cast<unsigned long>(previous.internalFree),
+                       static_cast<unsigned long>(previous.internalMinimum),
+                       static_cast<unsigned long>(previous.internalLargest),
+                       static_cast<unsigned long>(previous.taskCount),
+                       static_cast<unsigned long>(previous.runtimeFlags),
+                       dashDiagEventName(static_cast<uint8_t>(previous.lastEvent)));
+    }
+    else
+    {
+        ok = ok && dashDiagFilePrintf(file, "null,");
+    }
+
+    ok = ok && dashDiagFilePrintf(file, "\"last_allocation_failure\":");
+    if (failure.sequence != 0)
+    {
+        ok = ok && dashDiagFilePrintf(
+                       file,
+                       "{\"count\":%lu,\"uptime_ms\":%lu,\"requested_size\":%lu,"
+                       "\"caps\":%lu,\"internal_free\":%lu,\"internal_largest\":%lu,"
+                       "\"function\":",
+                       static_cast<unsigned long>(failure.sequence / 2U),
+                       static_cast<unsigned long>(failure.uptimeMs),
+                       static_cast<unsigned long>(failure.requestedSize),
+                       static_cast<unsigned long>(failure.caps),
+                       static_cast<unsigned long>(failure.internalFree),
+                       static_cast<unsigned long>(failure.internalLargest));
+        ok = ok && dashDiagWriteJsonString(file, failure.functionName);
+        ok = ok && dashDiagFilePrintf(file, "},");
+    }
+    else
+    {
+        ok = ok && dashDiagFilePrintf(file, "null,");
+    }
+
+    ok = ok && dashDiagFilePrintf(file, "\"tasks\":");
+    ok = ok && dashDiagWriteTaskArray(file);
+    ok = ok && dashDiagFilePrintf(file, ",\"timeline\":[");
+    for (size_t i = 0; ok && i < dashMemoryDiagnostics.sampleCount(); i++)
+    {
+        const DashDiagSample *sample = dashMemoryDiagnostics.sampleAt(i);
+        if (!sample)
+            continue;
+        ok = dashDiagFilePrintf(
+            file,
+            "%s{\"uptime_ms\":%lu,\"internal_free\":%lu,\"internal_min\":%lu,"
+            "\"internal_largest\":%lu,\"internal_allocated\":%lu,"
+            "\"internal_allocated_blocks\":%u,\"internal_free_blocks\":%u,"
+            "\"dma_free\":%lu,\"dma_largest\":%lu,\"psram_free\":%lu,"
+            "\"psram_largest\":%lu,\"tasks\":%u,\"wifi_mode\":%u,"
+            "\"wifi_status\":%u,\"ap_clients\":%u,\"wifi_rssi\":%d,"
+            "\"ble_protocol\":%u,\"ble_flags\":%u,\"ble_rssi\":%d,"
+            "\"ble_disconnect_reason\":%u,\"ble_reconnect_count\":%lu,"
+            "\"ble_disconnect_count\":%lu,\"gateway_pending\":%u,"
+            "\"gateway_pending_max\":%u,\"gateway_pending_full\":%lu,"
+            "\"gateway_timeouts\":%lu,\"runtime_flags\":%u,\"rx\":%lu,"
+            "\"tx\":%lu,\"tx_error\":%lu}",
+            i == 0 ? "" : ",",
+            static_cast<unsigned long>(sample->uptimeMs),
+            static_cast<unsigned long>(sample->internalFree),
+            static_cast<unsigned long>(sample->internalMinimum),
+            static_cast<unsigned long>(sample->internalLargest),
+            static_cast<unsigned long>(sample->internalAllocated),
+            sample->internalAllocatedBlocks, sample->internalFreeBlocks,
+            static_cast<unsigned long>(sample->dmaFree),
+            static_cast<unsigned long>(sample->dmaLargest),
+            static_cast<unsigned long>(sample->psramFree),
+            static_cast<unsigned long>(sample->psramLargest),
+            sample->taskCount, sample->wifiMode, sample->wifiStatus,
+            sample->apClients, static_cast<int>(sample->wifiRssi),
+            sample->bleProtocol, sample->bleFlags, static_cast<int>(sample->bleRssi),
+            sample->bleDisconnectReason,
+            static_cast<unsigned long>(sample->bleReconnectCount),
+            static_cast<unsigned long>(sample->bleDisconnectCount),
+            sample->gatewayPending, sample->gatewayPendingMax,
+            static_cast<unsigned long>(sample->gatewayPendingFull),
+            static_cast<unsigned long>(sample->gatewayTimeouts),
+            sample->runtimeFlags,
+            static_cast<unsigned long>(sample->rxCount),
+            static_cast<unsigned long>(sample->txCount),
+            static_cast<unsigned long>(sample->txErrorCount));
+    }
+
+    ok = ok && dashDiagFilePrintf(file, "],\"events\":[");
+    for (size_t i = 0; ok && i < dashMemoryDiagnostics.eventCount(); i++)
+    {
+        const DashDiagEvent *event = dashMemoryDiagnostics.eventAt(i);
+        if (!event)
+            continue;
+        ok = dashDiagFilePrintf(
+            file,
+            "%s{\"uptime_ms\":%lu,\"type\":\"%s\",\"code\":%u,"
+            "\"internal_free\":%lu,\"internal_largest\":%lu,"
+            "\"delta_from_previous\":%ld,\"argument\":%lu,\"tasks\":%u,"
+            "\"wifi_status\":%u,\"ap_clients\":%u,\"ble_protocol\":%u,"
+            "\"runtime_flags\":%u}",
+            i == 0 ? "" : ",",
+            static_cast<unsigned long>(event->uptimeMs),
+            dashDiagEventName(event->code), event->code,
+            static_cast<unsigned long>(event->internalFree),
+            static_cast<unsigned long>(event->internalLargest),
+            static_cast<long>(event->deltaFromPrevious),
+            static_cast<unsigned long>(event->argument), event->taskCount,
+            event->wifiStatus, event->apClients, event->bleProtocol,
+            event->runtimeFlags);
+    }
+    return ok && dashDiagFilePrintf(file, "]}");
+}
+
+static void handleDiagnosticsExport()
+{
+    File file = SPIFFS.open(kDashDiagExportPath, "w");
+    if (!file || !dashWriteDiagnosticsExport(file))
+    {
+        file.close();
+        SPIFFS.remove(kDashDiagExportPath);
+        server.send(500, "application/json", "{\"ok\":false,\"error\":\"diagnostics export failed\"}");
+        return;
+    }
+    file.close();
+    file = SPIFFS.open(kDashDiagExportPath, "r");
+    if (!file)
+    {
+        server.send(500, "application/json", "{\"ok\":false,\"error\":\"diagnostics file unavailable\"}");
+        return;
+    }
+    char filename[112];
+    snprintf(filename, sizeof(filename),
+             "attachment; filename=\"WiFi-NAG-DIAG-%s-%s-uptime%lu.json\"",
+             dashFirmwareVersion(), FIRMWARE_GIT_SHA,
+             static_cast<unsigned long>((millis() - startMs) / 1000U));
+    server.sendHeader("Content-Disposition", filename);
+    server.sendHeader("Cache-Control", "no-store");
+    server.streamFile(file, "application/json");
+    file.close();
+    SPIFFS.remove(kDashDiagExportPath);
+}
+
+static void handleDiagnosticsTasks()
+{
+    File file = SPIFFS.open(kDashDiagTasksPath, "w");
+    bool ok = file && dashDiagFilePrintf(file, "{\"ok\":true,\"tasks\":") &&
+              dashDiagWriteTaskArray(file) && dashDiagFilePrintf(file, "}");
+    file.close();
+    if (!ok)
+    {
+        SPIFFS.remove(kDashDiagTasksPath);
+        server.send(500, "application/json", "{\"ok\":false,\"error\":\"task snapshot failed\"}");
+        return;
+    }
+    file = SPIFFS.open(kDashDiagTasksPath, "r");
+    server.sendHeader("Cache-Control", "no-store");
+    server.streamFile(file, "application/json");
+    file.close();
+    SPIFFS.remove(kDashDiagTasksPath);
+}
+
+static void handleDiagnosticsMark()
+{
+    dashMemoryDiagnostics.recordEvent(DASH_DIAG_EVENT_MANUAL_MARK,
+                                      dashBuildDiagnosticsRuntimeState());
+    server.send(200, "application/json", "{\"ok\":true}");
+}
+
+static void handleDiagnosticsClear()
+{
+    dashMemoryDiagnostics.clear(dashBuildDiagnosticsRuntimeState());
+    server.send(200, "application/json", "{\"ok\":true}");
+}
+#endif
 
 #ifdef ESP_PLATFORM
 static void dashSerialPrintHelp()
@@ -2433,6 +2918,7 @@ static void webTask(void *)
             ESP.restart();
         }
         dashCheckWifi();
+        dashMemoryDiagnostics.poll(dashBuildDiagnosticsRuntimeState());
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
@@ -2448,6 +2934,8 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
 
     if (!SPIFFS.begin(true))
         dashLog("[WARN] SPIFFS mount failed");
+    if (!dashMemoryDiagnostics.begin())
+        dashLog("[WARN] Diagnostics timeline unavailable: PSRAM allocation failed");
 
     dashLoadPrefs();
     dashGatewayLoad();
@@ -2500,6 +2988,10 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     server.on("/wifi_config", HTTP_POST, handleWifiConfig);
     server.on("/wifi_status", HTTP_GET, handleWifiStatus);
     server.on("/system_status", HTTP_GET, handleSystemStatus);
+    server.on("/diagnostics_export", HTTP_GET, handleDiagnosticsExport);
+    server.on("/diagnostics_tasks", HTTP_GET, handleDiagnosticsTasks);
+    server.on("/diagnostics_mark", HTTP_POST, handleDiagnosticsMark);
+    server.on("/diagnostics_clear", HTTP_POST, handleDiagnosticsClear);
     server.on("/wifi_networks", HTTP_GET, handleWifiNetworks);
     server.on("/wifi_connect", HTTP_POST, handleWifiConnect);
     server.on("/wifi_delete", HTTP_POST, handleWifiDelete);

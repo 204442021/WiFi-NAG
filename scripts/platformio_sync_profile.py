@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 from SCons.Errors import UserError
 from SCons.Script import Import
@@ -152,6 +153,17 @@ for cred_name in CREDENTIAL_DEFINES:
 if version_path.exists():
     fw_version = version_path.read_text(encoding="utf-8").strip()
     env.Append(CPPDEFINES=[("FIRMWARE_VERSION", f'\\"{fw_version}\\"')])
+
+try:
+    git_sha = subprocess.check_output(
+        ["git", "rev-parse", "--short=7", "HEAD"],
+        cwd=project_dir,
+        text=True,
+        stderr=subprocess.DEVNULL,
+    ).strip()
+except (OSError, subprocess.CalledProcessError):
+    git_sha = "unknown"
+env.Append(CPPDEFINES=[("FIRMWARE_GIT_SHA", f'\\"{git_sha}\\"')])
 
 _sync_ble_sdkconfig(project_dir, env["PIOENV"])
 print(f"Synced {display_config_path.as_posix()} WIFI-NAG credentials for {env['PIOENV']}")
