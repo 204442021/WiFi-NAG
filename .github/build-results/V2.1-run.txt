@@ -1,4 +1,4 @@
-status=running
+status=success
 run_id=31879187179
 commit=2b5735a28de5a11ffb38d3f96e931008620a77bd
 artifact=WIFI-NAG-V2.1-2b5735a2-firmware
