@@ -389,10 +389,15 @@ static DashCanBootPolicy dashPrepareCanBootPolicy()
     const bool hasFingerprint =
         bootPreferences.isKey(kDashCanFirmwareAddressKey) &&
         bootPreferences.isKey(kDashCanFirmwareVersionKey);
-    const uint32_t previousAddress =
-        bootPreferences.getULong(kDashCanFirmwareAddressKey, runningAddress);
+    const String runningAddressText(
+        static_cast<unsigned long>(runningAddress));
+    const String previousAddressText = bootPreferences.getString(
+        kDashCanFirmwareAddressKey, runningAddressText.c_str());
+    const uint32_t previousAddress = static_cast<uint32_t>(
+        strtoul(previousAddressText.c_str(), nullptr, 10));
     const String previousVersion =
-        bootPreferences.getString(kDashCanFirmwareVersionKey, runningVersion);
+        bootPreferences.getString(kDashCanFirmwareVersionKey,
+                                  runningVersion.c_str());
     const bool firmwareChanged = hasFingerprint &&
                                  (previousAddress != runningAddress ||
                                   previousVersion != runningVersion);
@@ -410,7 +415,8 @@ static DashCanBootPolicy dashPrepareCanBootPolicy()
         bootPreferences.putBool(kDashNagBootRevisionKey, true);
     }
 
-    bootPreferences.putULong(kDashCanFirmwareAddressKey, runningAddress);
+    bootPreferences.putString(kDashCanFirmwareAddressKey,
+                              runningAddressText);
     bootPreferences.putString(kDashCanFirmwareVersionKey, runningVersion);
     bootPreferences.remove(kDashOtaNagForceOffKey);
     dashBootNagRevisionPending = forcedStateChange ||
@@ -430,10 +436,9 @@ static bool dashMarkOtaNagForceOff()
     Preferences otaPreferences;
     if (!otaPreferences.begin(PREFS_NS, false))
         return false;
-    const bool stored =
-        otaPreferences.putBool(kDashOtaNagForceOffKey, true) > 0;
+    otaPreferences.putBool(kDashOtaNagForceOffKey, true);
     otaPreferences.end();
-    return stored;
+    return true;
 }
 
 static void dashConsumeBootNagRevisionPending()
@@ -2532,3 +2537,4 @@ static void mcpDashboardLoop()
 }
 
 #endif
+
