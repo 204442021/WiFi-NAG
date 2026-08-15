@@ -72,6 +72,9 @@ The only active CAN business logic is Nag echo on `0x370 / 880`.
 - Starts AP + STA mode.
 - Default AP subnet: `100.100.1.x`.
 - Device/gateway IP: `100.100.1.1`.
+- Fixed AP name: `Albert-FSD`.
+- Factory AP password: `12345678`.
+- Manual OTA credentials: `admin / 12345678`.
 - Saves multiple upstream WiFi networks.
 - Supports static STA IP, gateway, mask, and DNS.
 - Enables AP-to-STA NAPT when STA is connected.
@@ -86,7 +89,7 @@ The WebUI provides:
 - CAN status, RX/TX/errors, FPS, uptime
 - CAN Write toggle
 - Nag mode and A_V2 range controls
-- AP hotspot settings
+- AP hotspot password and visibility settings (the name is fixed)
 - WiFi scan/connect/delete
 - STA-AP gateway controls
 - DNS upstream, blacklist, whitelist, diagnostics, and blocked-domain list

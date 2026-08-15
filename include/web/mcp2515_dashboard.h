@@ -127,10 +127,16 @@ static constexpr uint8_t kDashLedBrightnessDefault = 32;
 #endif
 static constexpr uint8_t dashLedBrightness = kDashLedBrightnessDefault;
 
-// WiFi AP (hotspot) — overridable at runtime
+// WiFi AP (hotspot) — name is fixed; password/visibility remain configurable.
 static char apSSID[33] = "";
 static char apPass[65] = "";
 static bool apHidden = false; // when true, SSID is not broadcast (hidden AP)
+static constexpr char kDashFixedApSsid[] = "Albert-FSD";
+static constexpr char kDashFactoryApPassword[] = "12345678";
+static constexpr char kDashFixedOtaUser[] = "admin";
+static constexpr char kDashFixedOtaPassword[] = "12345678";
+static constexpr char kDashApIdentityVersionKey[] = "apIdVer";
+static constexpr uint8_t kDashApIdentityVersion = 1;
 static constexpr size_t kDashMaxSsidLen = 32;
 static constexpr size_t kDashMinApPassLen = 8;
 static constexpr size_t kDashMaxPassLen = 64;
@@ -533,8 +539,8 @@ static void dashApplyWifiPerfTuning() {}
 
 static void dashUseDefaultApConfig()
 {
-    strlcpy(apSSID, DASH_SSID, sizeof(apSSID));
-    strlcpy(apPass, DASH_PASS, sizeof(apPass));
+    strlcpy(apSSID, kDashFixedApSsid, sizeof(apSSID));
+    strlcpy(apPass, kDashFactoryApPassword, sizeof(apPass));
     apHidden = false;
     apRuntimeChannel = kDashApChannel;
 }
@@ -625,26 +631,36 @@ static void dashLoadPrefs()
     dashApplyRuntimeState();
     if (dashHandler)
         dashHandler->enablePrint = ep;
-    // Load WiFi AP overrides (hotspot name/password)
-    String apSsidPref = prefs.isKey("ap_ssid") ? prefs.getString("ap_ssid", "") : "";
+    // Lock the product hotspot identity. The one-shot migration also puts old
+    // installations onto the shared factory password; later password changes
+    // remain user-controlled.
+    const uint8_t apIdentityVersion =
+        prefs.getUChar(kDashApIdentityVersionKey, 0);
+    if (apIdentityVersion < kDashApIdentityVersion)
+    {
+        prefs.remove("ap_ssid");
+        prefs.putString("ap_pass", kDashFactoryApPassword);
+        prefs.putUChar(kDashApIdentityVersionKey,
+                       kDashApIdentityVersion);
+        dashLog("[WIFI] AP identity migrated to Albert-FSD");
+    }
+
+    // Load the configurable WiFi AP password/visibility.
     String apPassPref = prefs.isKey("ap_pass") ? prefs.getString("ap_pass", "") : "";
-    bool hasApOverride = apSsidPref.length() > 0 || apPassPref.length() > 0 || prefs.isKey("ap_hidden");
-    bool invalidApOverride = apSsidPref.length() > kDashMaxSsidLen ||
-                             (apPassPref.length() > 0 && !dashApPasswordLengthValid(apPassPref.length()));
-    if (apSsidPref.length() > 0)
-        strlcpy(apSSID, apSsidPref.c_str(), sizeof(apSSID));
-    else
-        strlcpy(apSSID, DASH_SSID, sizeof(apSSID));
+    bool hasApOverride = apPassPref.length() > 0 || prefs.isKey("ap_hidden");
+    bool invalidApOverride =
+        apPassPref.length() > 0 &&
+        !dashApPasswordLengthValid(apPassPref.length());
+    strlcpy(apSSID, kDashFixedApSsid, sizeof(apSSID));
     if (apPassPref.length() > 0)
         strlcpy(apPass, apPassPref.c_str(), sizeof(apPass));
     else
-        strlcpy(apPass, DASH_PASS, sizeof(apPass));
+        strlcpy(apPass, kDashFactoryApPassword, sizeof(apPass));
     apHidden = prefs.getBool("ap_hidden", false);
     if (invalidApOverride || !dashApConfigValid(apSSID, apPass))
     {
         if (hasApOverride)
         {
-            prefs.remove("ap_ssid");
             prefs.remove("ap_pass");
             prefs.remove("ap_hidden");
             dashLog("[WIFI] Invalid saved AP config ignored");
@@ -1018,7 +1034,7 @@ static void handleReboot()
 
 static void handleOtaResult()
 {
-    if (!server.authenticate(DASH_OTA_USER, DASH_OTA_PASS))
+    if (!server.authenticate(kDashFixedOtaUser, kDashFixedOtaPassword))
     {
         server.requestAuthentication();
         return;
@@ -1041,7 +1057,7 @@ static void handleOtaResult()
 
 static void handleOtaUpload()
 {
-    if (!server.authenticate(DASH_OTA_USER, DASH_OTA_PASS))
+    if (!server.authenticate(kDashFixedOtaUser, kDashFixedOtaPassword))
         return;
     HTTPUpload &upload = server.upload();
     if (upload.status == UPLOAD_FILE_START)
@@ -2210,42 +2226,31 @@ static void dashSerialDiagnosticsPoll() {}
 
 static void handleApConfig()
 {
-    String newSsid = server.arg("ssid");
     String newPass = server.arg("pass");
     bool hasHidden = server.hasArg("hidden");
     bool newHidden = hasHidden && (server.arg("hidden") == "1" || server.arg("hidden") == "true");
 
-    if (newSsid.length() == 0)
-    {
-        server.send(400, "application/json", "{\"ok\":false,\"error\":\"SSID required\"}");
-        return;
-    }
-    if (newSsid.length() > kDashMaxSsidLen)
-    {
-        server.send(400, "application/json", "{\"ok\":false,\"error\":\"SSID must be 32 bytes or less\"}");
-        return;
-    }
     if (newPass.length() > 0 && !dashApPasswordLengthValid(newPass.length()))
     {
         server.send(400, "application/json", "{\"ok\":false,\"error\":\"Password must be 8-64 characters\"}");
         return;
     }
 
-    strlcpy(apSSID, newSsid.c_str(), sizeof(apSSID));
+    strlcpy(apSSID, kDashFixedApSsid, sizeof(apSSID));
     if (newPass.length() > 0)
         strlcpy(apPass, newPass.c_str(), sizeof(apPass));
     if (hasHidden)
         apHidden = newHidden;
 
     prefs.begin(PREFS_NS, false);
-    prefs.putString("ap_ssid", newSsid);
+    prefs.remove("ap_ssid");
     if (newPass.length() > 0)
         prefs.putString("ap_pass", newPass);
     if (hasHidden)
         prefs.putBool("ap_hidden", newHidden);
     prefs.end();
 
-    dashLog("[WIFI] AP config updated: SSID=" + newSsid + (apHidden ? " (hidden)" : "") +
+    dashLog("[WIFI] AP config updated: SSID=" + String(kDashFixedApSsid) + (apHidden ? " (hidden)" : "") +
             " channel=auto match STA");
     server.send(200, "application/json", "{\"ok\":true,\"msg\":\"Saved. AP starts on CH1 and auto matches STA after WiFi connects.\"}");
 }
@@ -2256,7 +2261,7 @@ static void handleApStatus()
     bool stored = false;
     if (p.begin(PREFS_NS, false))
     {
-        stored = p.isKey("ap_ssid") && p.getString("ap_ssid", "").length() > 0;
+        stored = p.isKey("ap_pass") || p.isKey("ap_hidden");
         p.end();
     }
     String j = "{\"ssid\":\"" + jsonEscape(apSSID) + "\"";
@@ -2318,7 +2323,7 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     dashLog("[BOOT] WIFI-NAG mode: Nag killer + WiFi gateway");
 
     ArduinoOTA.setHostname("wifi-nag");
-    ArduinoOTA.setPassword(DASH_OTA_PASS);
+    ArduinoOTA.setPassword(kDashFixedOtaPassword);
     ArduinoOTA.onStart([]()
                        { dashLog("[OTA] Starting..."); });
     ArduinoOTA.onEnd([]()

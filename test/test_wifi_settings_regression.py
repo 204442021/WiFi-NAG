@@ -78,16 +78,33 @@ class WifiNagRegressionTests(unittest.TestCase):
             with self.subTest(route=route):
                 self.assertIn(route, self.dash)
 
-    def test_default_wifi_and_ota_passwords_are_12345678(self) -> None:
+    def test_fixed_ap_identity_and_ota_credentials(self) -> None:
         defaults = dict(
             re.findall(
-                r'^#define\s+(DASH_PASS|DASH_OTA_PASS)\s+"([^"]+)"',
+                r'^#define\s+(DASH_SSID|DASH_PASS|DASH_OTA_USER|DASH_OTA_PASS)\s+"([^"]+)"',
                 self.profile_example,
                 re.MULTILINE,
             )
         )
+        self.assertEqual(defaults.get("DASH_SSID"), "Albert-FSD")
         self.assertEqual(defaults.get("DASH_PASS"), "12345678")
+        self.assertEqual(defaults.get("DASH_OTA_USER"), "admin")
         self.assertEqual(defaults.get("DASH_OTA_PASS"), "12345678")
+        self.assertIn('kDashFixedApSsid[] = "Albert-FSD"', self.dash)
+        self.assertIn('kDashFactoryApPassword[] = "12345678"', self.dash)
+        self.assertIn('kDashFixedOtaUser[] = "admin"', self.dash)
+        self.assertIn('kDashFixedOtaPassword[] = "12345678"', self.dash)
+        self.assertIn('server.authenticate(kDashFixedOtaUser, kDashFixedOtaPassword)', self.dash)
+        self.assertIn('kDashApIdentityVersionKey[] = "apIdVer"', self.dash)
+        self.assertIn('prefs.remove("ap_ssid")', self.dash)
+        self.assertIn('prefs.putString("ap_pass", kDashFactoryApPassword)', self.dash)
+        self.assertNotIn('prefs.putString("ap_ssid", newSsid)', self.dash)
+        self.assertRegex(
+            self.ui,
+            r'id=(?:"ap-ssid"|ap-ssid)\s+value=(?:"Albert-FSD"|Albert-FSD)\s+disabled\s+readonly',
+        )
+        self.assertHasUiId("t2can-btn")
+        self.assertIn("location.href='http://100.100.1.2/'", self.ui)
 
     def test_gateway_dns_routes_exist(self) -> None:
         required_routes = [
