@@ -51,7 +51,7 @@ jobs:
 
       - name: Verify generated dashboard
         run: |
-          pip install htmlmin2 rcssmin rjsmin
+          pip install csscompressor==0.9.5 htmlmin==0.1.12 rjsmin==1.2.5
           python scripts/minify_dashboard.py --check
 
       - name: Build ESP32-S3 firmware
@@ -66,7 +66,8 @@ jobs:
           mkdir -p dist
           OTA="dist/WIFI-NAG-V2.1-${SHORT_SHA}-OTA.bin"
           FACTORY="dist/WIFI-NAG-V2.1-${SHORT_SHA}-Factory-16MiB.bin"
-          cp .pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin "${OTA}"
+          BUILD_DIR=".pio/build/wifi_nag_ESP32_S3_CAN"
+          cp "${BUILD_DIR}/firmware.bin" "${OTA}"
           python "${HOME}/.platformio/packages/tool-esptoolpy/esptool.py" \
             --chip esp32s3 merge_bin \
             -o "${FACTORY}" \
@@ -74,11 +75,14 @@ jobs:
             --flash_freq 80m \
             --flash_size 16MB \
             --fill-flash-size 16MB \
-            0x0 .pio/build/wifi_nag_ESP32_S3_CAN/bootloader.bin \
-            0x8000 .pio/build/wifi_nag_ESP32_S3_CAN/partitions.bin \
-            0x19000 .pio/build/wifi_nag_ESP32_S3_CAN/ota_data_initial.bin \
-            0x20000 .pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin
+            0x0 "${BUILD_DIR}/bootloader.bin" \
+            0x8000 "${BUILD_DIR}/partitions.bin" \
+            0x19000 "${BUILD_DIR}/ota_data_initial.bin" \
+            0x20000 "${BUILD_DIR}/firmware.bin"
           test "$(stat -c%s "${FACTORY}")" -eq 16777216
+          cmp -n "$(stat -c%s "${BUILD_DIR}/partitions.bin")" -i $((0x8000)):0 "${FACTORY}" "${BUILD_DIR}/partitions.bin"
+          cmp -n "$(stat -c%s "${BUILD_DIR}/ota_data_initial.bin")" -i $((0x19000)):0 "${FACTORY}" "${BUILD_DIR}/ota_data_initial.bin"
+          cmp -n "$(stat -c%s "${BUILD_DIR}/firmware.bin")" -i $((0x20000)):0 "${FACTORY}" "${BUILD_DIR}/firmware.bin"
           sha256sum "${OTA}" "${FACTORY}" > "dist/SHA256SUMS-V2.1-${SHORT_SHA}.txt"
 
       - name: Upload firmware
