@@ -23,6 +23,21 @@ jobs:
       - name: Checkout V2.1
         uses: actions/checkout@v4
 
+      - name: Record build start
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::8}"
+          mkdir -p .github/build-results
+          printf 'status=running\nrun_id=%s\ncommit=%s\nartifact=WIFI-NAG-V2.1-%s-firmware\n' \
+            "${GITHUB_RUN_ID}" "${GITHUB_SHA}" "${SHORT_SHA}" \
+            > .github/build-results/V2.1-run.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/build-results/V2.1-run.txt
+          git commit -m "chore(ci): record V2.1 build start [skip ci]"
+          git push origin HEAD:V2.1
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -74,16 +89,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Record build run
+      - name: Record build result
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .github/build-results
-          printf 'run_id=%s\ncommit=%s\nartifact=WIFI-NAG-V2.1-%s-firmware\n' \
-            "${GITHUB_RUN_ID}" "${GITHUB_SHA}" "${SHORT_SHA}" \
+          SHORT_SHA="${GITHUB_SHA::8}"
+          printf 'status=%s\nrun_id=%s\ncommit=%s\nartifact=WIFI-NAG-V2.1-%s-firmware\n' \
+            "${{ job.status }}" "${GITHUB_RUN_ID}" "${GITHUB_SHA}" "${SHORT_SHA}" \
             > .github/build-results/V2.1-run.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/build-results/V2.1-run.txt
-          git commit -m "chore(ci): record V2.1 firmware build [skip ci]"
+          git commit -m "chore(ci): record V2.1 build result [skip ci]"
           git push origin HEAD:V2.1
