@@ -35,6 +35,9 @@ class WifiNagRegressionTests(unittest.TestCase):
     def test_wifi_ui_has_expected_fields(self) -> None:
         required_ids = [
             "wifi-status",
+            "wifi-external-ip",
+            "wifi-external-link",
+            "top-wifi-ip",
             "wifi-ssid",
             "wifi-pass",
             "wifi-static",
@@ -49,6 +52,17 @@ class WifiNagRegressionTests(unittest.TestCase):
         for element_id in required_ids:
             with self.subTest(element_id=element_id):
                 self.assertHasUiId(element_id)
+
+    def test_external_ip_is_reported_linked_and_ota_uses_current_host(self) -> None:
+        self.assertIn('j += ",\\\"ip\\\":\\\"" + staIp.toString() + "\\\"";', self.dash)
+        self.assertIn("externalUrl=externalIp?'http://'+externalIp:''", self.ui)
+        self.assertIn("link.href=externalUrl", self.ui)
+        self.assertIn("xhr.open('POST','/update?ota_time='", self.ui)
+        self.assertIn(
+            'server.on("/update", HTTP_POST, handleOtaResult, handleOtaUpload);',
+            self.dash,
+        )
+        self.assertNotIn("softap_only", self.dash)
 
     def test_wifi_backend_routes_exist(self) -> None:
         required_routes = [
