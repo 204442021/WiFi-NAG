@@ -39,6 +39,7 @@ jobs:
           python scripts/minify_dashboard.py --check
           PYTHONPATH=test python -m unittest \
             test_v23_diagnostics_regression \
+            test_v23_network_memory_regression \
             test_v21_twai_ota_safety_regression \
             test_can_restart_safety_regression \
             test_firmware_info_regression \

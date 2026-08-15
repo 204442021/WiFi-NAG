@@ -994,6 +994,7 @@ static bool dashApplyNagConfigArgs()
 
 static void handleRoot()
 {
+    DashDiagHttpScope diagHttpScope(DASH_DIAG_HTTP_ROOT);
     server.sendHeader("Content-Encoding", "gzip");
     server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     server.sendHeader("Pragma", "no-cache");
@@ -1015,6 +1016,7 @@ static void handleLegacyDashboardRedirect()
 
 static void handleStatus()
 {
+    DashDiagHttpScope diagHttpScope(DASH_DIAG_HTTP_STATUS);
     if (canOnline && millis() - lastFrameMs > 10000)
     {
         canOnline = false;
@@ -1030,8 +1032,9 @@ static void handleStatus()
 
     bool ep = dashHandler ? (bool)dashHandler->enablePrint : false;
 
-    String j = "{\"product\":\"wifi-nag\"";
-    j.reserve(900);
+    static String j;
+    j.reserve(1024);
+    j = "{\"product\":\"wifi-nag\"";
     j += ",\"wifiNag\":true";
 #if defined(NAG_KILLER)
     j += ",\"nagKiller\":";
@@ -1942,7 +1945,7 @@ static void handleWifiNetworks()
     server.send(200, "application/json", j);
 }
 
-static void handleWifiStatus()
+static void dashBuildWifiStatusJson(String &j)
 {
     bool stored = wifiNetworkCount > 0;
     bool connectedNow = WiFi.status() == WL_CONNECTED;
@@ -1951,7 +1954,8 @@ static void handleWifiStatus()
     String activeSsid = connectedNow ? WiFi.SSID() : String(staSSID);
     if (dashStaSsidLooksCorrupt(activeSsid))
         activeSsid = "";
-    String j = "{\"connected\":";
+    j.reserve(1024);
+    j = "{\"connected\":";
     j += connected ? "true" : "false";
     j += ",\"ssid\":\"" + jsonEscape(activeSsid) + "\"";
     j += ",\"stored\":" + String(stored ? "true" : "false");
@@ -1989,6 +1993,13 @@ static void handleWifiStatus()
         j += ",\"retry_in_s\":" + String(retryInMs > 0 ? (retryInMs / 1000) : 0);
     }
     j += "}";
+}
+
+static void handleWifiStatus()
+{
+    DashDiagHttpScope diagHttpScope(DASH_DIAG_HTTP_WIFI_STATUS);
+    static String j;
+    dashBuildWifiStatusJson(j);
     server.send(200, "application/json", j);
 }
 
@@ -2123,6 +2134,7 @@ static void dashReadCpuLoad(uint8_t &core0Load, uint8_t &core1Load, bool &valid)
 static void handleSystemStatus()
 {
 #ifdef ESP_PLATFORM
+    DashDiagHttpScope diagHttpScope(DASH_DIAG_HTTP_SYSTEM_STATUS);
     dashMemoryDiagnostics.poll(dashBuildDiagnosticsRuntimeState());
     const DashDiagHeapSnapshot memory = dashMemoryDiagnostics.heapSnapshot();
     const DashDiagAllocationFailure allocationFailure = dashMemoryDiagnostics.allocationFailure();
@@ -2200,8 +2212,9 @@ static void handleSystemStatus()
     bool hasCpuLoad = false;
     dashReadCpuLoad(cpu0Load, cpu1Load, hasCpuLoad);
 
-    String j = "{\"chip\":\"ESP32-S3\"";
-    j.reserve(3200);
+    static String j;
+    j.reserve(4096);
+    j = "{\"chip\":\"ESP32-S3\"";
     j += ",\"module\":\"ESP32-S3R8\"";
     j += ",\"target\":\"" CONFIG_IDF_TARGET "\"";
     j += ",\"cores\":" + String(chip.cores);
@@ -2261,6 +2274,17 @@ static void handleSystemStatus()
     j += ",\"diag_delta_10m\":" + String(dashMemoryDiagnostics.tenMinuteInternalDelta());
     j += ",\"diag_delta_boot\":" + String(dashMemoryDiagnostics.startupInternalDelta());
     j += ",\"diag_alloc_failures\":" + String(allocationFailure.sequence / 2U);
+    j += ",\"diag_alloc_fail_le_512\":" + String(dashMemoryDiagnostics.allocationFailureBucket(0));
+    j += ",\"diag_alloc_fail_513_1024\":" + String(dashMemoryDiagnostics.allocationFailureBucket(1));
+    j += ",\"diag_alloc_fail_1025_1536\":" + String(dashMemoryDiagnostics.allocationFailureBucket(2));
+    j += ",\"diag_alloc_fail_1537_2048\":" + String(dashMemoryDiagnostics.allocationFailureBucket(3));
+    j += ",\"diag_alloc_fail_gt_2048\":" + String(dashMemoryDiagnostics.allocationFailureBucket(4));
+    j += ",\"diag_last_alloc_size\":" + String(allocationFailure.requestedSize);
+    j += ",\"diag_last_alloc_caps\":" + String(allocationFailure.caps);
+    j += ",\"diag_last_alloc_dma_free\":" + String(allocationFailure.dmaFree);
+    j += ",\"diag_last_alloc_dma_largest\":" + String(allocationFailure.dmaLargest);
+    j += ",\"diag_last_alloc_core\":" + String(allocationFailure.coreId);
+    j += ",\"diag_last_alloc_http\":" + String(allocationFailure.httpEndpoint);
     j += ",\"diag_previous_boot\":" + String(dashMemoryDiagnostics.hasPreviousBoot() ? "true" : "false");
     j += ",\"flash_size\":" + String(flashSize);
     j += ",\"flash_speed\":" + String(80000000UL);
@@ -2385,6 +2409,23 @@ static const char *dashDiagEventName(uint8_t code)
     }
 }
 
+static const char *dashDiagHttpEndpointName(uint8_t endpoint)
+{
+    switch (endpoint)
+    {
+    case DASH_DIAG_HTTP_ROOT: return "root";
+    case DASH_DIAG_HTTP_STATUS: return "status";
+    case DASH_DIAG_HTTP_SYSTEM_STATUS: return "system_status";
+    case DASH_DIAG_HTTP_NETWORK_STATUS: return "network_status";
+    case DASH_DIAG_HTTP_WIFI_STATUS: return "wifi_status";
+    case DASH_DIAG_HTTP_AP_STATUS: return "ap_status";
+    case DASH_DIAG_HTTP_GATEWAY_STATUS: return "gateway_status";
+    case DASH_DIAG_HTTP_EXPORT: return "diagnostics_export";
+    case DASH_DIAG_HTTP_TASKS: return "diagnostics_tasks";
+    default: return "none";
+    }
+}
+
 static const char *dashDiagTaskStateName(eTaskState state)
 {
     switch (state)
@@ -2466,7 +2507,8 @@ static bool dashWriteDiagnosticsExport(File &file)
                    "\"psram_total\":%lu,\"psram_free\":%lu,\"psram_min\":%lu,"
                    "\"psram_largest\":%lu,\"delta_10m\":%ld,\"delta_boot\":%ld,"
                    "\"sample_count\":%lu,\"sample_capacity\":%lu,"
-                   "\"event_count\":%lu,\"allocation_failure_count\":%lu},",
+                   "\"event_count\":%lu,\"allocation_failure_count\":%lu,"
+                   "\"allocation_failure_histogram\":[%lu,%lu,%lu,%lu,%lu]},",
                    static_cast<unsigned long>(heap.internal.total),
                    static_cast<unsigned long>(heap.internal.free),
                    static_cast<unsigned long>(heap.internal.minimum),
@@ -2489,7 +2531,12 @@ static bool dashWriteDiagnosticsExport(File &file)
                    static_cast<unsigned long>(dashMemoryDiagnostics.sampleCount()),
                    static_cast<unsigned long>(dashMemoryDiagnostics.sampleCapacity()),
                    static_cast<unsigned long>(dashMemoryDiagnostics.eventCount()),
-                   static_cast<unsigned long>(failure.sequence / 2U));
+                   static_cast<unsigned long>(failure.sequence / 2U),
+                   static_cast<unsigned long>(dashMemoryDiagnostics.allocationFailureBucket(0)),
+                   static_cast<unsigned long>(dashMemoryDiagnostics.allocationFailureBucket(1)),
+                   static_cast<unsigned long>(dashMemoryDiagnostics.allocationFailureBucket(2)),
+                   static_cast<unsigned long>(dashMemoryDiagnostics.allocationFailureBucket(3)),
+                   static_cast<unsigned long>(dashMemoryDiagnostics.allocationFailureBucket(4)));
 
     ok = ok && dashDiagFilePrintf(
                    file,
@@ -2545,13 +2592,18 @@ static bool dashWriteDiagnosticsExport(File &file)
                        file,
                        "{\"count\":%lu,\"uptime_ms\":%lu,\"requested_size\":%lu,"
                        "\"caps\":%lu,\"internal_free\":%lu,\"internal_largest\":%lu,"
-                       "\"function\":",
+                       "\"dma_free\":%lu,\"dma_largest\":%lu,\"core\":%d,"
+                       "\"http_endpoint\":\"%s\",\"function\":",
                        static_cast<unsigned long>(failure.sequence / 2U),
                        static_cast<unsigned long>(failure.uptimeMs),
                        static_cast<unsigned long>(failure.requestedSize),
                        static_cast<unsigned long>(failure.caps),
                        static_cast<unsigned long>(failure.internalFree),
-                       static_cast<unsigned long>(failure.internalLargest));
+                       static_cast<unsigned long>(failure.internalLargest),
+                       static_cast<unsigned long>(failure.dmaFree),
+                       static_cast<unsigned long>(failure.dmaLargest),
+                       static_cast<int>(failure.coreId),
+                       dashDiagHttpEndpointName(failure.httpEndpoint));
         ok = ok && dashDiagWriteJsonString(file, failure.functionName);
         ok = ok && dashDiagFilePrintf(file, "},");
     }
@@ -2580,7 +2632,8 @@ static bool dashWriteDiagnosticsExport(File &file)
             "\"ble_disconnect_reason\":%u,\"ble_reconnect_count\":%lu,"
             "\"ble_disconnect_count\":%lu,\"gateway_pending\":%u,"
             "\"gateway_pending_max\":%u,\"gateway_pending_full\":%lu,"
-            "\"gateway_timeouts\":%lu,\"runtime_flags\":%u,\"rx\":%lu,"
+            "\"gateway_timeouts\":%lu,\"allocation_failure_count\":%lu,"
+            "\"runtime_flags\":%u,\"rx\":%lu,"
             "\"tx\":%lu,\"tx_error\":%lu}",
             i == 0 ? "" : ",",
             static_cast<unsigned long>(sample->uptimeMs),
@@ -2602,6 +2655,7 @@ static bool dashWriteDiagnosticsExport(File &file)
             sample->gatewayPending, sample->gatewayPendingMax,
             static_cast<unsigned long>(sample->gatewayPendingFull),
             static_cast<unsigned long>(sample->gatewayTimeouts),
+            static_cast<unsigned long>(sample->allocationFailureCount),
             sample->runtimeFlags,
             static_cast<unsigned long>(sample->rxCount),
             static_cast<unsigned long>(sample->txCount),
@@ -2636,6 +2690,7 @@ static bool dashWriteDiagnosticsExport(File &file)
 
 static void handleDiagnosticsExport()
 {
+    DashDiagHttpScope diagHttpScope(DASH_DIAG_HTTP_EXPORT);
     File file = SPIFFS.open(kDashDiagExportPath, "w");
     if (!file || !dashWriteDiagnosticsExport(file))
     {
@@ -2665,6 +2720,7 @@ static void handleDiagnosticsExport()
 
 static void handleDiagnosticsTasks()
 {
+    DashDiagHttpScope diagHttpScope(DASH_DIAG_HTTP_TASKS);
     File file = SPIFFS.open(kDashDiagTasksPath, "w");
     bool ok = file && dashDiagFilePrintf(file, "{\"ok\":true,\"tasks\":") &&
               dashDiagWriteTaskArray(file) && dashDiagFilePrintf(file, "}");
@@ -2878,7 +2934,7 @@ static void handleApConfig()
     server.send(200, "application/json", "{\"ok\":true,\"msg\":\"Saved. AP starts on CH1 and auto matches STA after WiFi connects.\"}");
 }
 
-static void handleApStatus()
+static void dashBuildApStatusJson(String &j)
 {
     Preferences p;
     bool stored = false;
@@ -2887,7 +2943,8 @@ static void handleApStatus()
         stored = p.isKey("ap_pass") || p.isKey("ap_hidden");
         p.end();
     }
-    String j = "{\"ssid\":\"" + jsonEscape(apSSID) + "\"";
+    j.reserve(768);
+    j = "{\"ssid\":\"" + jsonEscape(apSSID) + "\"";
     j += ",\"ip\":\"" + WiFi.softAPIP().toString() + "\"";
     j += ",\"clients\":" + String(WiFi.softAPgetStationNum());
     j += ",\"channel\":" + String(dashCurrentApChannel());
@@ -2898,7 +2955,43 @@ static void handleApStatus()
     j += ",\"stored\":" + String(stored ? "true" : "false");
     j += ",\"hidden\":" + String(apHidden ? "true" : "false");
     j += "}";
+}
+
+static void handleApStatus()
+{
+    DashDiagHttpScope diagHttpScope(DASH_DIAG_HTTP_AP_STATUS);
+    static String j;
+    dashBuildApStatusJson(j);
     server.send(200, "application/json", j);
+}
+
+static void handleNetworkStatus()
+{
+    DashDiagHttpScope diagHttpScope(DASH_DIAG_HTTP_NETWORK_STATUS);
+    static String response;
+    static String wifi;
+    static String ap;
+#if defined(ESP_PLATFORM) && defined(DASH_STA_AP_GATEWAY)
+    static String gateway;
+#endif
+    dashBuildWifiStatusJson(wifi);
+    dashBuildApStatusJson(ap);
+#if defined(ESP_PLATFORM) && defined(DASH_STA_AP_GATEWAY)
+    dashBuildGatewayStatusJson(gateway);
+#endif
+    response.reserve(4096);
+    response = "{\"wifi\":";
+    response += wifi;
+    response += ",\"ap\":";
+    response += ap;
+    response += ",\"gateway\":";
+#if defined(ESP_PLATFORM) && defined(DASH_STA_AP_GATEWAY)
+    response += gateway;
+#else
+    response += "{}";
+#endif
+    response += "}";
+    server.send(200, "application/json", response);
 }
 
 // Dashboard frame callback wrapper
@@ -2987,6 +3080,7 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     server.on("/wifi_scan", HTTP_GET, handleWifiScan);
     server.on("/wifi_config", HTTP_POST, handleWifiConfig);
     server.on("/wifi_status", HTTP_GET, handleWifiStatus);
+    server.on("/network_status", HTTP_GET, handleNetworkStatus);
     server.on("/system_status", HTTP_GET, handleSystemStatus);
     server.on("/diagnostics_export", HTTP_GET, handleDiagnosticsExport);
     server.on("/diagnostics_tasks", HTTP_GET, handleDiagnosticsTasks);

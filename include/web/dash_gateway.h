@@ -1356,7 +1356,7 @@ static void dashGatewayOnStaDisconnected(esp_netif_t *apNetif)
     ESP_LOGI(kDashGatewayTag, "STA offline; NAT disabled and DNS pending cleared");
 }
 
-static String dashGatewayStatusJson()
+static void dashBuildGatewayStatusJson(String &j)
 {
     // Format upstream DNS as dotted-decimal string
     String upstreamStr = dashGatewayIpToString(gatewayUpstreamDns);
@@ -1370,8 +1370,8 @@ static String dashGatewayStatusJson()
     if (esp_wifi_get_config(WIFI_IF_AP, &apConfig) == ESP_OK)
         apChannel = apConfig.ap.channel;
 
-    String j = "{\"enabled\":";
-    j.reserve(900);
+    j.reserve(1400);
+    j = "{\"enabled\":";
     j += gatewayEnabled ? "true" : "false";
     j += ",\"nat\":";
     j += (gatewayNaptEnabled && WiFi.status() == WL_CONNECTED) ? "true" : "false";
@@ -1459,12 +1459,14 @@ static String dashGatewayStatusJson()
     j += ",\"dns_upstream_fails\":";
     j += String(gatewayDnsUpstreamFails);
     j += "}";
-    return j;
 }
 
 static void handleGatewayStatus()
 {
-    server.send(200, "application/json", dashGatewayStatusJson());
+    DashDiagHttpScope diagHttpScope(DASH_DIAG_HTTP_GATEWAY_STATUS);
+    static String j;
+    dashBuildGatewayStatusJson(j);
+    server.send(200, "application/json", j);
 }
 
 static String dashGatewayDnsSettingsJson(bool ok)
@@ -1606,7 +1608,9 @@ static void handleGatewayDnsPost()
 static void handleGatewayDnsStatsReset()
 {
     dashGatewayResetDnsStats();
-    server.send(200, "application/json", dashGatewayStatusJson());
+    static String j;
+    dashBuildGatewayStatusJson(j);
+    server.send(200, "application/json", j);
 }
 
 static void handleGatewayWhitelistAdd()
@@ -1700,4 +1704,3 @@ static void dashGatewayOnStaConnected(esp_netif_t *, esp_netif_t *) {}
 static void dashGatewayOnStaDisconnected(esp_netif_t *) {}
 
 #endif
-

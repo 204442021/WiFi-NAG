@@ -841,6 +841,8 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
           <div class="sys-item sys-wide"><div class="sys-lbl">自动判断</div><div class="sys-val" id="diag-memory-risk">--</div></div>
           <div class="sys-item"><div class="sys-lbl">记录状态</div><div class="sys-val" id="diag-recording-state">--</div></div>
           <div class="sys-item"><div class="sys-lbl">内存变化</div><div class="sys-val" id="diag-memory-delta">--</div></div>
+          <div class="sys-item sys-wide"><div class="sys-lbl">最近分配失败</div><div class="sys-val" id="diag-allocation-detail">--</div></div>
+          <div class="sys-item sys-wide"><div class="sys-lbl">失败尺寸分布</div><div class="sys-val" id="diag-allocation-histogram">--</div></div>
           <div class="sys-item sys-wide"><div class="sys-lbl">上次重启前快照</div><div class="sys-val" id="diag-previous-boot">--</div></div>
         </div>
         <div class="btn-row">
@@ -1063,6 +1065,8 @@ let uiModeEffective='phone';
 const pollLocks={};
 let bleStatusTimer=null;
 let bleStatusLoading=false;
+let wifiNagActivePage='features';
+let networkPageInitialLoaded=false;
 
 function normalizeUiMode(v){
   v=String(v||'auto').toLowerCase();
@@ -1165,6 +1169,7 @@ function stopDashboardPolling(){
 function dashboardVisible(){
   return !document.hidden&&!dashboardPollStopped;
 }
+function dashboardPageActive(page){return dashboardVisible()&&wifiNagActivePage===page;}
 function intervalVisible(fn,ms){
   return setInterval(()=>{if(dashboardVisible())fn();},ms);
 }
@@ -1191,14 +1196,12 @@ function startDashboardPolling(){
   const car=isCarUiActive();
   const fast=!networkPerformanceMode&&!car;
   dashboardPollTimers.push(intervalVisible(poll,car?7000:(fast?2000:5000)));
-  dashboardPollTimers.push(intervalVisible(loadWifiStatus,car?45000:(fast?10000:30000)));
-  dashboardPollTimers.push(intervalVisible(loadApStatus,car?45000:(fast?10000:30000)));
-  dashboardPollTimers.push(intervalVisible(loadGatewayStatus,car?45000:(fast?10000:30000)));
+  dashboardPollTimers.push(intervalVisible(()=>{if(dashboardPageActive('network'))loadNetworkStatus();},car?45000:(fast?10000:30000)));
   dashboardPollTimers.push(intervalVisible(pollLog,5000));
   if(fast){
-    dashboardPollTimers.push(intervalVisible(loadWifiNetworks,30000));
-    dashboardPollTimers.push(intervalVisible(loadGatewayBlocked,5000));
-    dashboardPollTimers.push(intervalVisible(()=>loadGatewayDns(true),15000));
+    dashboardPollTimers.push(intervalVisible(()=>{if(dashboardPageActive('network'))loadWifiNetworks();},30000));
+    dashboardPollTimers.push(intervalVisible(()=>{if(dashboardPageActive('network'))loadGatewayBlocked();},5000));
+    dashboardPollTimers.push(intervalVisible(()=>{if(dashboardPageActive('network'))loadGatewayDns(true);},15000));
   }
   updateNetworkPerformanceUi();
 }
@@ -1207,8 +1210,8 @@ function setNetworkPerformanceMode(enabled,persist){
   if(persist)localStorage.setItem('netPerfMode',networkPerformanceMode?'1':'0');
   startDashboardPolling();
   if(dashboardVisible()){
-    poll();loadWifiStatus();loadApStatus();loadGatewayStatus();
-    if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
+    poll();if(dashboardPageActive('network'))loadNetworkStatus();
+    if(dashboardPageActive('network')&&!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
   }
 }
 
@@ -1351,6 +1354,7 @@ const WIFI_NAG_PAGE_META={
 };
 function setWifiNagPage(page){
   if(!WIFI_NAG_PAGE_META[page])page='features';
+  wifiNagActivePage=page;
   document.querySelectorAll('.ui-screen').forEach(screen=>screen.classList.toggle('active',screen.dataset.page===page));
   document.querySelectorAll('.bottom-nav-btn').forEach(btn=>{
     const active=btn.dataset.pageTarget===page;
@@ -1359,6 +1363,15 @@ function setWifiNagPage(page){
   });
   const meta=WIFI_NAG_PAGE_META[page];
   setText('page-title',meta[0]);setText('page-copy',meta[1]);
+  if(page==='network'){
+    loadNetworkStatus();
+    if(!networkPageInitialLoaded){
+      networkPageInitialLoaded=true;
+      loadWifiNetworks();loadGatewayDns();
+      if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();
+    }
+  }
+  if(page==='diagnostics'&&systemStatusEnabled)loadSystemStatus();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function initWifiNagNavigation(){
@@ -1809,7 +1822,7 @@ function fmtAddr(n){
   return n?'0x'+n.toString(16).toUpperCase():'--';
 }
 function resetSystemStatusUi(){
-  ['sys-chip','sys-cpu','sys-clocks','sys-board','sys-temp','sys-reset','sys-runtime','sys-heap','sys-internal','sys-largest','sys-minheap','sys-internal-frag','sys-internal-blocks','sys-dma','sys-psram','sys-psram-detail','sys-tasks','sys-flash','sys-spiffs','sys-rssi','sys-wifi-mode','sys-apclients','sys-ble','sys-wireless','sys-fw','diag-memory-risk','diag-recording-state','diag-memory-delta','diag-previous-boot'].forEach(id=>setText(id,'--'));
+  ['sys-chip','sys-cpu','sys-clocks','sys-board','sys-temp','sys-reset','sys-runtime','sys-heap','sys-internal','sys-largest','sys-minheap','sys-internal-frag','sys-internal-blocks','sys-dma','sys-psram','sys-psram-detail','sys-tasks','sys-flash','sys-spiffs','sys-rssi','sys-wifi-mode','sys-apclients','sys-ble','sys-wireless','sys-fw','diag-memory-risk','diag-recording-state','diag-memory-delta','diag-allocation-detail','diag-allocation-histogram','diag-previous-boot'].forEach(id=>setText(id,'--'));
   setText('sys-summary',trText('Monitoring off'));
   setText('sys-cpu-load',trText('off'));
   ['sys-cpu0-fill','sys-cpu1-fill','sys-heap-fill','sys-internal-fill','sys-psram-fill','sys-app-fill','sys-spiffs-fill'].forEach(id=>setFill(id,0));
@@ -1820,7 +1833,7 @@ function startSystemMonitor(){
   systemStatusEnabled=true;
   const t=$('sys-monitor-tgl');if(t)t.checked=true;
   loadSystemStatus();
-  systemStatusTimer=setInterval(loadSystemStatus,5000);
+  systemStatusTimer=setInterval(()=>{if(dashboardPageActive('diagnostics'))loadSystemStatus();},5000);
 }
 function stopSystemMonitor(){
   systemStatusEnabled=false;
@@ -1895,6 +1908,10 @@ async function loadSystemStatus(){
       setText('diag-memory-risk',risk);setClass('diag-memory-risk','sys-val '+riskClass);
       setText('diag-recording-state',(d.diag_recording?'记录中':'不可用')+' \u2022 '+(d.diag_samples||0)+'/'+(d.diag_sample_capacity||0)+' 样本 \u2022 '+(d.diag_events||0)+' 事件');
       setText('diag-memory-delta','10分钟 '+fmtSignedBytes(delta10)+' \u2022 启动后 '+fmtSignedBytes(deltaBoot));
+      const endpointNames=['none','root','status','system_status','network_status','wifi_status','ap_status','gateway_status','diagnostics_export','diagnostics_tasks'];
+      const endpointName=endpointNames[Number(d.diag_last_alloc_http||0)]||('endpoint '+Number(d.diag_last_alloc_http||0));
+      setText('diag-allocation-detail',allocFails?((d.diag_last_alloc_size||0)+' B \u2022 DMA '+fmtBytes(d.diag_last_alloc_dma_free)+' / 最大块 '+fmtBytes(d.diag_last_alloc_dma_largest)+' \u2022 core '+d.diag_last_alloc_core+' \u2022 '+endpointName):'暂无失败');
+      setText('diag-allocation-histogram','≤512 '+(d.diag_alloc_fail_le_512||0)+' \u2022 513–1024 '+(d.diag_alloc_fail_513_1024||0)+' \u2022 1025–1536 '+(d.diag_alloc_fail_1025_1536||0)+' \u2022 1537–2048 '+(d.diag_alloc_fail_1537_2048||0)+' \u2022 >2048 '+(d.diag_alloc_fail_gt_2048||0));
       setText('diag-previous-boot',d.diag_previous_boot?'已保留，可在导出文件中查看':'本次未发现可用快照');
       setFill('sys-heap-fill',pct(heapUsed,d.heap_total),70,85);
       setFill('sys-internal-fill',pct(internalUsed,internalTotal),70,85);
@@ -2057,7 +2074,10 @@ async function poll(){
       syncDashboardSummary();
       if(!dashboardInitialLoaded){
         dashboardInitialLoaded=true;
-        loadWifiNetworks();loadWifiStatus();loadApStatus();loadGatewayDns();loadGatewayStatus();if(!isCarUiActive())loadGatewayBlocked();
+        if(dashboardPageActive('network')){
+          loadWifiNetworks();loadNetworkStatus();loadGatewayDns();
+          if(!networkPerformanceMode&&!isCarUiActive())loadGatewayBlocked();
+        }
       }
     }catch(e){}
   });
@@ -2099,10 +2119,7 @@ async function saveAP(){
     else{$('ap-status').textContent=trText(d.error||'Error');$('ap-status').style.color='var(--err)';}
   }catch(e){$('ap-status').textContent=trText('Error');$('ap-status').style.color='var(--err)';}
 }
-async function loadApStatus(){
-  return runPoll('ap_status',async()=>{
-    if(!dashboardStatusOk)return;
-    try{const d=await fetchPollJson('/ap_status',2000);
+function applyApStatusData(d){
     if(d.ssid)$('ap-ssid').value=d.ssid;
     $('ap-clients').textContent=clientCountText(d.clients);
     if(typeof d.hidden!=='undefined')$('ap-hidden').checked=!!d.hidden;
@@ -2115,7 +2132,11 @@ async function loadApStatus(){
     }
     if(d.stored){$('ap-stored').textContent=trText('saved');$('ap-stored').style.color='var(--ok)';}
     else{$('ap-stored').textContent=trText('firmware default');$('ap-stored').style.color='var(--tx3)';}
-    }catch(e){}
+}
+async function loadApStatus(){
+  return runPoll('ap_status',async()=>{
+    if(!dashboardStatusOk)return;
+    try{applyApStatusData(await fetchPollJson('/ap_status',2000));}catch(e){}
   });
 }
 // 鈹€鈹€ WiFi management 鈹€鈹€
@@ -2201,9 +2222,7 @@ async function loadWifiNetworks(){
     }catch(e){}
   });
 }
-async function loadWifiStatus(){
-  return runPoll('wifi_status',async()=>{
-    try{const d=await fetchPollJson('/wifi_status',2000);
+function applyWifiStatusData(d){
     wifiStatusCache=d;
     dashboardStaIp=d.connected&&d.ip?d.ip:'';
     if(typeof d.active==='number')wifiSlotCache.active=d.active;
@@ -2236,7 +2255,10 @@ async function loadWifiStatus(){
       setText('wifi-status','Not configured');
       $('wifi-status').style.color='var(--tx3)';
     }
-    }catch(e){}
+}
+async function loadWifiStatus(){
+  return runPoll('wifi_status',async()=>{
+    try{applyWifiStatusData(await fetchPollJson('/wifi_status',2000));}catch(e){}
   });
 }
 async function connectWifiSlot(idx){
@@ -2500,10 +2522,8 @@ function setGatewayUpstreamMode(mode,persist){
   toggleGatewayUpstreamCustom();
   if(persist)saveGatewayDns().catch(()=>{});
 }
-async function loadGatewayStatus(){
-  return runPoll('gateway_status',async()=>{
+function applyGatewayStatusData(d){
     try{
-      const d=await fetchPollJson('/gateway_status',2000);
       if(!$('gw-status'))return;
       const clients=d.ap_clients||0;
       var statusText=trText(d.enabled?'Gateway ON':'Gateway OFF')+' \u2022 NAT '+trText(d.nat?'READY':'WAITING')+' \u2022 '+trText('AP Clients')+' '+clients+' \u2022 '+trText('blocked')+' '+(d.blocked||0);
@@ -2533,6 +2553,20 @@ async function loadGatewayStatus(){
       if($('gw-status')){$('gw-status').textContent=trText('Gateway not available');$('gw-status').style.color='var(--tx3)';}
       ['gw-diag-ap','gw-diag-sta','gw-diag-nat','gw-diag-radio','gw-diag-dns','gw-diag-slow','gw-diag-pending','gw-diag-upstream','gw-diag-clients'].forEach(id=>setGatewayDiag(id,'--','var(--tx3)'));
     }
+}
+async function loadGatewayStatus(){
+  return runPoll('gateway_status',async()=>{
+    try{applyGatewayStatusData(await fetchPollJson('/gateway_status',2000));}catch(e){applyGatewayStatusData(null);}
+  });
+}
+async function loadNetworkStatus(){
+  return runPoll('network_status',async()=>{
+    try{
+      const d=await fetchPollJson('/network_status',3000);
+      if(d.wifi)applyWifiStatusData(d.wifi);
+      if(d.ap)applyApStatusData(d.ap);
+      if(d.gateway)applyGatewayStatusData(d.gateway);
+    }catch(e){applyGatewayStatusData(null);}
   });
 }
 async function loadGatewayDns(force){
@@ -2648,11 +2682,12 @@ initWifiNagNavigation();
 startDashboardPolling();
 document.addEventListener('visibilitychange',()=>{
   if(!dashboardVisible())return;
-  poll();loadFirmwareInfo();loadWifiStatus();loadApStatus();loadGatewayStatus();
-  if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
+  poll();loadFirmwareInfo();if(dashboardPageActive('network'))loadNetworkStatus();
+  if(dashboardPageActive('diagnostics')&&systemStatusEnabled)loadSystemStatus();
+  if(dashboardPageActive('network')&&!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
   pollLog();
 });
-initWifiNagAccordion();initBleBridgeUi();initSystemMonitor();syncDashboardSummary();loadFirmwareInfo();loadGatewayDnsCached();loadGatewayDns(true);loadGatewayStatus();poll();
+initWifiNagAccordion();initBleBridgeUi();initSystemMonitor();syncDashboardSummary();loadFirmwareInfo();loadGatewayDnsCached();poll();
 </script>
 </body>
 </html>

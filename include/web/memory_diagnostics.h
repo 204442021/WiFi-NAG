@@ -31,6 +31,20 @@ enum DashDiagEventCode : uint8_t
     DASH_DIAG_EVENT_RESTART_REQUESTED,
 };
 
+enum DashDiagHttpEndpoint : uint8_t
+{
+    DASH_DIAG_HTTP_NONE = 0,
+    DASH_DIAG_HTTP_ROOT,
+    DASH_DIAG_HTTP_STATUS,
+    DASH_DIAG_HTTP_SYSTEM_STATUS,
+    DASH_DIAG_HTTP_NETWORK_STATUS,
+    DASH_DIAG_HTTP_WIFI_STATUS,
+    DASH_DIAG_HTTP_AP_STATUS,
+    DASH_DIAG_HTTP_GATEWAY_STATUS,
+    DASH_DIAG_HTTP_EXPORT,
+    DASH_DIAG_HTTP_TASKS,
+};
+
 struct DashDiagRuntimeState
 {
     uint8_t wifiMode = 0;
@@ -93,6 +107,7 @@ struct DashDiagSample
     uint32_t bleDisconnectCount = 0;
     uint32_t gatewayPendingFull = 0;
     uint32_t gatewayTimeouts = 0;
+    uint32_t allocationFailureCount = 0;
     uint16_t taskCount = 0;
     uint16_t internalAllocatedBlocks = 0;
     uint16_t internalFreeBlocks = 0;
@@ -132,6 +147,10 @@ struct DashDiagAllocationFailure
     uint32_t caps = 0;
     uint32_t internalFree = 0;
     uint32_t internalLargest = 0;
+    uint32_t dmaFree = 0;
+    uint32_t dmaLargest = 0;
+    int8_t coreId = -1;
+    uint8_t httpEndpoint = DASH_DIAG_HTTP_NONE;
     char functionName[24] = {};
 };
 
@@ -151,6 +170,30 @@ struct DashDiagPreviousBoot
 static constexpr uint32_t kDashDiagRtcMagic = 0x574E4433UL; // "WND3"
 RTC_NOINIT_ATTR static DashDiagPreviousBoot dashDiagRtcSnapshot;
 static volatile DashDiagAllocationFailure dashDiagLastAllocationFailure;
+static volatile uint32_t dashDiagAllocationFailureBuckets[5] = {};
+static volatile uint8_t dashDiagActiveHttpEndpoint = DASH_DIAG_HTTP_NONE;
+
+class DashDiagHttpScope
+{
+public:
+    explicit DashDiagHttpScope(uint8_t endpoint)
+        : previous_(__atomic_exchange_n(&dashDiagActiveHttpEndpoint,
+                                        endpoint,
+                                        __ATOMIC_ACQ_REL))
+    {
+    }
+
+    ~DashDiagHttpScope()
+    {
+        __atomic_store_n(&dashDiagActiveHttpEndpoint, previous_, __ATOMIC_RELEASE);
+    }
+
+    DashDiagHttpScope(const DashDiagHttpScope &) = delete;
+    DashDiagHttpScope &operator=(const DashDiagHttpScope &) = delete;
+
+private:
+    uint8_t previous_;
+};
 
 static void dashDiagAllocationFailedHook(size_t requestedSize,
                                          uint32_t caps,
@@ -164,6 +207,19 @@ static void dashDiagAllocationFailedHook(size_t requestedSize,
         heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     dashDiagLastAllocationFailure.internalLargest = static_cast<uint32_t>(
         heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    dashDiagLastAllocationFailure.dmaFree = static_cast<uint32_t>(
+        heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT));
+    dashDiagLastAllocationFailure.dmaLargest = static_cast<uint32_t>(
+        heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT));
+    dashDiagLastAllocationFailure.coreId = static_cast<int8_t>(xPortGetCoreID());
+    dashDiagLastAllocationFailure.httpEndpoint =
+        __atomic_load_n(&dashDiagActiveHttpEndpoint, __ATOMIC_ACQUIRE);
+    const size_t bucket = requestedSize <= 512U    ? 0U
+                          : requestedSize <= 1024U ? 1U
+                          : requestedSize <= 1536U ? 2U
+                          : requestedSize <= 2048U ? 3U
+                                                   : 4U;
+    __atomic_add_fetch(&dashDiagAllocationFailureBuckets[bucket], 1U, __ATOMIC_RELAXED);
     size_t i = 0;
     if (functionName)
     {
@@ -236,7 +292,9 @@ public:
         if (!force && sampleCount_ > 0 && now - lastSampleMs_ < kSampleIntervalMs)
             return;
 
-        const DashDiagSample sample = captureSample(now, state);
+        const DashDiagAllocationFailure failure = allocationFailure();
+        DashDiagSample sample = captureSample(now, state);
+        sample.allocationFailureCount = failure.sequence / 2U;
         if (!haveRuntimeState_)
         {
             storeEvent(DASH_DIAG_EVENT_BOOT, sample, 0);
@@ -270,10 +328,17 @@ public:
             memoryPressure_ = nextPressure;
         }
 
-        DashDiagAllocationFailure failure = allocationFailure();
         if (failure.sequence != 0 && failure.sequence != lastAllocationFailureSequence_)
         {
-            storeEvent(DASH_DIAG_EVENT_ALLOC_FAILED, sample, failure.requestedSize);
+            const uint32_t failureCount = failure.sequence / 2U;
+            if (lastAllocationEventMs_ == 0 || now - lastAllocationEventMs_ >= 30000U)
+            {
+                storeEvent(DASH_DIAG_EVENT_ALLOC_FAILED,
+                           sample,
+                           failureCount - lastAllocationEventCount_);
+                lastAllocationEventMs_ = now;
+                lastAllocationEventCount_ = failureCount;
+            }
             lastAllocationFailureSequence_ = failure.sequence;
         }
 
@@ -376,6 +441,10 @@ public:
             copy.caps = dashDiagLastAllocationFailure.caps;
             copy.internalFree = dashDiagLastAllocationFailure.internalFree;
             copy.internalLargest = dashDiagLastAllocationFailure.internalLargest;
+            copy.dmaFree = dashDiagLastAllocationFailure.dmaFree;
+            copy.dmaLargest = dashDiagLastAllocationFailure.dmaLargest;
+            copy.coreId = dashDiagLastAllocationFailure.coreId;
+            copy.httpEndpoint = dashDiagLastAllocationFailure.httpEndpoint;
             for (size_t i = 0; i < sizeof(copy.functionName); i++)
                 copy.functionName[i] = dashDiagLastAllocationFailure.functionName[i];
             const uint32_t after = __atomic_load_n(&dashDiagLastAllocationFailure.sequence,
@@ -384,6 +453,13 @@ public:
                 return copy;
         }
         return {};
+    }
+
+    uint32_t allocationFailureBucket(size_t index) const
+    {
+        if (index >= 5)
+            return 0;
+        return __atomic_load_n(&dashDiagAllocationFailureBuckets[index], __ATOMIC_ACQUIRE);
     }
 
 private:
@@ -516,6 +592,8 @@ private:
     size_t eventCount_ = 0;
     uint32_t lastSampleMs_ = 0;
     uint32_t lastAllocationFailureSequence_ = 0;
+    uint32_t lastAllocationEventMs_ = 0;
+    uint32_t lastAllocationEventCount_ = 0;
     uint16_t lastTaskCount_ = 0;
     uint8_t memoryPressure_ = 0;
     DashDiagEventCode lastEventCode_ = DASH_DIAG_EVENT_BOOT;
