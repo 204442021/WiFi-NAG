@@ -490,7 +490,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
     </div>
   </div>
   <div class="shell-actions">
-    <button class="shell-btn" id="t2can-btn" type="button" onclick="location.href='http://100.100.1.2/'">T2CAN</button>
+    <button class="shell-btn" id="t2can-btn" type="button" onclick="location.href='http://100.100.1.200/'">T2CAN</button>
     <button class="shell-btn" id="lang-btn" type="button" onclick="toggleLanguage()">中文</button>
     <button class="shell-btn theme" id="theme-btn" type="button" onclick="toggleTheme()">夜间模式</button>
     <button class="shell-btn reboot" id="reboot-btn" type="button" onclick="reboot()">重启</button>

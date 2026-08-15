@@ -104,7 +104,7 @@ class WifiNagRegressionTests(unittest.TestCase):
             r'id=(?:"ap-ssid"|ap-ssid)\s+value=(?:"Albert-FSD"|Albert-FSD)\s+disabled\s+readonly',
         )
         self.assertHasUiId("t2can-btn")
-        self.assertIn("location.href='http://100.100.1.2/'", self.ui)
+        self.assertIn("location.href='http://100.100.1.200/'", self.ui)
 
     def test_gateway_dns_routes_exist(self) -> None:
         required_routes = [
