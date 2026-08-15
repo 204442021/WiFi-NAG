@@ -17,6 +17,9 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
             encoding="utf-8"
         )
         cls.app = (ROOT / "include/app.h").read_text(encoding="utf-8")
+        cls.can_ids = (ROOT / "include/wifi_nag_can_ids.h").read_text(
+            encoding="utf-8"
+        )
         cls.source = (ROOT / "include/web/mcp2515_dashboard_ui.src.h").read_text(
             encoding="utf-8-sig"
         )
@@ -45,8 +48,10 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
 
     def test_ble_filter_excludes_118_without_changing_base_nag_filter(self):
         handler = (ROOT / "include/handlers_base.h").read_text(encoding="utf-8")
-        self.assertIn("{0x370, 0x255, 0x12B}", self.bridge)
-        self.assertNotIn("{0x370, 0x255, 0x12B, 0x118}", self.bridge)
+        self.assertIn("{0x370, 0x255, 0x12B}", self.can_ids)
+        self.assertNotIn("0x118", self.can_ids)
+        self.assertIn("kWifiNagObservedIds", self.app)
+        self.assertNotIn("setFilters(", self.bridge)
         self.assertIn("static constexpr uint32_t ids[] = {880};", handler)
 
     def test_can_loop_owns_condition_tick_and_frame_observation(self):

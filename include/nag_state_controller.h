@@ -77,7 +77,7 @@ public:
         unlock();
     }
 
-    void begin(bool configuredEnabled)
+    void begin(bool configuredEnabled, bool incrementBootRevision = false)
     {
 #ifdef ESP_PLATFORM
         if (!mutex_)
@@ -86,6 +86,13 @@ public:
         lock();
         configuredEnabled_ = configuredEnabled;
         revision_ = loadRevision();
+        if (incrementBootRevision)
+        {
+            const uint32_t nextRevision =
+                static_cast<uint32_t>(revision_) + 1U;
+            revision_ = nextRevision;
+            persistRevision(nextRevision);
+        }
         lastRuntimeEffective_ = runtimeCallback_ ? runtimeCallback_() : configuredEnabled;
         lastResult_ = NAG_RESULT_OK;
         lastSource_ = NAG_SOURCE_BOOT;

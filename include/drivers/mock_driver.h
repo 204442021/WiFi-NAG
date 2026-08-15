@@ -11,6 +11,7 @@ public:
 
     std::vector<CanFrame> sent;
     bool writeEnabled = true;
+    bool transmitGate = true;
     bool restartPrepared = false;
 
     bool init() override { return true; }
@@ -20,12 +21,30 @@ public:
         if (restartPrepared && enabled)
             return false;
         writeEnabled = enabled;
+        if (!enabled)
+            transmitGate = false;
         return true;
     }
+    bool setTransmitGate(bool enabled) override
+    {
+        transmitGate = enabled && writeEnabled && !restartPrepared;
+        return !enabled || transmitGate;
+    }
+    bool transmitReady() override
+    {
+        return writeEnabled && transmitGate && !restartPrepared;
+    }
+    bool quiesceTransmit(uint32_t /*timeoutMs*/) override
+    {
+        transmitGate = false;
+        return true;
+    }
+    void clearReceiveQueue() override {}
     void prepareForRestart() override
     {
         restartPrepared = true;
         writeEnabled = false;
+        transmitGate = false;
     }
     bool enableInterrupt(void (* /*onReady*/)()) override { return false; }
 
@@ -36,7 +55,7 @@ public:
 
     bool send(const CanFrame &frame) override
     {
-        if (!writeEnabled || restartPrepared)
+        if (!writeEnabled || !transmitGate || restartPrepared)
         {
             if (onSendFrame)
                 onSendFrame(frame, false);

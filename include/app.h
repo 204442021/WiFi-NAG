@@ -5,6 +5,7 @@
 #include "drivers/can_driver.h"
 #include "can_helpers.h"
 #include "handlers.h"
+#include "wifi_nag_can_ids.h"
 
 #if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
 #include "ble/brake_state.h"
@@ -46,8 +47,16 @@ static volatile bool frameReady = true;
 static void canISR() { frameReady = true; }
 
 static volatile bool appCanRestartPreparing = false;
+static volatile bool appCanOtaPreparing = false;
 static bool appCanWriteModeKnown = false;
 static bool appLastWriteEnabled = false;
+static uint8_t appStableNagFrameCount = 0;
+static uint32_t appLastStableNagFrameMs = 0;
+
+static bool appPrepareCanForOta();
+static void appResumeCanAfterOtaFailure();
+static bool appPrepareCanForRestart();
+static bool appCanTransmitRuntimeReady();
 
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD) && defined(DASH_RGB_STATUS_LED)
 static void appRefreshStatusLed(bool force = false);
@@ -70,6 +79,9 @@ static bool appSyncCanWriteMode(bool desiredWriteEnabled)
     if (appCanWriteModeKnown && appLastWriteEnabled == desiredWriteEnabled)
         return true;
 
+    appDriver->setTransmitGate(false);
+    appStableNagFrameCount = 0;
+    appLastStableNagFrameMs = 0;
     const bool ok = appDriver->setWriteEnabled(desiredWriteEnabled);
     if (ok)
     {
@@ -79,9 +91,107 @@ static bool appSyncCanWriteMode(bool desiredWriteEnabled)
     return ok;
 }
 
-static void appPrepareCanForRestart()
+static void appRefreshNagRuntimeGate()
+{
+#if defined(NAG_KILLER)
+    nagKillerRuntime = nagKillerEnabled && canActive &&
+                       appCanTransmitRuntimeReady() &&
+                       !Update.isRunning() && !appCanOtaPreparing &&
+                       !appCanRestartPreparing;
+#else
+    nagKillerRuntime = false;
+#endif
+}
+
+static bool appCanTransmitRuntimeReady()
+{
+    return appDriver && appCanWriteModeKnown && appLastWriteEnabled &&
+           appDriver->transmitReady() && !appCanOtaPreparing &&
+           !appCanRestartPreparing;
+}
+
+static void appResetCanStability()
+{
+    appStableNagFrameCount = 0;
+    appLastStableNagFrameMs = 0;
+    if (appDriver)
+        appDriver->setTransmitGate(false);
+    appRefreshNagRuntimeGate();
+}
+
+static bool appNagFrameChecksumValid(const CanFrame &frame)
+{
+    if (frame.id != 0x370 || frame.dlc != 8)
+        return false;
+    uint16_t sum = 0x73;
+    for (uint8_t index = 0; index < 7; ++index)
+        sum = static_cast<uint16_t>(sum + frame.data[index]);
+    return static_cast<uint8_t>(sum & 0xFFU) == frame.data[7];
+}
+
+static void appObserveCanStability(const CanFrame &frame)
+{
+    if (frame.id != 0x370)
+        return;
+
+    const uint32_t now = millis();
+    const bool checksumValid = appNagFrameChecksumValid(frame);
+    if (!checksumValid ||
+        (appLastStableNagFrameMs != 0 &&
+         now - appLastStableNagFrameMs > 100U))
+    {
+        appStableNagFrameCount = 0;
+    }
+
+    if (!checksumValid)
+    {
+        appLastStableNagFrameMs = 0;
+        appRefreshNagRuntimeGate();
+        return;
+    }
+
+    appLastStableNagFrameMs = now;
+    if (appStableNagFrameCount < 3)
+        appStableNagFrameCount++;
+
+    if (appStableNagFrameCount >= 3 && canActive &&
+        appCanWriteModeKnown && appLastWriteEnabled &&
+        !Update.isRunning() && !appCanOtaPreparing &&
+        !appCanRestartPreparing)
+        appDriver->setTransmitGate(true);
+
+    appRefreshNagRuntimeGate();
+}
+
+static bool appPrepareCanForOta()
+{
+    if (appCanRestartPreparing)
+        return false;
+    appCanOtaPreparing = true;
+    nagKillerRuntime = false;
+    const bool idle = appDriver && appDriver->quiesceTransmit(100);
+    if (!idle)
+    {
+        appCanOtaPreparing = false;
+        appResetCanStability();
+    }
+    return idle;
+}
+
+static void appResumeCanAfterOtaFailure()
+{
+    if (appCanRestartPreparing)
+        return;
+    if (appDriver)
+        appDriver->clearReceiveQueue();
+    appCanOtaPreparing = false;
+    appResetCanStability();
+}
+
+static bool appPrepareCanForRestart()
 {
     appCanRestartPreparing = true;
+    appCanOtaPreparing = false;
     nagKillerRuntime = false;
     appCanWriteModeKnown = true;
     appLastWriteEnabled = false;
@@ -89,8 +199,13 @@ static void appPrepareCanForRestart()
     obstacleShiftController.reset();
     brakeStateMailbox.endSession();
 #endif
+    bool idle = false;
     if (appDriver)
+    {
+        idle = appDriver->quiesceTransmit(100);
         appDriver->prepareForRestart();
+    }
+    return idle;
 }
 
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD) && defined(DASH_RGB_STATUS_LED)
@@ -192,7 +307,8 @@ static void appPollInjectionToggleButton()
 #endif
 
 template <typename Driver>
-static void appSetup(std::unique_ptr<Driver> drv, const char *readyMsg)
+static void appSetup(std::unique_ptr<Driver> drv, const char *readyMsg,
+                     bool initialWriteEnabled = false)
 {
     appHandler = std::make_unique<SelectedHandler>();
     appActiveHandler = appHandler.get();
@@ -217,11 +333,15 @@ static void appSetup(std::unique_ptr<Driver> drv, const char *readyMsg)
     appDriver = std::move(drv);
     // Configure the acceptance filter before the first TWAI installation so
     // startup never needs an immediate stop/uninstall/reinstall cycle.
-    appDriver->setFilters(appHandler->filterIds(), appHandler->filterIdCount());
-    if (!appDriver->init())
+    appDriver->setFilters(kWifiNagObservedIds, kWifiNagObservedIdCount);
+    const bool initialized = appDriver->init();
+    if (!initialized)
     {
         Serial.println("CAN init failed");
     }
+    appCanWriteModeKnown = initialized;
+    appLastWriteEnabled = initialized && initialWriteEnabled;
+    appResetCanStability();
 
     if constexpr (Driver::kSupportsISR)
     {
@@ -242,16 +362,17 @@ static bool appLoop()
     appRefreshStatusLed(false);
 #endif
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
-    const bool desiredWriteEnabled = canActive && !Update.isRunning() && !appCanRestartPreparing;
-    appSyncCanWriteMode(desiredWriteEnabled);
+    if (!Update.isRunning() && !appCanOtaPreparing &&
+        !appCanRestartPreparing)
+        appSyncCanWriteMode(canActive);
+    appRefreshNagRuntimeGate();
 #if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
     BrakeStateView brakeView;
     if (!brakeStateMailbox.read(brakeView))
         brakeView = BrakeStateView{};
     ObstacleShiftRuntimeInputs shiftRuntime{
         static_cast<bool>(obstacleShiftFeatureEnabled),
-        appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
-            !Update.isRunning() && !appCanRestartPreparing,
+        appCanTransmitRuntimeReady() && canOnline,
     };
     const uint32_t shiftNowMs = millis();
     obstacleShiftController.tick(brakeView, shiftRuntime, shiftNowMs);
@@ -288,9 +409,7 @@ static bool appLoop()
             brakeBeforeRead = BrakeStateView{};
         shiftRuntime.featureEnabled =
             static_cast<bool>(obstacleShiftFeatureEnabled);
-        shiftRuntime.canWriteReady =
-            appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
-            !Update.isRunning() && !appCanRestartPreparing;
+        shiftRuntime.canWriteReady = appCanTransmitRuntimeReady() && canOnline;
         const uint32_t beforeReadMs = millis();
         obstacleShiftController.tick(brakeBeforeRead,
                                      shiftRuntime,
@@ -307,9 +426,7 @@ static bool appLoop()
             brakeAfterRead = BrakeStateView{};
         shiftRuntime.featureEnabled =
             static_cast<bool>(obstacleShiftFeatureEnabled);
-        shiftRuntime.canWriteReady =
-            appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
-            !Update.isRunning() && !appCanRestartPreparing;
+        shiftRuntime.canWriteReady = appCanTransmitRuntimeReady() && canOnline;
         const uint32_t afterReadMs = millis();
         obstacleShiftController.observeFrame(frame,
                                              brakeAfterRead,
@@ -317,6 +434,7 @@ static bool appLoop()
                                              afterReadMs,
                                              *appDriver);
 #endif
+        appObserveCanStability(frame);
 #if !(defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD) && defined(DASH_RGB_STATUS_LED))
         digitalWrite(PIN_LED, LOW);
 #endif

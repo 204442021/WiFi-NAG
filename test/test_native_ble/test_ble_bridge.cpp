@@ -449,6 +449,33 @@ void test_nag_controller_accepts_stale_revision_when_state_is_already_equal()
     TEST_ASSERT_EQUAL_UINT32(1, applyCount);
 }
 
+void test_ota_boot_revision_is_wifi_nag_authoritative_and_rejects_stale_enable()
+{
+    NagStateController controller;
+    controller.configureCallbacks(testApply, testRuntime);
+
+    // WiFi-NAG owns the boot revision bump when OTA has forced NAG off.
+    controller.begin(false, true);
+    const NagStateView boot = controller.view();
+    TEST_ASSERT_FALSE(boot.configuredEnabled);
+    TEST_ASSERT_EQUAL_UINT32(1, boot.revision);
+    TEST_ASSERT_EQUAL_UINT32(0, applyCount);
+
+    // A B2.8 command based on its pre-OTA cache must not reopen NAG. The
+    // returned state carries WiFi-NAG's new revision for the next command.
+    NagRemoteCommand staleCommand;
+    staleCommand.desiredEnabled = true;
+    staleCommand.commandId = 34;
+    staleCommand.expectedRevision = 0;
+    const NagStateView rejected = controller.applyRemote(staleCommand);
+
+    TEST_ASSERT_FALSE(rejected.configuredEnabled);
+    TEST_ASSERT_EQUAL_UINT8(NAG_RESULT_REVISION_CONFLICT, rejected.result);
+    TEST_ASSERT_EQUAL_UINT32(1, rejected.revision);
+    TEST_ASSERT_EQUAL_UINT32(1, rejected.revisionConflictCount);
+    TEST_ASSERT_EQUAL_UINT32(0, applyCount);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -478,5 +505,6 @@ int main()
     RUN_TEST(test_nag_controller_rejects_stale_conflicting_revision);
     RUN_TEST(test_nag_controller_duplicate_command_is_idempotent);
     RUN_TEST(test_nag_controller_accepts_stale_revision_when_state_is_already_equal);
+    RUN_TEST(test_ota_boot_revision_is_wifi_nag_authoritative_and_rejects_stale_enable);
     return UNITY_END();
 }

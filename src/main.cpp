@@ -49,6 +49,7 @@ static void app_main_setup()
 {
     gpio_num_t twaiTx = TWAI_TX_PIN;
     gpio_num_t twaiRx = TWAI_RX_PIN;
+    const DashCanBootPolicy bootPolicy = dashPrepareCanBootPolicy();
 
 #if defined(ESP_PLATFORM)
     Preferences canPrefs;
@@ -67,7 +68,11 @@ static void app_main_setup()
     }
 #endif
 
-    appSetup<TWAIDriver>(std::make_unique<TWAIDriver>(twaiTx, twaiRx), "ESP32-S3 TWAI WIFI-NAG ready @ 500k");
+    appSetup<TWAIDriver>(
+        std::make_unique<TWAIDriver>(twaiTx, twaiRx,
+                                     bootPolicy.initialWriteEnabled),
+        "ESP32-S3 TWAI WIFI-NAG ready @ 500k",
+        bootPolicy.initialWriteEnabled);
 #ifdef ESP32_DASHBOARD
 #if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
     bleBridgeRegisterApiRoutes();

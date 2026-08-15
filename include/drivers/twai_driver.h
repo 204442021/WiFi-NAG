@@ -29,8 +29,10 @@ class TWAIDriver : public CanDriver
 public:
     static constexpr bool kSupportsISR = false;
 
-    TWAIDriver(gpio_num_t txPin, gpio_num_t rxPin)
-        : txPin_(txPin), rxPin_(rxPin)
+    TWAIDriver(gpio_num_t txPin, gpio_num_t rxPin,
+               bool initialWriteEnabled = false)
+        : txPin_(txPin), rxPin_(rxPin),
+          writeEnabled_(initialWriteEnabled)
     {
         t_config_ = TWAI_TIMING_CONFIG_500KBITS();
         f_config_ = TWAI_FILTER_CONFIG_ACCEPT_ALL();
@@ -48,7 +50,7 @@ public:
 
         lock();
         shutdown_ = false;
-        writeEnabled_ = false; // Safe boot: real hardware listen-only first.
+        transmitGateOpen_ = false;
         driverOK_ = installAndStartLocked();
         unlock();
         return driverOK_;
@@ -66,7 +68,7 @@ public:
         const bool sameFilter = filterConfigured_ &&
                                 f_config_.acceptance_code == nextFilter.acceptance_code &&
                                 f_config_.acceptance_mask == nextFilter.acceptance_mask &&
-                                f_config_.single_filter &&
+                                f_config_.single_filter == nextFilter.single_filter &&
                                 exactFilterListMatchesLocked(ids, nextExactCount);
         if (sameFilter)
         {
@@ -86,7 +88,7 @@ public:
             exactFilterIds_[i] = ids[i];
         f_config_.acceptance_code = nextFilter.acceptance_code;
         f_config_.acceptance_mask = nextFilter.acceptance_mask;
-        f_config_.single_filter = true;
+        f_config_.single_filter = nextFilter.single_filter;
         filterConfigured_ = true;
 
         if (reinstall)
@@ -110,6 +112,9 @@ public:
             return true;
         }
 
+        // Close the software gate before changing the controller mode. send()
+        // uses the same mutex, so no frame can enter the TX queue afterwards.
+        transmitGateOpen_ = false;
         if (driverInstalled_)
         {
             waitForBusIdleLocked();
@@ -123,22 +128,66 @@ public:
         return ok;
     }
 
+    bool setTransmitGate(bool enabled) override
+    {
+        lock();
+        if (!enabled)
+        {
+            transmitGateOpen_ = false;
+            unlock();
+            return true;
+        }
+
+        serviceControllerLocked();
+        const bool ready = !shutdown_ && driverInstalled_ && driverOK_ &&
+                           writeEnabled_ && !recoveryInProgress_;
+        transmitGateOpen_ = ready;
+        unlock();
+        return ready;
+    }
+
+    bool transmitReady() override
+    {
+        lock();
+        serviceControllerLocked();
+        const bool ready = !shutdown_ && driverInstalled_ && driverOK_ &&
+                           writeEnabled_ && transmitGateOpen_ &&
+                           !recoveryInProgress_;
+        unlock();
+        return ready;
+    }
+
+    bool quiesceTransmit(uint32_t timeoutMs) override
+    {
+        lock();
+        transmitGateOpen_ = false;
+        const bool idle = waitForTxIdleLocked(timeoutMs);
+        unlock();
+        return idle;
+    }
+
+    void clearReceiveQueue() override
+    {
+        lock();
+        if (driverInstalled_)
+            twai_clear_receive_queue();
+        unlock();
+    }
+
     void prepareForRestart() override
     {
         lock();
         if (!shutdown_)
         {
             shutdown_ = true;
-            writeEnabled_ = false;
-            if (driverInstalled_)
-            {
-                waitForBusIdleLocked();
-                stopAndUninstallLocked();
-            }
+            transmitGateOpen_ = false;
+            // Do not stop/uninstall a live controller during OTA or reboot.
+            // With the TX gate closed and queue drained it remains recessive
+            // until the SoC reset, avoiding a truncated in-progress frame.
+            waitForTxIdleLocked(kRestartTxDrainTimeoutMs);
         }
-        // Idempotent fallback: keep TX recessive even if the driver was never
-        // installed, failed, or this function is called more than once.
-        forceTxRecessiveLocked();
+        if (!driverInstalled_)
+            forceTxRecessiveLocked();
         unlock();
     }
 
@@ -154,9 +203,8 @@ public:
                 unlock();
                 return false;
             }
-            if (!driverOK_)
+            if (!serviceControllerLocked())
             {
-                tryRecover();
                 unlock();
                 return false;
             }
@@ -164,8 +212,7 @@ public:
             twai_message_t msg;
             if (twai_receive(&msg, 0) != ESP_OK)
             {
-                if (isBusOff())
-                    recoverWithCooldown();
+                serviceControllerLocked();
                 unlock();
                 return false;
             }
@@ -189,7 +236,8 @@ public:
     bool send(const CanFrame &frame) override
     {
         lock();
-        if (!driverOK_ || !writeEnabled_ || shutdown_)
+        if (!driverOK_ || !writeEnabled_ || !transmitGateOpen_ ||
+            recoveryInProgress_ || shutdown_)
         {
             unlock();
             if (onSendFrame)
@@ -206,8 +254,8 @@ public:
         // Short timeout (2ms): modified frames should not be dropped, but
         // long blocks risk overflowing the RX queue.
         const bool ok = twai_transmit(&msg, pdMS_TO_TICKS(2)) == ESP_OK;
-        if (!ok && isBusOff())
-            recoverWithCooldown();
+        if (!ok)
+            serviceControllerLocked();
         unlock();
         if (onSendFrame)
             onSendFrame(frame, ok);
@@ -218,6 +266,9 @@ private:
     static constexpr uint8_t kMaxExactFilters = 32;
     static constexpr uint16_t kReadDrainBudget = TWAI_READ_DRAIN_BUDGET;
     static constexpr uint32_t kBusOffCooldownMs = 1000;
+    static constexpr uint32_t kLongRecoveryCooldownMs = 5000;
+    static constexpr uint8_t kShortRecoveryAttempts = 3;
+    static constexpr uint32_t kRestartTxDrainTimeoutMs = 100;
     // At 500 kbit/s a bit is 2 us. Six consecutive recessive bits cannot
     // occur in the stuffed payload, so this detects EOF/intermission/idle.
     static constexpr int64_t kBusIdleStableUs = 12;
@@ -262,6 +313,28 @@ private:
         return false;
     }
 
+    bool waitForTxIdleLocked(uint32_t timeoutMs) const
+    {
+        if (!driverInstalled_ || !writeEnabled_)
+            return true;
+
+        const int64_t started = esp_timer_get_time();
+        const int64_t timeoutUs = static_cast<int64_t>(timeoutMs) * 1000LL;
+        while (esp_timer_get_time() - started < timeoutUs)
+        {
+            twai_status_info_t status;
+            if (twai_get_status_info(&status) != ESP_OK)
+                return false;
+            if (status.state == TWAI_STATE_BUS_OFF ||
+                status.state == TWAI_STATE_RECOVERING ||
+                status.state == TWAI_STATE_STOPPED ||
+                status.msgs_to_tx == 0)
+                return true;
+            vTaskDelay(1);
+        }
+        return false;
+    }
+
     void forceTxRecessiveLocked() const
     {
         gpio_reset_pin(txPin_);
@@ -272,40 +345,101 @@ private:
         gpio_set_level(txPin_, 1);
     }
 
-    bool isBusOff()
+    uint32_t recoveryCooldownMsLocked() const
     {
-        if (!driverInstalled_)
+        return recoveryAttemptCount_ < kShortRecoveryAttempts
+                   ? kBusOffCooldownMs
+                   : kLongRecoveryCooldownMs;
+    }
+
+    bool serviceControllerLocked()
+    {
+        if (shutdown_)
             return false;
+
+        if (!driverInstalled_)
+        {
+            tryRecoverInstallLocked();
+            return driverOK_;
+        }
+
         twai_status_info_t status;
         if (twai_get_status_info(&status) != ESP_OK)
+        {
+            driverOK_ = false;
+            transmitGateOpen_ = false;
             return false;
-        return status.state == TWAI_STATE_BUS_OFF;
+        }
+
+        if (status.state == TWAI_STATE_RUNNING)
+        {
+            driverOK_ = true;
+            return true;
+        }
+
+        transmitGateOpen_ = false;
+        driverOK_ = false;
+
+        if (status.state == TWAI_STATE_RECOVERING)
+        {
+            recoveryInProgress_ = true;
+            return false;
+        }
+
+        if (status.state == TWAI_STATE_STOPPED && recoveryInProgress_)
+        {
+            if (twai_start() == ESP_OK)
+            {
+                recoveryInProgress_ = false;
+                recoveryAttemptCount_ = 0;
+                driverOK_ = true;
+                twai_clear_receive_queue();
+                return true;
+            }
+            return false;
+        }
+
+        if (status.state == TWAI_STATE_BUS_OFF)
+        {
+            const uint32_t now = millis();
+            if (now - lastRecovery_ < recoveryCooldownMsLocked())
+                return false;
+            lastRecovery_ = now;
+            if (twai_initiate_recovery() == ESP_OK)
+            {
+                recoveryInProgress_ = true;
+                recoveryAttemptCount_ = static_cast<uint8_t>(
+                    recoveryAttemptCount_ < 0xFFU
+                        ? recoveryAttemptCount_ + 1U
+                        : recoveryAttemptCount_);
+            }
+            return false;
+        }
+
+        tryRecoverInstallLocked();
+        return driverOK_;
     }
 
-    void recoverWithCooldown()
+    void tryRecoverInstallLocked()
     {
         if (shutdown_)
             return;
         const uint32_t now = millis();
-        if (now - lastRecovery_ < kBusOffCooldownMs)
+        if (now - lastRecovery_ < recoveryCooldownMsLocked())
             return;
         lastRecovery_ = now;
 
         stopAndUninstallLocked();
         driverOK_ = installAndStartLocked();
-    }
-
-    void tryRecover()
-    {
-        if (shutdown_)
-            return;
-        const uint32_t now = millis();
-        if (now - lastRecovery_ < kBusOffCooldownMs * 10)
-            return;
-        lastRecovery_ = now;
-
-        stopAndUninstallLocked();
-        driverOK_ = installAndStartLocked();
+        if (driverOK_)
+        {
+            recoveryInProgress_ = false;
+            recoveryAttemptCount_ = 0;
+        }
+        else if (recoveryAttemptCount_ < 0xFFU)
+        {
+            recoveryAttemptCount_++;
+        }
     }
 
     void lock()
@@ -373,8 +507,11 @@ private:
     bool driverInstalled_ = false;
     bool driverOK_ = false;
     bool writeEnabled_ = false;
+    bool transmitGateOpen_ = false;
     bool shutdown_ = false;
     bool filterConfigured_ = false;
+    bool recoveryInProgress_ = false;
+    uint8_t recoveryAttemptCount_ = 0;
     uint32_t lastRecovery_ = 0;
     uint32_t exactFilterIds_[kMaxExactFilters] = {};
     uint8_t exactFilterCount_ = 0;

@@ -9,6 +9,10 @@ struct CanDriver
     virtual bool init() = 0;
     virtual void setFilters(const uint32_t *ids, uint8_t count) = 0;
     virtual bool setWriteEnabled(bool enabled) = 0;
+    virtual bool setTransmitGate(bool enabled) = 0;
+    virtual bool transmitReady() = 0;
+    virtual bool quiesceTransmit(uint32_t timeoutMs) = 0;
+    virtual void clearReceiveQueue() = 0;
     virtual void prepareForRestart() = 0;
     virtual bool enableInterrupt(void (*onReady)()) = 0;
     virtual bool read(CanFrame &frame) = 0;

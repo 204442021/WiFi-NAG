@@ -111,6 +111,13 @@ static float fps = 0.0f;
 
 static uint8_t hwMode = DASH_DEFAULT_HW;
 static bool canActive = kDashInjectionDefaultEnabled;
+static bool dashBootForcedNagOff = false;
+static bool dashBootNagRevisionPending = false;
+static bool dashOtaCanPrepared = false;
+static constexpr char kDashOtaNagForceOffKey[] = "ota_nag_off";
+static constexpr char kDashCanFirmwareAddressKey[] = "can_fw_addr";
+static constexpr char kDashCanFirmwareVersionKey[] = "can_fw_ver";
+static constexpr char kDashNagBootRevisionKey[] = "nag_boot_rev";
 #if defined(NAG_KILLER)
 // User-facing Nag killer switch (WebUI). Actual CAN echo TX is additionally
 // gated by canActive (the global CAN/injection master switch), so nothing is
@@ -354,6 +361,93 @@ static const char *dashOtaPartitionName(const esp_partition_t *running)
         return "OTA_1";
     return running->label[0] ? running->label : "unknown";
 }
+
+struct DashCanBootPolicy
+{
+    bool initialWriteEnabled = false;
+    bool forcedOffAfterOta = false;
+};
+
+static DashCanBootPolicy dashPrepareCanBootPolicy()
+{
+    DashCanBootPolicy policy;
+    Preferences bootPreferences;
+    if (!bootPreferences.begin(PREFS_NS, false))
+        return policy;
+
+    const bool hadCanPreference = bootPreferences.isKey("can");
+    bool configuredEnabled =
+        bootPreferences.getBool("can", kDashInjectionDefaultEnabled);
+    const bool explicitOtaMarker =
+        bootPreferences.getBool(kDashOtaNagForceOffKey, false);
+
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    const uint32_t runningAddress = running
+                                        ? static_cast<uint32_t>(running->address)
+                                        : 0U;
+    const String runningVersion = dashFirmwareVersion();
+    const bool hasFingerprint =
+        bootPreferences.isKey(kDashCanFirmwareAddressKey) &&
+        bootPreferences.isKey(kDashCanFirmwareVersionKey);
+    const uint32_t previousAddress =
+        bootPreferences.getULong(kDashCanFirmwareAddressKey, runningAddress);
+    const String previousVersion =
+        bootPreferences.getString(kDashCanFirmwareVersionKey, runningVersion);
+    const bool firmwareChanged = hasFingerprint &&
+                                 (previousAddress != runningAddress ||
+                                  previousVersion != runningVersion);
+    // Existing V2.1 installations predate the fingerprint keys. A saved CAN
+    // preference without a fingerprint is therefore treated as the first OTA
+    // migration. A factory-erased first boot keeps the product default.
+    const bool legacyUpgrade = hadCanPreference && !hasFingerprint;
+    const bool forceOff = explicitOtaMarker || firmwareChanged || legacyUpgrade;
+
+    const bool forcedStateChange = forceOff && configuredEnabled;
+    if (forcedStateChange)
+    {
+        configuredEnabled = false;
+        bootPreferences.putBool("can", false);
+        bootPreferences.putBool(kDashNagBootRevisionKey, true);
+    }
+
+    bootPreferences.putULong(kDashCanFirmwareAddressKey, runningAddress);
+    bootPreferences.putString(kDashCanFirmwareVersionKey, runningVersion);
+    bootPreferences.remove(kDashOtaNagForceOffKey);
+    dashBootNagRevisionPending = forcedStateChange ||
+                                 bootPreferences.getBool(
+                                     kDashNagBootRevisionKey, false);
+    bootPreferences.end();
+
+    canActive = configuredEnabled;
+    dashBootForcedNagOff = forceOff;
+    policy.initialWriteEnabled = configuredEnabled;
+    policy.forcedOffAfterOta = forceOff;
+    return policy;
+}
+
+static bool dashMarkOtaNagForceOff()
+{
+    Preferences otaPreferences;
+    if (!otaPreferences.begin(PREFS_NS, false))
+        return false;
+    const bool stored =
+        otaPreferences.putBool(kDashOtaNagForceOffKey, true) > 0;
+    otaPreferences.end();
+    return stored;
+}
+
+static void dashConsumeBootNagRevisionPending()
+{
+    if (!dashBootNagRevisionPending)
+        return;
+    Preferences bootPreferences;
+    if (bootPreferences.begin(PREFS_NS, false))
+    {
+        bootPreferences.remove(kDashNagBootRevisionKey);
+        bootPreferences.end();
+    }
+    dashBootNagRevisionPending = false;
+}
 #endif
 
 static bool dashInjectionActive()
@@ -448,7 +542,8 @@ static bool dashStaSsidLooksCorrupt(const String &ssid)
 static void dashApplyRuntimeState()
 {
 #if defined(NAG_KILLER)
-    nagKillerRuntime = nagKillerEnabled && canActive;
+    nagKillerRuntime = nagKillerEnabled && canActive &&
+                       appCanTransmitRuntimeReady();
 #else
     nagKillerRuntime = false;
 #endif
@@ -602,6 +697,11 @@ static void dashLoadPrefs()
     if (storedDefaultHw != DASH_DEFAULT_HW)
         prefs.putUChar("hw_def", DASH_DEFAULT_HW);
     canActive = prefs.getBool("can", kDashInjectionDefaultEnabled);
+    // The early boot policy also selects the TWAI hardware mode. Never let a
+    // later preference reload undo an OTA force-off and trigger a live
+    // controller reinstall. A manual WebUI/BLE command may enable it later.
+    if (dashBootForcedNagOff)
+        canActive = false;
     if (prefs.getBool("force_act", false))
         prefs.putBool("force_act", false);
     if (prefs.getBool("ap_rst", false))
@@ -1027,6 +1127,7 @@ static void handleDisable()
 
 static void handleReboot()
 {
+    appPrepareCanForRestart();
     server.send(200, "text/plain", "Rebooting...");
     delay(200);
     ESP.restart();
@@ -1044,6 +1145,8 @@ static void handleOtaResult()
     server.send(ok ? 200 : 500, "text/plain", ok ? "OK" : Update.errorString());
     if (ok)
     {
+        dashMarkOtaNagForceOff();
+        appPrepareCanForRestart();
         dashLog("[OTA] Upload complete -- rebooting");
         delay(300);
         ESP.restart();
@@ -1052,6 +1155,8 @@ static void handleOtaResult()
     {
         dashLog("[OTA] Upload FAILED: " + String(Update.errorString()));
         Update.abort();
+        dashOtaCanPrepared = false;
+        appResumeCanAfterOtaFailure();
     }
 }
 
@@ -1063,16 +1168,31 @@ static void handleOtaUpload()
     if (upload.status == UPLOAD_FILE_START)
     {
         dashLog("[OTA] Receiving: " + String(upload.filename.c_str()));
+        dashOtaCanPrepared = appPrepareCanForOta();
+        if (!dashOtaCanPrepared)
+        {
+            dashLog("[OTA] CAN TX did not quiesce; upload rejected");
+            Update.abort();
+            return;
+        }
         esp_task_wdt_deinit();
         if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+        {
             dashLog("[OTA] Begin failed: " + String(Update.errorString()));
+            dashOtaCanPrepared = false;
+            appResumeCanAfterOtaFailure();
+        }
     }
     else if (upload.status == UPLOAD_FILE_WRITE)
     {
+        if (!dashOtaCanPrepared)
+            return;
         if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
         {
             dashLog("[OTA] Write error: " + String(Update.errorString()));
             Update.abort();
+            dashOtaCanPrepared = false;
+            appResumeCanAfterOtaFailure();
         }
     }
     else if (upload.status == UPLOAD_FILE_END)
@@ -1080,18 +1200,23 @@ static void handleOtaUpload()
         if (upload.totalSize > 0 && Update.end(true) && Update.isFinished())
         {
             dashPersistOtaTime(server.arg("ota_time"));
+            dashMarkOtaNagForceOff();
             dashLog("[OTA] Done: " + String(upload.totalSize) + " bytes");
         }
         else
         {
             dashLog("[OTA] End failed: " + String(Update.errorString()));
             Update.abort();
+            dashOtaCanPrepared = false;
+            appResumeCanAfterOtaFailure();
         }
     }
     else if (upload.status == UPLOAD_FILE_ABORTED)
     {
         dashLog("[OTA] Upload aborted");
         Update.abort();
+        dashOtaCanPrepared = false;
+        appResumeCanAfterOtaFailure();
     }
 }
 
@@ -2316,10 +2441,10 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     {
         dashHandler->onFrame = mcpDashOnFrame;
         appActiveHandler = dashHandler;
-        if (dashDriver)
-            dashDriver->setFilters(dashHandler->filterIds(), dashHandler->filterIdCount());
     }
     dashApplyRuntimeState();
+    if (dashBootForcedNagOff)
+        dashLog("[BOOT] OTA/firmware change forced NAG OFF");
     dashLog("[BOOT] WIFI-NAG mode: Nag killer + WiFi gateway");
 
     ArduinoOTA.setHostname("wifi-nag");

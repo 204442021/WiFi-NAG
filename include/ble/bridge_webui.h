@@ -135,8 +135,9 @@ static NagResultCode bleBridgeApplyNagState(bool desiredEnabled,
 static bool bleBridgeNagRuntimeEffective()
 {
     return canActive && nagKillerEnabled && static_cast<bool>(nagKillerRuntime) &&
-           appCanWriteModeKnown && appLastWriteEnabled && canOnline &&
-           !Update.isRunning() && !appCanRestartPreparing;
+           appCanTransmitRuntimeReady() && canOnline &&
+           !Update.isRunning() && !appCanOtaPreparing &&
+           !appCanRestartPreparing;
 }
 
 static void bleBridgeFrameObserver(const CanFrame &frame)
@@ -370,18 +371,11 @@ static void bleBridgeAfterDashboardSetup()
 {
     nagStateController.configureCallbacks(bleBridgeApplyNagState,
                                           bleBridgeNagRuntimeEffective);
-    nagStateController.begin(canActive);
+    nagStateController.begin(canActive, dashBootNagRevisionPending);
+    dashConsumeBootNagRevisionPending();
 
     if (dashHandler)
         dashHandler->onFrame = bleBridgeFrameObserver;
-    if (dashDriver)
-    {
-        static constexpr uint32_t observedIds[] = {0x370, 0x255, 0x12B};
-        dashDriver->setFilters(observedIds,
-                               static_cast<uint8_t>(sizeof(observedIds) /
-                                                    sizeof(observedIds[0])));
-    }
-
     bleBridgeClient.begin();
     dashLog("[BOOT] BLE bridge ready: 0x255/0x12B observer + authoritative NAG sync");
 }
