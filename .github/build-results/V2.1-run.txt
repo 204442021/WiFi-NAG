@@ -1,4 +1,4 @@
-status=failure
-run_id=31879113966
-commit=f94aac98340a8a8015d31717042379550c4a7c6f
-artifact=WIFI-NAG-V2.1-f94aac98-firmware
+status=running
+run_id=31879187179
+commit=2b5735a28de5a11ffb38d3f96e931008620a77bd
+artifact=WIFI-NAG-V2.1-2b5735a2-firmware
