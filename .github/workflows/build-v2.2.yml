@@ -56,13 +56,13 @@ jobs:
 
       - name: Run targeted OTA safety tests
         run: |
-          python -m unittest \
-            test.test_v21_twai_ota_safety_regression \
-            test.test_can_restart_safety_regression \
-            test.test_firmware_info_regression \
-            test.test_v20_restore_regression \
-            test.test_v109_defaults_ui_regression \
-            test.test_wifi_settings_regression
+          PYTHONPATH=test python -m unittest \
+            test_v21_twai_ota_safety_regression \
+            test_can_restart_safety_regression \
+            test_firmware_info_regression \
+            test_v20_restore_regression \
+            test_v109_defaults_ui_regression \
+            test_wifi_settings_regression
 
       - name: Build ESP32-S3 firmware
         run: pio run -e wifi_nag_ESP32_S3_CAN
