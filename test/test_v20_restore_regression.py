@@ -12,7 +12,7 @@ UI = (ROOT / "include/web/mcp2515_dashboard_ui.src.h").read_text(encoding="utf-8
 
 class V20RestoreRegression(unittest.TestCase):
     def test_v4_0_v13_version_metadata(self):
-        self.assertEqual(VERSION, "V4.0")
+        self.assertEqual(VERSION, "V4.0 V13")
         self.assertIn('<span class="version-badge">V4.0 V13</span>', UI)
         self.assertIn('id="diag-version">V4.0 V13</div>', UI)
         self.assertIn("mirrorDashboardText('fw-version','diag-version','V4.0 V13')", UI)
