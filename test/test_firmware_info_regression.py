@@ -47,6 +47,10 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
             r'file\(STRINGS\s+"\$\{CMAKE_CURRENT_LIST_DIR\}/VERSION"\s+PROJECT_VER\s+LIMIT_COUNT\s+1\)',
         )
         self.assertIn('string(STRIP "${PROJECT_VER}" PROJECT_VER)', self.cmake)
+        self.assertIn(
+            'string(REPLACE " " "\\\\\\\\\\\\\\\\x20" PROJECT_VER "${PROJECT_VER}")',
+            self.cmake,
+        )
         self.assertIn("esp_app_get_description()", self.dash)
         self.assertIn('\\"firmware\\":\\"', self.dash)
 
