@@ -370,7 +370,33 @@ static NagHandler *dashNagActiveHandler()
 
 static const char *dashNagModeName(uint8_t mode)
 {
+    if (mode == NagHandler::MODE_ADAPTIVE)
+        return "ADAPTIVE";
     return mode == NagHandler::MODE_A_V2 ? "A_V2" : "A";
+}
+
+static const char *dashNagAdaptivePhaseName(NagAdaptiveController::Phase phase)
+{
+    switch (phase)
+    {
+    case NagAdaptiveController::PHASE_ARMING: return "arming";
+    case NagAdaptiveController::PHASE_SEND: return "send";
+    case NagAdaptiveController::PHASE_PAUSE: return "pause";
+    default: return "disabled";
+    }
+}
+
+static const char *dashNagAdaptiveBlockName(NagAdaptiveController::BlockReason reason)
+{
+    switch (reason)
+    {
+    case NagAdaptiveController::BLOCK_ARMING: return "arming";
+    case NagAdaptiveController::BLOCK_PAUSE: return "pause";
+    case NagAdaptiveController::BLOCK_ANGLE: return "angle";
+    case NagAdaptiveController::BLOCK_TORQUE_DEADBAND: return "torque-deadband";
+    case NagAdaptiveController::BLOCK_DISABLED: return "disabled";
+    default: return "none";
+    }
 }
 
 static int16_t dashNagParseNmCenti(const String &value, int16_t fallback)
@@ -385,6 +411,46 @@ static int16_t dashNagParseNmCenti(const String &value, int16_t fallback)
 static String dashNagNmString(int16_t centiNm)
 {
     return String(NagHandler::centiNmToNm(centiNm), 2);
+}
+
+static int16_t dashNagParseDeci(const String &value, int16_t fallback)
+{
+    char *end = nullptr;
+    const float parsed = strtof(value.c_str(), &end);
+    if (end == value.c_str())
+        return fallback;
+    return static_cast<int16_t>(parsed >= 0.0f ? parsed * 10.0f + 0.5f
+                                                : parsed * 10.0f - 0.5f);
+}
+
+static uint32_t dashNagParseSecondsMs(const String &value, uint32_t fallback)
+{
+    char *end = nullptr;
+    const float parsed = strtof(value.c_str(), &end);
+    if (end == value.c_str() || parsed < 0.0f)
+        return fallback;
+    return static_cast<uint32_t>(parsed * 1000.0f + 0.5f);
+}
+
+static String dashNagDeciString(int16_t deciValue)
+{
+    return String(static_cast<float>(deciValue) / 10.0f, 1);
+}
+
+static String dashNagSecondsString(uint32_t milliseconds)
+{
+    return String(static_cast<float>(milliseconds) / 1000.0f, 1);
+}
+
+static bool dashNagAdaptiveConfigEqual(const NagAdaptiveConfig &left,
+                                       const NagAdaptiveConfig &right)
+{
+    return left.torqueMagnitudeCentiNm == right.torqueMagnitudeCentiNm &&
+           left.torqueDeadbandCentiNm == right.torqueDeadbandCentiNm &&
+           left.angleLimitDeciDeg == right.angleLimitDeciDeg &&
+           left.sendWindowMs == right.sendWindowMs &&
+           left.pauseMinMs == right.pauseMinMs &&
+           left.pauseMaxMs == right.pauseMaxMs;
 }
 
 static bool dashApplyNagConfigArgs();
@@ -421,6 +487,49 @@ static String dashNagStatusJson(bool includeOk)
     j += String(dashNagEchoCount());
     j += ",\"ownEchoSkip\":";
     j += String((uint32_t)nag->nagOwnEchoSkipCount);
+    const NagAdaptiveConfig adaptive = nag->adaptiveConfig();
+    j += ",\"adaptiveTorqueNm\":";
+    j += dashNagNmString(adaptive.torqueMagnitudeCentiNm);
+    j += ",\"adaptiveDeadbandNm\":";
+    j += dashNagNmString(adaptive.torqueDeadbandCentiNm);
+    j += ",\"adaptiveAngleLimitDeg\":";
+    j += dashNagDeciString(adaptive.angleLimitDeciDeg);
+    j += ",\"adaptiveAngleResumeDeg\":";
+    j += dashNagDeciString(static_cast<int16_t>(adaptive.angleLimitDeciDeg - NagAdaptiveController::kAngleHysteresisDeciDeg));
+    j += ",\"adaptiveSendWindowSec\":";
+    j += dashNagSecondsString(adaptive.sendWindowMs);
+    j += ",\"adaptivePauseMinSec\":";
+    j += dashNagSecondsString(adaptive.pauseMinMs);
+    j += ",\"adaptivePauseMaxSec\":";
+    j += dashNagSecondsString(adaptive.pauseMaxMs);
+    j += ",\"adaptivePhase\":\"";
+    j += dashNagAdaptivePhaseName(nag->adaptiveController.phaseValue());
+    j += "\",\"adaptiveBlockReason\":\"";
+    j += dashNagAdaptiveBlockName(nag->adaptiveController.blockReasonValue());
+    j += "\",\"adaptiveAngleDeg\":";
+    j += dashNagDeciString(nag->adaptiveAngleDeciDeg());
+    j += ",\"adaptiveTargetTorqueNm\":";
+    j += dashNagNmString(nag->adaptiveTargetCentiNm());
+    j += ",\"adaptivePhaseRemainingMs\":";
+    j += String(nag->adaptivePhaseRemainingMs());
+    j += ",\"adaptiveCurrentPauseMs\":";
+    j += String(nag->adaptiveController.currentPauseMs());
+    j += ",\"adaptiveAngleBlockEvents\":";
+    j += String(nag->adaptiveController.angleBlockEventCount());
+    j += ",\"adaptiveAngleBlockedFrames\":";
+    j += String(nag->adaptiveController.angleBlockedFrameCount());
+    j += ",\"adaptiveDeadbandSkips\":";
+    j += String(nag->adaptiveController.torqueDeadbandSkipCount());
+    j += ",\"adaptivePauseSkips\":";
+    j += String(nag->adaptiveController.pauseSkipCount());
+    j += ",\"checksumRejects\":";
+    j += String((uint32_t)nag->nagChecksumRejectCount);
+    j += ",\"invalidTorqueRejects\":";
+    j += String((uint32_t)nag->nagInvalidTorqueRejectCount);
+    j += ",\"sendAttempts\":";
+    j += String((uint32_t)nag->nagSendAttemptCount);
+    j += ",\"sendFailures\":";
+    j += String((uint32_t)nag->nagSendFailureCount);
     j += "}";
     return j;
 }
@@ -470,6 +579,13 @@ static void dashSavePrefs()
         prefs.putUChar("nag_mode", (uint8_t)nag->nagMode);
         prefs.putString("nag_av2_min", dashNagNmString(nag->av2MinCenti()));
         prefs.putString("nag_av2_max", dashNagNmString(nag->av2MaxCenti()));
+        const NagAdaptiveConfig adaptive = nag->adaptiveConfig();
+        prefs.putString("nag_ad_mag", dashNagNmString(adaptive.torqueMagnitudeCentiNm));
+        prefs.putString("nag_ad_db", dashNagNmString(adaptive.torqueDeadbandCentiNm));
+        prefs.putString("nag_ad_ang", dashNagDeciString(adaptive.angleLimitDeciDeg));
+        prefs.putString("nag_ad_send", dashNagSecondsString(adaptive.sendWindowMs));
+        prefs.putString("nag_ad_pmin", dashNagSecondsString(adaptive.pauseMinMs));
+        prefs.putString("nag_ad_pmax", dashNagSecondsString(adaptive.pauseMaxMs));
     }
 #endif
     prefs.putBool("auto_sleep", false);
@@ -611,6 +727,14 @@ static void dashLoadPrefs()
         int16_t minNm = dashNagParseNmCenti(prefs.getString("nag_av2_min", "1.50"), 150);
         int16_t maxNm = dashNagParseNmCenti(prefs.getString("nag_av2_max", "1.80"), 180);
         nag->setAv2RangeCentiNm(minNm, maxNm);
+        NagAdaptiveConfig adaptive;
+        adaptive.torqueMagnitudeCentiNm = dashNagParseNmCenti(prefs.getString("nag_ad_mag", "1.80"), 180);
+        adaptive.torqueDeadbandCentiNm = dashNagParseNmCenti(prefs.getString("nag_ad_db", "0.05"), 5);
+        adaptive.angleLimitDeciDeg = dashNagParseDeci(prefs.getString("nag_ad_ang", "50.0"), 500);
+        adaptive.sendWindowMs = dashNagParseSecondsMs(prefs.getString("nag_ad_send", "10.0"), 10000);
+        adaptive.pauseMinMs = dashNagParseSecondsMs(prefs.getString("nag_ad_pmin", "1.0"), 1000);
+        adaptive.pauseMaxMs = dashNagParseSecondsMs(prefs.getString("nag_ad_pmax", "3.0"), 3000);
+        nag->setAdaptiveConfig(adaptive);
         nag->setMode(prefs.getUChar("nag_mode", NagHandler::MODE_A));
     }
 #endif
@@ -813,10 +937,60 @@ static bool dashApplyNagConfigArgs()
         changed = changed || oldMin != nag->av2MinCenti() || oldMax != nag->av2MaxCenti();
     }
 
+    NagAdaptiveConfig adaptive = nag->adaptiveConfig();
+    bool adaptiveChanged = false;
+    if (server.hasArg("adaptiveTorqueNm"))
+    {
+        adaptive.torqueMagnitudeCentiNm = dashNagParseNmCenti(server.arg("adaptiveTorqueNm"), adaptive.torqueMagnitudeCentiNm);
+        if (adaptive.torqueMagnitudeCentiNm < 0)
+            adaptive.torqueMagnitudeCentiNm = static_cast<int16_t>(-adaptive.torqueMagnitudeCentiNm);
+        adaptiveChanged = true;
+    }
+    if (server.hasArg("adaptiveDeadbandNm"))
+    {
+        adaptive.torqueDeadbandCentiNm = dashNagParseNmCenti(server.arg("adaptiveDeadbandNm"), adaptive.torqueDeadbandCentiNm);
+        if (adaptive.torqueDeadbandCentiNm < 0)
+            adaptive.torqueDeadbandCentiNm = static_cast<int16_t>(-adaptive.torqueDeadbandCentiNm);
+        adaptiveChanged = true;
+    }
+    if (server.hasArg("adaptiveAngleDeg"))
+    {
+        adaptive.angleLimitDeciDeg = dashNagParseDeci(server.arg("adaptiveAngleDeg"), adaptive.angleLimitDeciDeg);
+        if (adaptive.angleLimitDeciDeg < 0)
+            adaptive.angleLimitDeciDeg = static_cast<int16_t>(-adaptive.angleLimitDeciDeg);
+        adaptiveChanged = true;
+    }
+    if (server.hasArg("adaptiveSendSec"))
+    {
+        adaptive.sendWindowMs = dashNagParseSecondsMs(server.arg("adaptiveSendSec"), adaptive.sendWindowMs);
+        adaptiveChanged = true;
+    }
+    if (server.hasArg("adaptivePauseMinSec"))
+    {
+        adaptive.pauseMinMs = dashNagParseSecondsMs(server.arg("adaptivePauseMinSec"), adaptive.pauseMinMs);
+        adaptiveChanged = true;
+    }
+    if (server.hasArg("adaptivePauseMaxSec"))
+    {
+        adaptive.pauseMaxMs = dashNagParseSecondsMs(server.arg("adaptivePauseMaxSec"), adaptive.pauseMaxMs);
+        adaptiveChanged = true;
+    }
+    if (adaptiveChanged)
+    {
+        adaptive = NagAdaptiveController::normalizeConfig(adaptive);
+        const NagAdaptiveConfig previous = nag->adaptiveConfig();
+        if (!dashNagAdaptiveConfigEqual(previous, adaptive))
+        {
+            nag->setAdaptiveConfig(adaptive);
+            changed = true;
+        }
+    }
+
     if (changed)
     {
         dashLog("[CFG] Nag mode=" + String(dashNagModeName((uint8_t)nag->nagMode)) +
-                " A_V2=" + dashNagNmString(nag->av2MinCenti()) + ".." + dashNagNmString(nag->av2MaxCenti()) + " Nm");
+                " A_V2=" + dashNagNmString(nag->av2MinCenti()) + ".." + dashNagNmString(nag->av2MaxCenti()) +
+                " Nm adaptive angle=+/-" + dashNagDeciString(nag->adaptiveConfig().angleLimitDeciDeg) + " deg");
     }
     return changed;
 }
@@ -861,7 +1035,7 @@ static void handleStatus()
     bool ep = dashHandler ? (bool)dashHandler->enablePrint : false;
 
     String j = "{\"product\":\"wifi-nag\"";
-    j.reserve(900);
+    j.reserve(1500);
     j += ",\"wifiNag\":true";
 #if defined(NAG_KILLER)
     j += ",\"nagKiller\":";
@@ -884,6 +1058,49 @@ static void handleStatus()
         j += dashNagNmString(nag->lastInjectedCenti());
         j += ",\"nagOwnEchoSkip\":";
         j += String((uint32_t)nag->nagOwnEchoSkipCount);
+        const NagAdaptiveConfig adaptive = nag->adaptiveConfig();
+        j += ",\"nagAdaptiveTorqueNm\":";
+        j += dashNagNmString(adaptive.torqueMagnitudeCentiNm);
+        j += ",\"nagAdaptiveDeadbandNm\":";
+        j += dashNagNmString(adaptive.torqueDeadbandCentiNm);
+        j += ",\"nagAdaptiveAngleLimitDeg\":";
+        j += dashNagDeciString(adaptive.angleLimitDeciDeg);
+        j += ",\"nagAdaptiveAngleResumeDeg\":";
+        j += dashNagDeciString(static_cast<int16_t>(adaptive.angleLimitDeciDeg - NagAdaptiveController::kAngleHysteresisDeciDeg));
+        j += ",\"nagAdaptiveSendWindowSec\":";
+        j += dashNagSecondsString(adaptive.sendWindowMs);
+        j += ",\"nagAdaptivePauseMinSec\":";
+        j += dashNagSecondsString(adaptive.pauseMinMs);
+        j += ",\"nagAdaptivePauseMaxSec\":";
+        j += dashNagSecondsString(adaptive.pauseMaxMs);
+        j += ",\"nagAdaptivePhase\":\"";
+        j += dashNagAdaptivePhaseName(nag->adaptiveController.phaseValue());
+        j += "\",\"nagAdaptiveBlockReason\":\"";
+        j += dashNagAdaptiveBlockName(nag->adaptiveController.blockReasonValue());
+        j += "\",\"nagAdaptiveAngleDeg\":";
+        j += dashNagDeciString(nag->adaptiveAngleDeciDeg());
+        j += ",\"nagAdaptiveTargetTorqueNm\":";
+        j += dashNagNmString(nag->adaptiveTargetCentiNm());
+        j += ",\"nagAdaptivePhaseRemainingMs\":";
+        j += String(nag->adaptivePhaseRemainingMs());
+        j += ",\"nagAdaptiveCurrentPauseMs\":";
+        j += String(nag->adaptiveController.currentPauseMs());
+        j += ",\"nagAdaptiveAngleBlockEvents\":";
+        j += String(nag->adaptiveController.angleBlockEventCount());
+        j += ",\"nagAdaptiveAngleBlockedFrames\":";
+        j += String(nag->adaptiveController.angleBlockedFrameCount());
+        j += ",\"nagAdaptiveDeadbandSkips\":";
+        j += String(nag->adaptiveController.torqueDeadbandSkipCount());
+        j += ",\"nagAdaptivePauseSkips\":";
+        j += String(nag->adaptiveController.pauseSkipCount());
+        j += ",\"nagChecksumRejects\":";
+        j += String((uint32_t)nag->nagChecksumRejectCount);
+        j += ",\"nagInvalidTorqueRejects\":";
+        j += String((uint32_t)nag->nagInvalidTorqueRejectCount);
+        j += ",\"nagSendAttempts\":";
+        j += String((uint32_t)nag->nagSendAttemptCount);
+        j += ",\"nagSendFailures\":";
+        j += String((uint32_t)nag->nagSendFailureCount);
     }
 #endif
     j += ",\"hw\":";
@@ -954,6 +1171,19 @@ static void handleNagApiMode()
 }
 
 static void handleNagApiUpdate()
+{
+    dashApplyNagConfigArgs();
+    dashApplyRuntimeState();
+    dashSavePrefs();
+    server.send(200, "application/json", dashNagStatusJson(true));
+}
+
+static void handleNagAdaptiveApiGet()
+{
+    server.send(200, "application/json", dashNagStatusJson(true));
+}
+
+static void handleNagAdaptiveApiPost()
 {
     dashApplyNagConfigArgs();
     dashApplyRuntimeState();
@@ -2337,6 +2567,8 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     server.on("/api/stats", HTTP_GET, handleNagApiStats);
     server.on("/api/mode", HTTP_POST, handleNagApiMode);
     server.on("/api/update", HTTP_POST, handleNagApiUpdate);
+    server.on("/api/nag-adaptive", HTTP_GET, handleNagAdaptiveApiGet);
+    server.on("/api/nag-adaptive", HTTP_POST, handleNagAdaptiveApiPost);
 #endif
     server.on("/logging", HTTP_POST, handleLoggingConfig);
     server.on("/disable", HTTP_POST, handleDisable);

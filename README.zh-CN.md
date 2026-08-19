@@ -48,7 +48,7 @@ CANL -> 车辆 CAN-L
 - 只监听 CAN ID `880 / 0x370`。
 - 忽略 DLC 小于 8 的帧。
 - `CAN Write OFF`：只读监听，不发送 Nag echo。
-- `CAN Write ON`：对每个真实 `0x370` 帧发送 Nag echo。
+- `CAN Write ON`：允许当前 Nag 模式按各自门控规则发送 echo。
 - 输出 echo 帧写入 `EPAS3S_handsOnLevel = 1`。
 - 更新 `data[6]` 低 4 bit counter。
 - 重新计算 checksum byte `data[7]`。
@@ -66,6 +66,17 @@ CANL -> 车辆 CAN-L
 - 默认范围：`+1.50 .. +1.80 Nm`。
 - 范围会限制在 `-1.80 .. +1.80 Nm`。
 - 如果最小值大于最大值，会自动交换。
+
+### 模式 ADAPTIVE（V4.0 V13）
+
+- 从校验和有效的真实 `0x370` 帧读取方向盘扭矩和方向盘角度。
+- 真实扭矩为正时发送负扭矩，真实扭矩为负时发送正扭矩；死区内只监听。
+- 默认输出幅值为 `1.80 Nm`，默认扭矩死区为 `0.05 Nm`，均可在 WebUI 调整。
+- 角度安全门使用绝对值：方向盘角度 `>= +50.0°` 或 `<= -50.0°` 时停止发送。
+- 角度需连续 3 个有效帧回到 `-45.0° .. +45.0°` 才恢复，避免临界值附近反复开关。
+- 默认连续发送 `10 s`，随后随机只监听 `1 .. 3 s`，再开始下一轮。
+- 切换模式或修改配置后先监听 3 个有效帧再开始发送。
+- 自适应参数保存在 NVS，重启后继续生效。
 
 ## WiFi / DNS 网关
 
@@ -85,7 +96,7 @@ WebUI 提供：
 
 - CAN 状态、RX/TX/errors、FPS、运行时间
 - CAN Write 开关
-- Nag 模式和 A_V2 范围控制
+- Nag 模式、A_V2 范围和 ADAPTIVE 安全门/周期控制
 - AP 热点设置
 - WiFi 扫描/连接/删除
 - STA-AP 网关控制
@@ -137,6 +148,7 @@ py -3 $env:USERPROFILE\.platformio\packages\tool-esptoolpy\esptool.py --chip esp
 
 ```powershell
 pio test -e native_nag
+pio test -e native_nag_adaptive
 pio test -e native_twai
 pio test -e native_log_buffer
 py -3 -m unittest test/test_wifi_settings_regression.py

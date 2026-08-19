@@ -48,7 +48,7 @@ The only active CAN business logic is Nag echo on `0x370 / 880`.
 - Listens only to CAN ID `880 / 0x370`.
 - Ignores frames with DLC less than 8.
 - `CAN Write OFF`: read-only monitoring; no Nag echo is sent.
-- `CAN Write ON`: sends Nag echo for every real `0x370` frame.
+- `CAN Write ON`: allows the selected Nag mode to send echoes under its own gates.
 - Writes `EPAS3S_handsOnLevel = 1` in outgoing echo frames.
 - Updates the low-nibble counter in `data[6]`.
 - Recalculates checksum byte `data[7]`.
@@ -66,6 +66,17 @@ The only active CAN business logic is Nag echo on `0x370 / 880`.
 - Default range: `+1.50 .. +1.80 Nm`.
 - Range is clamped to `-1.80 .. +1.80 Nm`.
 - If min is greater than max, values are automatically swapped.
+
+### Mode ADAPTIVE (V4.0 V13)
+
+- Reads steering torque and steering angle from checksum-valid real `0x370` frames.
+- Sends negative torque for positive measured torque and positive torque for negative measured torque; only listens inside the deadband.
+- Defaults to `1.80 Nm` output magnitude and a `0.05 Nm` torque deadband, both configurable in the WebUI.
+- The angle safety gate uses absolute angle: sending stops at `>= +50.0°` or `<= -50.0°`.
+- Resumes only after 3 consecutive valid frames return to `-45.0° .. +45.0°`, providing 5-degree hysteresis.
+- Sends for `10 s`, then listens only for a random `1 .. 3 s`, and repeats by default.
+- Listens for 3 valid frames before sending after mode or configuration changes.
+- Adaptive settings are persisted in NVS.
 
 ## WiFi / DNS Gateway
 
@@ -85,7 +96,7 @@ The WebUI provides:
 
 - CAN status, RX/TX/errors, FPS, uptime
 - CAN Write toggle
-- Nag mode and A_V2 range controls
+- Nag mode, A_V2 range, and ADAPTIVE safety/timing controls
 - AP hotspot settings
 - WiFi scan/connect/delete
 - STA-AP gateway controls
@@ -137,6 +148,7 @@ The full image writes the entire flash and will overwrite NVS/SPIFFS settings.
 
 ```powershell
 pio test -e native_nag
+pio test -e native_nag_adaptive
 pio test -e native_twai
 pio test -e native_log_buffer
 py -3 -m unittest test/test_wifi_settings_regression.py
