@@ -6,7 +6,7 @@ from SCons.Script import Import
 Import("env")
 
 
-CREDENTIAL_DEFINES = ("DASH_SSID", "DASH_PASS", "DASH_OTA_USER", "DASH_OTA_PASS")
+CREDENTIAL_DEFINES = ("DASH_SSID", "DASH_PASS")
 CONFIG_RELATIVE_PATH = Path("platformio_profile.h")
 EXAMPLE_CONFIG_RELATIVE_PATH = Path("platformio_profile.example.h")
 

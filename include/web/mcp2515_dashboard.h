@@ -56,13 +56,6 @@
 #ifndef DASH_PASS
 #error "Define -DDASH_PASS in build_flags (min 8 chars)"
 #endif
-#ifndef DASH_OTA_PASS
-#error "Define -DDASH_OTA_PASS in build_flags"
-#endif
-#ifndef DASH_OTA_USER
-#error "Define -DDASH_OTA_USER in build_flags"
-#endif
-
 static_assert(sizeof(DASH_SSID) > 1 && sizeof(DASH_SSID) <= 33, "DASH_SSID must be 1-32 bytes");
 static_assert(sizeof(DASH_PASS) >= 9 && sizeof(DASH_PASS) <= 65, "DASH_PASS must be 8-64 bytes");
 
@@ -136,6 +129,7 @@ static constexpr size_t kDashMinApPassLen = 8;
 static constexpr size_t kDashMaxPassLen = 64;
 static constexpr int kDashApChannel = 1;
 static constexpr int kDashApMaxConn = 4;
+static constexpr uint8_t kDashApCredentialRevision = 1;
 static uint8_t apRuntimeChannel = kDashApChannel;
 static unsigned long apLastChannelSyncMs = 0;
 static uint8_t apLastChannelSyncTarget = 0;
@@ -749,6 +743,17 @@ static void dashLoadPrefs()
     dashApplyRuntimeState();
     if (dashHandler)
         dashHandler->enablePrint = ep;
+    // Apply the V4.0 V13 hotspot credentials once after an OTA update. Older
+    // NVS overrides would otherwise keep the previous SSID/password forever.
+    if (prefs.getUChar("ap_cred_rev", 0) < kDashApCredentialRevision)
+    {
+        prefs.remove("ap_ssid");
+        prefs.remove("ap_pass");
+        prefs.remove("ap_hidden");
+        prefs.putUChar("ap_cred_rev", kDashApCredentialRevision);
+        dashLog("[WIFI] Migrated hotspot credentials to firmware defaults");
+    }
+
     // Load WiFi AP overrides (hotspot name/password)
     String apSsidPref = prefs.isKey("ap_ssid") ? prefs.getString("ap_ssid", "") : "";
     String apPassPref = prefs.isKey("ap_pass") ? prefs.getString("ap_pass", "") : "";
@@ -1248,11 +1253,6 @@ static void handleReboot()
 
 static void handleOtaResult()
 {
-    if (!server.authenticate(DASH_OTA_USER, DASH_OTA_PASS))
-    {
-        server.requestAuthentication();
-        return;
-    }
     bool ok = Update.isFinished() && !Update.hasError();
     server.sendHeader("Connection", "close");
     server.send(ok ? 200 : 500, "text/plain", ok ? "OK" : Update.errorString());
@@ -1271,8 +1271,6 @@ static void handleOtaResult()
 
 static void handleOtaUpload()
 {
-    if (!server.authenticate(DASH_OTA_USER, DASH_OTA_PASS))
-        return;
     HTTPUpload &upload = server.upload();
     if (upload.status == UPLOAD_FILE_START)
     {
@@ -2548,7 +2546,6 @@ static void mcpDashboardSetup(CarManagerBase *handler, CanDriver *driver)
     dashLog("[BOOT] WIFI-NAG mode: Nag killer + WiFi gateway");
 
     ArduinoOTA.setHostname("wifi-nag");
-    ArduinoOTA.setPassword(DASH_OTA_PASS);
     ArduinoOTA.onStart([]()
                        { dashLog("[OTA] Starting..."); });
     ArduinoOTA.onEnd([]()

@@ -914,8 +914,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
       <div class="ota-status" id="ota-status">Uploading...</div>
     </div>
     <button class="ota-btn" id="ota-upload-btn" onclick="uploadFirmware()">开始升级</button>
-    <button class="sniff-btn" id="ota-reset-btn" onclick="resetOtaCredentials()" style="width:100%;margin-top:6px">重置 OTA 凭据</button>
-    <div class="setting-desc" style="margin-top:10px">请选择为本设备生成的 .bin 固件。</div>
+    <div class="setting-desc" style="margin-top:10px">OTA 上传无需账号或密码。请选择为本设备生成的 .bin 固件。</div>
   </div>
 </section><section class="card ui-main-card collapsed" id="device-actions-card" data-ui-kind="system">
   <div class="card-hdr" role="button" tabindex="0" aria-expanded="false">
@@ -987,7 +986,7 @@ const I18N_ZH={
   'WiFi Internet':'WiFi 上网','Up to 4 saved networks. The device tries each in turn until one connects.':'最多保存 4 个网络，设备会按顺序尝试直到连接成功。','Not configured':'未配置','Save up to 4 networks (e.g. home + phone hotspot). Device tries each in turn. Stored in NVS \u2014 survives firmware updates.':'最多保存 4 个网络（例如家里 WiFi + 手机热点）。设备会按顺序尝试，配置保存在 NVS 中，固件更新后仍保留。','Add network':'添加网络','WiFi SSID':'WiFi SSID','Scan':'扫描','Scanning...':'扫描中...','Scan failed':'扫描失败','No networks found':'未发现网络','Password':'密码','Save & Connect':'保存并连接','Static IP (optional)':'静态 IP（可选）','Set a fixed IP configuration instead of using DHCP.':'使用固定 IP 配置，而不是 DHCP。','Use static IP':'使用静态 IP','IP (e.g. 192.168.1.100)':'IP（如 192.168.1.100）','Gateway (e.g. 192.168.1.1)':'网关（如 192.168.1.1）','Mask (255.255.255.0)':'掩码（255.255.255.0）','DNS (e.g. 8.8.8.8)':'DNS（如 8.8.8.8）','No networks saved.':'未保存网络。','connected':'已连接','trying':'尝试中','saved':'已保存','[static]':'[静态]','[connected]':'[已连接]','[trying]':'[连接中]','Reconnect':'重新连接','Connect':'连接','Edit':'编辑','Delete':'删除','Save Changes':'保存修改','Leave empty to keep current':'留空则保持当前密码','Delete WiFi':'删除 WiFi','Delete failed':'删除失败','Enter SSID':'请输入 SSID','Connect failed':'连接失败','connect failed':'连接失败','save failed':'保存失败','retry in':'后重试','switch to that WiFi and open this IP':'切换到该 WiFi 后打开此 IP','External IP':'外部 IP','External access address':'外部访问地址','Shown after connecting to external WiFi':'连接外部 Wi-Fi 后显示','Tap the IP to open the dashboard from the external network':'点击 IP 可通过外部网络进入后台',
   'STA-AP Gateway':'STA-AP 网关','Routes hotspot clients through the configured WiFi Internet uplink, with DNS filtering.':'通过已配置的 WiFi 上网链路转发热点客户端流量，并进行 DNS 过滤。','Gateway':'网关','Gateway status unavailable':'网关状态不可用','Enable STA-AP NAT routing for hotspot clients when WiFi Internet is connected':'WiFi 上网连接后，为热点客户端启用 STA-AP NAT 路由','Network Performance Mode':'网络性能模式','Reduce WebUI polling while AP+STA+NAPT is forwarding traffic':'AP+STA+NAPT 转发流量时降低 WebUI 轮询频率','ON: status 5s, network diagnostics 30s, heavy lists manual only':'开启：状态 5 秒，网络诊断 30 秒，重列表仅手动刷新','OFF: status 2s, network diagnostics 10s, DNS/filter lists auto refresh':'关闭：状态 2 秒，网络诊断 10 秒，DNS/过滤列表自动刷新','Car UI: status 7s, network diagnostics 45s, heavy lists manual only':'车机界面：状态 7 秒，网络诊断 45 秒，重列表仅手动刷新','Radio':'信道','DNS Slow':'DNS 慢请求','Pending':'待处理','Upstream':'上游','Upstream DNS':'上游 DNS','Custom':'自定义','223.5.5.5 Ali':'223.5.5.5 阿里','119.29.29.29 Tencent':'119.29.29.29 腾讯','Custom DNS, e.g. 8.8.8.8':'自定义 DNS，如 8.8.8.8','Save DNS':'保存 DNS','Reset DNS Stats':'清零 DNS 统计','Auto uses DHCP DNS from the connected WiFi; public DNS can avoid stale slow/fail counters from a bad router DNS.':'自动模式使用已连接 WiFi 的 DHCP DNS；公共 DNS 可避免路由器 DNS 异常导致的慢/失败计数。','Using Ali DNS 223.5.5.5.':'使用阿里 DNS 223.5.5.5。','Using Tencent DNS 119.29.29.29.':'使用腾讯 DNS 119.29.29.29。','Enter a custom upstream DNS IPv4 address.':'输入自定义上游 DNS IPv4 地址。','Conservative Mode':'保守模式','Aggressive Mode':'激进模式','Conservative Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant.':'保守模式：WiFi 上网 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 语音助手。','Aggressive Mode: WiFi access / offline navigation / online navigation / China maps / WeChat notifications / Bluetooth music / voice assistant / app vehicle control.':'激进模式：WiFi 上网 / 离线导航 / 在线导航 / 中国地图 / 微信通知 / 蓝牙音乐 / 语音助手 / App 车辆控制。','Custom DNS profile':'自定义 DNS 方案','Blacklist':'黑名单','Whitelist':'白名单','Blocked domains, one per line':'拦截域名，每行一个','Allowed domains, one per line':'放行域名，每行一个','Filter List':'过滤清单','Refresh':'刷新','Clear':'清空','Test domain':'测试域名','Test DNS':'测试 DNS','Gateway ON':'网关开启','Gateway OFF':'网关关闭','READY':'就绪','WAITING':'等待中','blocked':'已拦截','pending FULL':'待处理已满','DNS cache':'DNS 缓存','compiled':'已编译','not compiled':'未编译','same':'同信道','cross':'跨信道','task':'任务运行','no task':'无任务','bind ok':'绑定正常','bind wait':'等待绑定','last':'最近','avg':'平均','max':'最大','full':'已满','timeout':'超时','fail':'失败','none':'无','custom':'自定义','Gateway not available':'网关不可用','Remote DNS list changed. Finish editing or save to overwrite.':'远端 DNS 列表已变化。请完成编辑或保存以覆盖。','Resetting DNS stats...':'正在清零 DNS 统计...','DNS stats reset':'DNS 统计已清零','Whitelist allows specific subdomain exceptions; blocked root domains cannot be reopened.':'白名单允许特定子域例外；已拦截的根域不能重新放行。','items':'项','No blocked domains recorded':'暂无被拦截域名记录','Already in blacklist':'已在黑名单','Already whitelisted':'已在白名单','Not allowed':'不允许','Add to Whitelist':'加入白名单','DNS filter list unavailable':'DNS 过滤列表不可用','empty domain':'域名为空','would be blocked':'将被拦截','would be allowed':'将被放行','gateway disabled':'网关未启用','DNS test failed':'DNS 测试失败','cannot add domain':'无法添加域名','Cleared':'已清空','matched whitelist':'命中白名单','matched blacklist':'命中黑名单','not in blacklist':'不在黑名单','domain is blocked root':'该域名是被拦截根域','whitelist full (max 200)':'白名单已满（最多 200）',
   'Debug Log':'调试日志','Debug logging':'调试日志','Recent debug output':'最近调试输出','Shows recent WebUI and firmware log lines.':'显示最近的 WebUI 和固件日志。','Turns WebUI debug log output on or off.':'开启或关闭 WebUI 调试日志输出。','Toggle WebUI and firmware debug output':'开启或关闭 WebUI 与固件调试日志输出',
-  'Firmware Update':'固件更新','Manual OTA':'手动 OTA','Firmware Version':'固件版本','Current Partition':'当前分区','OTA Upload Time':'OTA 上传时间','Not recorded':'未记录','Manual firmware upload only. Select a local .bin and flash it to the device.':'仅保留手动固件上传。选择本地 .bin 并刷写到设备。','Tap to select firmware .bin':'点击选择 firmware .bin','Or drag and drop a file here':'或将文件拖到这里','Uploading...':'上传中...','Flash Firmware':'刷写固件','Reset OTA Credentials':'重置 OTA 凭据','OTA Credentials Reset':'OTA 凭据已重置','OTA Username:':'OTA 用户名：','OTA Password:':'OTA 密码：','Flashing...':'刷写中...','Done! Device is rebooting...':'完成！设备正在重启...','Upload failed:':'上传失败：','Connection error':'连接错误','Use the generated PlatformIO firmware.bin for this board.':'请使用为这块板生成的 PlatformIO firmware.bin。','Current build path:':'当前构建路径：',
+  'Firmware Update':'固件更新','Manual OTA':'手动 OTA','Firmware Version':'固件版本','Current Partition':'当前分区','OTA Upload Time':'OTA 上传时间','Not recorded':'未记录','Manual firmware upload only. Select a local .bin and flash it to the device.':'仅保留手动固件上传。选择本地 .bin 并刷写到设备。','Tap to select firmware .bin':'点击选择 firmware .bin','Or drag and drop a file here':'或将文件拖到这里','Uploading...':'上传中...','Flash Firmware':'刷写固件','Flashing...':'刷写中...','Done! Device is rebooting...':'完成！设备正在重启...','Upload failed:':'上传失败：','Connection error':'连接错误','Use the generated PlatformIO firmware.bin for this board.':'请使用为这块板生成的 PlatformIO firmware.bin。','Current build path:':'当前构建路径：',
   'Confirm':'确认','Continue':'继续','Cancel':'取消','Reboot device?':'重启设备？','CAN bus writes affect vehicle behavior. Remove device immediately if unexpected behavior occurs. Not affiliated with any vehicle manufacturer.':'CAN 写入会影响车辆行为。如出现异常请立即拔除设备。与任何车厂无关联。'
 };
 Object.assign(I18N_ZH,{'Ali':'阿里','Tencent':'腾讯','fetch error':'获取失败','network':'网络错误','scan failed':'扫描失败'});
@@ -1057,7 +1056,6 @@ function clientCountText(n){
 function injectionStatusLabel(armed){return armed?trText('Enabled'):trText('Disabled');}
 let state={can:true,nagMode:0,nagAv2Min:1.5,nagAv2Max:1.8,nagAdaptiveTorque:1.8,nagAdaptiveDeadband:0.05,nagAdaptiveAngle:50,nagAdaptiveSend:10,nagAdaptivePauseMin:1,nagAdaptivePauseMax:3};
 let otaFile=null;
-let otaUser=localStorage.getItem('otaU')||'',otaPass=localStorage.getItem('otaP')||'';
 let logSince=0;
 let dashConfirmState=null;
 let dashboardPollTimers=[];
@@ -2013,23 +2011,8 @@ function handleDrop(e){
   if(file&&file.name.endsWith('.bin'))fileSelected(file);
 }
 
-function resetOtaCredentials(){
-  localStorage.removeItem('otaU');
-  localStorage.removeItem('otaP');
-  otaUser='';
-  otaPass='';
-  const btn=$('ota-reset-btn');
-  if(btn){
-    btn.textContent=trText('OTA Credentials Reset');
-    setTimeout(()=>{btn.textContent=trText('Reset OTA Credentials');},1500);
-  }
-}
-
 async function uploadFirmware(){
   if(!otaFile)return;
-  if(!otaUser){otaUser=prompt('OTA Username:')||'';localStorage.setItem('otaU',otaUser);}
-  if(!otaPass){otaPass=prompt('OTA Password:')||'';localStorage.setItem('otaP',otaPass);}
-  if(!otaUser||!otaPass)return;
   const prog=$('ota-progress');
   const fill=$('ota-fill');
   const status=$('ota-status');
@@ -2063,7 +2046,7 @@ async function uploadFirmware(){
     $('ota-upload-btn').disabled=false;
   };
   const otaTime=formatOtaLocalTime(new Date());
-  xhr.open('POST','/update?ota_time='+encodeURIComponent(otaTime),true,otaUser,otaPass);
+  xhr.open('POST','/update?ota_time='+encodeURIComponent(otaTime),true);
   xhr.setRequestHeader('Content-Type','application/octet-stream');
   xhr.setRequestHeader('X-File-Name',otaFile.name);
   xhr.setRequestHeader('X-File-Size',otaFile.size);

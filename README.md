@@ -28,6 +28,8 @@ CAN write behavior can affect vehicle behavior. Use `CAN Write OFF` first, confi
 - CAN speed: `500 kbit/s`
 - Default TWAI TX: `GPIO_NUM_15`
 - Default TWAI RX: `GPIO_NUM_16`
+- Default hotspot: `Albert-WX`
+- Default hotspot password: `12345678`
 - WebUI address: `http://100.100.1.1/`
 
 External wiring should use the board terminal labels:
@@ -104,6 +106,7 @@ The WebUI provides:
 - System status
 - Debug log viewer
 - Manual firmware upload OTA
+- Web OTA and ArduinoOTA require no account or password
 - Safety notice popup on every page load
 
 ## Build

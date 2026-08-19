@@ -78,16 +78,31 @@ class WifiNagRegressionTests(unittest.TestCase):
             with self.subTest(route=route):
                 self.assertIn(route, self.dash)
 
-    def test_default_wifi_and_ota_passwords_are_12345678(self) -> None:
+    def test_default_wifi_and_passwordless_ota(self) -> None:
         defaults = dict(
             re.findall(
-                r'^#define\s+(DASH_PASS|DASH_OTA_PASS)\s+"([^"]+)"',
+                r'^#define\s+(DASH_SSID|DASH_PASS)\s+"([^"]+)"',
                 self.profile_example,
                 re.MULTILINE,
             )
         )
+        self.assertEqual(defaults.get("DASH_SSID"), "Albert-WX")
         self.assertEqual(defaults.get("DASH_PASS"), "12345678")
-        self.assertEqual(defaults.get("DASH_OTA_PASS"), "12345678")
+        self.assertNotIn("DASH_OTA_USER", self.profile_example)
+        self.assertNotIn("DASH_OTA_PASS", self.profile_example)
+        self.assertNotIn("server.authenticate", self.dash)
+        self.assertNotIn("requestAuthentication", self.dash)
+        self.assertNotIn("ArduinoOTA.setPassword", self.dash)
+        self.assertNotIn("OTA Username:", self.ui)
+        self.assertNotIn("OTA Password:", self.ui)
+        self.assertNotIn("otaUser", self.ui)
+        self.assertNotIn("otaPass", self.ui)
+        self.assertIn("xhr.open('POST','/update?ota_time='", self.ui)
+        self.assertIn('server.on("/update", HTTP_POST, handleOtaResult, handleOtaUpload);', self.dash)
+        self.assertIn('ArduinoOTA.begin();', self.dash)
+        self.assertIn('prefs.getUChar("ap_cred_rev", 0)', self.dash)
+        self.assertIn('prefs.remove("ap_ssid");', self.dash)
+        self.assertIn('prefs.remove("ap_pass");', self.dash)
 
     def test_gateway_dns_routes_exist(self) -> None:
         required_routes = [
