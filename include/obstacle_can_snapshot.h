@@ -2,6 +2,13 @@
 
 #include <cstdint>
 
+#ifdef NATIVE_BUILD
+#include <mutex>
+#else
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
+#endif
+
 #include "can_frame_types.h"
 #include "shared_types.h"
 
@@ -13,6 +20,7 @@ struct ObstacleCanView
     uint32_t last12BRxMs = 0;
     uint32_t generation255 = 0;
     uint32_t generation12B = 0;
+    uint32_t invalidationGeneration = 0;
     bool has255 = false;
     bool has12B = false;
     bool dlc255Valid = false;
@@ -29,6 +37,7 @@ public:
 
         // Single CAN-task writer. Every published field is atomic; the odd/even
         // generation lets the BLE task retry rather than wait on a lock.
+        lockWriter();
         const uint32_t start = static_cast<uint32_t>(version_);
         version_ = start + 1U;
 
@@ -52,6 +61,7 @@ public:
         }
 
         version_ = start + 2U;
+        unlockWriter();
     }
 
     bool read(ObstacleCanView &out) const
@@ -69,6 +79,8 @@ public:
             candidate.last12BRxMs = static_cast<uint32_t>(last12BRxMs_);
             candidate.generation255 = static_cast<uint32_t>(generation255_);
             candidate.generation12B = static_cast<uint32_t>(generation12B_);
+            candidate.invalidationGeneration =
+                static_cast<uint32_t>(invalidationGeneration_);
             candidate.has255 = static_cast<bool>(has255_);
             candidate.has12B = static_cast<bool>(has12B_);
             candidate.dlc255Valid = static_cast<bool>(dlc255Valid_);
@@ -84,9 +96,32 @@ public:
         return false;
     }
 
+    void invalidate()
+    {
+        lockWriter();
+        const uint32_t start = static_cast<uint32_t>(version_);
+        version_ = start + 1U;
+        raw255_ = 0;
+        raw12B_ = 0;
+        last255RxMs_ = 0;
+        last12BRxMs_ = 0;
+        has255_ = false;
+        has12B_ = false;
+        dlc255Valid_ = false;
+        dlc12BValid_ = false;
+        uint32_t generation =
+            static_cast<uint32_t>(invalidationGeneration_) + 1U;
+        if (generation == 0)
+            generation = 1;
+        invalidationGeneration_ = generation;
+        version_ = start + 2U;
+        unlockWriter();
+    }
+
 #ifdef NATIVE_BUILD
     void reset()
     {
+        lockWriter();
         version_ = 1;
         raw255_ = 0;
         raw12B_ = 0;
@@ -98,11 +133,31 @@ public:
         has12B_ = false;
         dlc255Valid_ = false;
         dlc12BValid_ = false;
+        invalidationGeneration_ = 0;
         version_ = 2;
+        unlockWriter();
     }
 #endif
 
 private:
+    void lockWriter()
+    {
+#ifdef NATIVE_BUILD
+        writerMutex_.lock();
+#else
+        portENTER_CRITICAL(&writerMux_);
+#endif
+    }
+
+    void unlockWriter()
+    {
+#ifdef NATIVE_BUILD
+        writerMutex_.unlock();
+#else
+        portEXIT_CRITICAL(&writerMux_);
+#endif
+    }
+
     static uint32_t pack(const uint8_t data[8])
     {
         return static_cast<uint32_t>(data[0]) |
@@ -126,10 +181,16 @@ private:
     Shared<uint32_t> last12BRxMs_{0};
     Shared<uint32_t> generation255_{0};
     Shared<uint32_t> generation12B_{0};
+    Shared<uint32_t> invalidationGeneration_{0};
     Shared<bool> has255_{false};
     Shared<bool> has12B_{false};
     Shared<bool> dlc255Valid_{false};
     Shared<bool> dlc12BValid_{false};
+#ifdef NATIVE_BUILD
+    std::mutex writerMutex_;
+#else
+    portMUX_TYPE writerMux_ = portMUX_INITIALIZER_UNLOCKED;
+#endif
 };
 
 inline ObstacleCanSnapshot obstacleCanSnapshot;

@@ -109,6 +109,17 @@ struct BleBridgeDiagnostics
     uint32_t sequenceGapCount = 0;
     uint32_t duplicateOrOldSequenceCount = 0;
     uint32_t badBrakeStateCount = 0;
+    bool obstacleTransportSupported = false;
+    bool obstacleTransportValid = false;
+    bool obstacleTransportPaused = false;
+    uint8_t obstacleTransportGear = 0;
+    uint8_t obstacleTransportReason = 0;
+    uint32_t obstacleTransportStateGeneration = 0;
+    uint32_t obstacleTransportLastRxAgeMs = 0;
+    uint32_t obstacleTransportBadPayloadCount = 0;
+    uint32_t obstacleTransportTimeoutCount = 0;
+    uint32_t obstaclePausedCanFrameSkipCount = 0;
+    uint32_t obstaclePausedTxSlotCount = 0;
 };
 
 class BleBridgeClient
@@ -125,6 +136,8 @@ public:
     void unbind();
     void prepareForRestart();
     void forceNagState();
+    bool obstacleTransportPaused() const;
+    void noteObstacleCanFrameSkipped();
     BleBridgeDiagnostics diagnostics() const;
 };
 

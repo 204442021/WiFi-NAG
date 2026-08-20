@@ -30,6 +30,33 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
         self.assertIn("supportsRequiredCapabilities", self.client)
         self.assertNotIn("constexpr uint8_t kCaps = 0x0f", self.client)
 
+    def test_dr_pause_stops_obstacle_observation_and_transmission(self):
+        self.assertIn("obstacleTransportController", self.client)
+        self.assertIn("MSG_OBSTACLE_TRANSPORT_CONTROL", self.client)
+        self.assertRegex(
+            self.client,
+            r"if \(obstacleTransportPaused\(\)\)\s*return false;",
+        )
+        self.assertIn("obstacleCanSnapshot.invalidate()", self.client)
+        self.assertIn("obstaclePausedTxSlot", self.client)
+        self.assertRegex(
+            self.client,
+            r"(?s)obstacleStateDue\([^;]+\).*?obstacleTransportPaused\(\).*?"
+            r"lastObstacle\s*=\s*obstacleNow",
+        )
+
+    def test_web_observer_skips_obstacle_frames_while_paused(self):
+        self.assertIn("!bleBridgeClient.obstacleTransportPaused()", self.bridge)
+        self.assertIn("noteObstacleCanFrameSkipped", self.bridge)
+
+    def test_pause_diagnostics_cover_can_and_tx_suppression(self):
+        for marker in (
+            "obstaclePausedCanFrameSkipCount",
+            "obstaclePausedTxSlotCount",
+        ):
+            self.assertIn(marker, self.header)
+            self.assertIn(marker, self.bridge)
+
     def test_brake_state_is_session_scoped_and_published(self):
         self.assertIn("brakeStateMailbox.beginSession", self.client)
         self.assertIn("brakeStateMailbox.endSession", self.client)

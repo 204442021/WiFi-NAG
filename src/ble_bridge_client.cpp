@@ -4,6 +4,7 @@
 #include <cstring>
 #include "ble/brake_state.h"
 #include "ble/bridge_protocol.h"
+#include "ble/obstacle_transport.h"
 #include "obstacle_can_snapshot.h"
 #include "platform/espidf_runtime.h"
 #include <esp_log.h>
@@ -46,6 +47,7 @@ struct Runtime
 Shared<bool> enabled{false}, obstacle{true}, started{false}, synced{false};
 Shared<bool> scanning{false}, connecting{false}, connected{false}, bonded{false};
 Shared<bool> subscribed{false}, ready{false}, pairing{false}, stopping{false};
+Shared<bool> obstacleTransportPaused{false};
 Shared<uint8_t> status{BLE_BRIDGE_PROTOCOL_DISABLED}, backoff{0};
 Shared<uint16_t> conn{BLE_HS_CONN_HANDLE_NONE}, svcStart{0}, svcEnd{0};
 Shared<uint16_t> rxHandle{0}, txHandle{0}, cccd{0}, lastDisconnect{0};
@@ -59,6 +61,7 @@ Shared<int8_t> rssi{-127};
 Shared<uint32_t> reconnects{0}, disconnects{0}, obstacleTx{0}, obstacleFail{0}, stateTx{0};
 Shared<uint32_t> crcFail{0}, badLength{0}, badMagic{0}, badVersion{0}, unknown{0};
 Shared<uint32_t> peerReject{0}, seqGap{0}, duplicateOrOld{0}, badBrakeState{0};
+Shared<uint32_t> obstaclePausedCanFrameSkip{0}, obstaclePausedTxSlot{0};
 QueueHandle_t commands = nullptr;
 } g;
 uint32_t randomNonZero()
@@ -106,6 +109,9 @@ g.status = static_cast<uint8_t>(status);
 void resetLink()
 {
 brakeStateMailbox.endSession();
+obstacleTransportController.endSession();
+g.obstacleTransportPaused = false;
+obstacleCanSnapshot.invalidate();
 g.scanning = false;
 g.connecting = false;
 g.connected = false;
@@ -118,6 +124,22 @@ g.peerBoot = 0;
 g.peerCaps = 0;
 g.rssi = -127;
 g.haveRxSeq = false;
+}
+bool obstacleTransportPaused()
+{
+return static_cast<bool>(g.obstacleTransportPaused);
+}
+
+void applyObstacleTransportUpdate(ObstacleTransportUpdate update)
+{
+if (update == OBSTACLE_TRANSPORT_REJECTED ||
+    update == OBSTACLE_TRANSPORT_NO_CHANGE)
+return;
+const ObstacleTransportView view = obstacleTransportController.view(millis());
+const bool previous = static_cast<bool>(g.obstacleTransportPaused);
+g.obstacleTransportPaused = view.paused;
+if (previous != view.paused || update == OBSTACLE_TRANSPORT_TIMED_OUT)
+obstacleCanSnapshot.invalidate();
 }
 void scheduleReconnect()
 {
@@ -323,6 +345,8 @@ return true;
 }
 bool sendObstacle()
 {
+if (obstacleTransportPaused())
+return false;
 ObstacleCanView snapshot;
 if (!obstacleCanSnapshot.read(snapshot))
 return false;
@@ -380,6 +404,11 @@ brakeStateMailbox.beginSession(
     static_cast<uint32_t>(g.peerBoot),
     BleBridgeProtocol::supportsBrakeState(body[8]),
     millis());
+obstacleTransportController.beginSession(
+    BleBridgeProtocol::supportsObstacleTransportControl(body[8]),
+    millis());
+g.obstacleTransportPaused = false;
+obstacleCanSnapshot.invalidate();
 g.ready = true;
 g.backoff = 0;
 setStatus(BLE_BRIDGE_PROTOCOL_READY);
@@ -448,6 +477,13 @@ if (!brakeStateMailbox.publish(data + BleBridgeProtocol::kPayloadOffset,
                                sequence,
                                millis()))
 g.badBrakeState = static_cast<uint32_t>(g.badBrakeState) + 1U;
+return;
+}
+if (data[2] == BleBridgeProtocol::MSG_OBSTACLE_TRANSPORT_CONTROL)
+{
+const ObstacleTransportUpdate update = obstacleTransportController.ingest(
+    data + BleBridgeProtocol::kPayloadOffset, millis());
+applyObstacleTransportUpdate(update);
 return;
 }
 if (data[2] != BleBridgeProtocol::MSG_SET_NAG)
@@ -693,17 +729,30 @@ if (!static_cast<bool>(g.ready))
 vTaskDelay(pdMS_TO_TICKS(20));
 continue;
 }
+applyObstacleTransportUpdate(obstacleTransportController.service(now));
 const NagStateView state = nagStateController.view();
 if (static_cast<bool>(g.forceState) || state.reportGeneration != static_cast<uint32_t>(g.lastStateGen) ||
 now - static_cast<uint32_t>(g.lastState) >= kStateMs)
 {
 sendNag(state.reportGeneration == static_cast<uint32_t>(g.lastStateGen));
 }
+const uint32_t obstacleNow = millis();
 if (static_cast<bool>(g.obstacle) &&
-BleBridgeTiming::obstacleStateDue(millis(), static_cast<uint32_t>(g.lastObstacle)))
+    BleBridgeTiming::obstacleStateDue(
+        obstacleNow, static_cast<uint32_t>(g.lastObstacle)))
+{
+if (obstacleTransportPaused())
+{
+g.obstaclePausedTxSlot =
+    static_cast<uint32_t>(g.obstaclePausedTxSlot) + 1U;
+g.lastObstacle = obstacleNow;
+}
+else
 sendObstacle();
+}
 const uint32_t serviceDelayMs = BleBridgeTiming::nextObstacleServiceDelayMs(
-millis(), static_cast<uint32_t>(g.lastObstacle), static_cast<bool>(g.obstacle));
+millis(), static_cast<uint32_t>(g.lastObstacle),
+static_cast<bool>(g.obstacle) && !obstacleTransportPaused());
 vTaskDelay(pdMS_TO_TICKS(serviceDelayMs));
 }
 }
@@ -837,6 +886,15 @@ brakeStateMailbox.endSession();
 setStatus(BLE_BRIDGE_PROTOCOL_DISABLED);
 }
 void BleBridgeClient::forceNagState() { g.forceState = true; }
+bool BleBridgeClient::obstacleTransportPaused() const
+{
+return ::obstacleTransportPaused();
+}
+void BleBridgeClient::noteObstacleCanFrameSkipped()
+{
+g.obstaclePausedCanFrameSkip =
+    static_cast<uint32_t>(g.obstaclePausedCanFrameSkip) + 1U;
+}
 BleBridgeDiagnostics BleBridgeClient::diagnostics() const
 {
 BleBridgeDiagnostics out;
@@ -900,6 +958,20 @@ out.peerRejectCount = static_cast<uint32_t>(g.peerReject);
 out.sequenceGapCount = static_cast<uint32_t>(g.seqGap);
 out.duplicateOrOldSequenceCount = static_cast<uint32_t>(g.duplicateOrOld);
 out.badBrakeStateCount = static_cast<uint32_t>(g.badBrakeState);
+const ObstacleTransportView transport = obstacleTransportController.view(now);
+out.obstacleTransportSupported = transport.supported;
+out.obstacleTransportValid = transport.valid;
+out.obstacleTransportPaused = transport.paused;
+out.obstacleTransportGear = static_cast<uint8_t>(transport.realGear);
+out.obstacleTransportReason = static_cast<uint8_t>(transport.reason);
+out.obstacleTransportStateGeneration = transport.stateGeneration;
+out.obstacleTransportLastRxAgeMs = transport.lastRxAgeMs;
+out.obstacleTransportBadPayloadCount = transport.badPayloadCount;
+out.obstacleTransportTimeoutCount = transport.timeoutCount;
+out.obstaclePausedCanFrameSkipCount =
+    static_cast<uint32_t>(g.obstaclePausedCanFrameSkip);
+out.obstaclePausedTxSlotCount =
+    static_cast<uint32_t>(g.obstaclePausedTxSlot);
 return out;
 }
 #endif

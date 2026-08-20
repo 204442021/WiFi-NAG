@@ -143,7 +143,12 @@ static void bleBridgeFrameObserver(const CanFrame &frame)
 {
     mcpDashOnFrame(frame);
     if (frame.id == 0x255 || frame.id == 0x12B)
-        obstacleCanSnapshot.observe(frame, millis());
+    {
+        if (!bleBridgeClient.obstacleTransportPaused())
+            obstacleCanSnapshot.observe(frame, millis());
+        else
+            bleBridgeClient.noteObstacleCanFrameSkipped();
+    }
 }
 
 static void bleBridgeAppendAge(String &json, const char *name,
@@ -214,6 +219,9 @@ static void bleBridgeHandleStatus()
     BLE_JSON_BOOL("normalRuntime", haveBrakeView && brake.data.normalRuntime);
     BLE_JSON_BOOL("hasReal118", shift.hasReal118);
     BLE_JSON_BOOL("virtualParkActive", shift.virtualParkActive);
+    BLE_JSON_BOOL("obstacleTransportSupported", diagnostics.obstacleTransportSupported);
+    BLE_JSON_BOOL("obstacleTransportValid", diagnostics.obstacleTransportValid);
+    BLE_JSON_BOOL("obstacleTransportPaused", diagnostics.obstacleTransportPaused);
 #undef BLE_JSON_BOOL
     json += ",\"pairingRemainingMs\":" + String(diagnostics.pairingRemainingMs);
     json += ",\"deviceId\":" + String(diagnostics.deviceId);
@@ -256,6 +264,16 @@ static void bleBridgeHandleStatus()
     json += ",\"sequenceGapCount\":" + String(diagnostics.sequenceGapCount);
     json += ",\"duplicateOrOldSequenceCount\":" + String(diagnostics.duplicateOrOldSequenceCount);
     json += ",\"badBrakeStateCount\":" + String(diagnostics.badBrakeStateCount);
+    json += ",\"obstacleTransportGear\":" + String(diagnostics.obstacleTransportGear);
+    json += ",\"obstacleTransportReason\":" + String(diagnostics.obstacleTransportReason);
+    json += ",\"obstacleTransportStateGeneration\":" + String(diagnostics.obstacleTransportStateGeneration);
+    bleBridgeAppendAge(json, "obstacleTransportLastRxAgeMs",
+                       diagnostics.obstacleTransportValid,
+                       diagnostics.obstacleTransportLastRxAgeMs);
+    json += ",\"obstacleTransportBadPayloadCount\":" + String(diagnostics.obstacleTransportBadPayloadCount);
+    json += ",\"obstacleTransportTimeoutCount\":" + String(diagnostics.obstacleTransportTimeoutCount);
+    json += ",\"obstaclePausedCanFrameSkipCount\":" + String(diagnostics.obstaclePausedCanFrameSkipCount);
+    json += ",\"obstaclePausedTxSlotCount\":" + String(diagnostics.obstaclePausedTxSlotCount);
     json += ",\"setCommandCount\":" + String(nag.setCommandCount);
     json += ",\"duplicateCommandCount\":" + String(nag.duplicateCommandCount);
     json += ",\"revisionConflictCount\":" + String(nag.revisionConflictCount);

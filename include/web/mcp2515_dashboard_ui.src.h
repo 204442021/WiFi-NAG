@@ -499,7 +499,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
   <div class="brand">
     <div class="brand-copy">
       <div class="brand-title" id="brand-title">Albert FSD辅助系统</div>
-      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V4.0 V13</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
+      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V4.1 V13</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
     </div>
   </div>
   <div class="shell-actions">
@@ -778,7 +778,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
       <div class="stat"><div class="stat-lbl">蓝牙</div><div class="stat-val v-dim" id="diag-ble-state">未连接</div></div>
       <div class="stat"><div class="stat-lbl">Wi-Fi</div><div class="stat-val v-dim" id="diag-wifi-state">未配置</div></div>
       <div class="stat"><div class="stat-lbl">温度</div><div class="stat-val v-dim" id="sys-temp">--</div></div>
-      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V4.0 V13</div></div>
+      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V4.1 V13</div></div>
     </div>
     <details id="advanced-diagnostics">
       <summary>高级诊断</summary>
@@ -1389,7 +1389,7 @@ function syncDashboardSummary(){
   mirrorDashboardText('wifi-status','top-wifi-state',trText('Not configured'));
   mirrorDashboardText('ble-main-card-meta','diag-ble-state',trText('Offline'));
   mirrorDashboardText('wifi-status','diag-wifi-state',trText('Not configured'));
-  mirrorDashboardText('fw-version','diag-version','V4.0 V13');
+  mirrorDashboardText('fw-version','diag-version','V4.1 V13');
   mirrorDashboardText('s-inj','nag-card-meta',trText('Enabled'));
   const note=$('top-nag-note');if(note)note.textContent=trText('Mode')+' '+(state.nagMode===5?'ADAPTIVE':state.nagMode===4?'A_V2':'A');
 }

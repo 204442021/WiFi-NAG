@@ -13,8 +13,10 @@ static constexpr uint8_t kMagic = 0xA7;
 static constexpr uint8_t kVersion = 0x02;
 static constexpr uint8_t kRequiredCapabilities = 0x0F;
 static constexpr uint8_t CAPABILITY_BRAKE_STATE = 0x10;
+static constexpr uint8_t CAPABILITY_OBSTACLE_TRANSPORT_CONTROL = 0x20;
 static constexpr uint8_t kAdvertisedCapabilities =
-    kRequiredCapabilities | CAPABILITY_BRAKE_STATE;
+    kRequiredCapabilities | CAPABILITY_BRAKE_STATE |
+    CAPABILITY_OBSTACLE_TRANSPORT_CONTROL;
 
 enum MessageType : uint8_t
 {
@@ -22,6 +24,7 @@ enum MessageType : uint8_t
     MSG_SET_NAG = 0x10,
     MSG_QUERY_NAG = 0x11,
     MSG_BRAKE_STATE = 0x12,
+    MSG_OBSTACLE_TRANSPORT_CONTROL = 0x13,
     MSG_NAG_STATE = 0x20,
     MSG_HELLO = 0x30,
     MSG_HELLO_ACK = 0x31,
@@ -98,6 +101,11 @@ inline bool supportsRequiredCapabilities(uint8_t capabilities)
 inline bool supportsBrakeState(uint8_t capabilities)
 {
     return (capabilities & CAPABILITY_BRAKE_STATE) != 0U;
+}
+
+inline bool supportsObstacleTransportControl(uint8_t capabilities)
+{
+    return (capabilities & CAPABILITY_OBSTACLE_TRANSPORT_CONTROL) != 0U;
 }
 
 inline bool isHelloSessionBoundary(uint8_t messageType)
@@ -226,6 +234,7 @@ inline bool isKnownMessageType(uint8_t type)
     case MSG_SET_NAG:
     case MSG_QUERY_NAG:
     case MSG_BRAKE_STATE:
+    case MSG_OBSTACLE_TRANSPORT_CONTROL:
     case MSG_NAG_STATE:
     case MSG_HELLO:
     case MSG_HELLO_ACK:

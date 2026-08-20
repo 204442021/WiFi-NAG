@@ -2,6 +2,7 @@
 
 #include "ble/bridge_client.h"
 #include "ble/bridge_protocol.h"
+#include "ble/obstacle_transport.h"
 #include "ble/brake_state.h"
 #include "can_frame_types.h"
 #include "nag_state_controller.h"
@@ -111,8 +112,54 @@ void test_brake_state_contract_and_capabilities()
 {
     TEST_ASSERT_TRUE(BleBridgeProtocol::isKnownMessageType(0x12));
     TEST_ASSERT_EQUAL_HEX8(0x0F, BleBridgeProtocol::kRequiredCapabilities);
-    TEST_ASSERT_EQUAL_HEX8(0x1F, BleBridgeProtocol::kAdvertisedCapabilities);
+    TEST_ASSERT_EQUAL_HEX8(0x3F, BleBridgeProtocol::kAdvertisedCapabilities);
     TEST_ASSERT_EQUAL_HEX8(0x10, BleBridgeProtocol::CAPABILITY_BRAKE_STATE);
+    TEST_ASSERT_EQUAL_HEX8(0x20,
+                           BleBridgeProtocol::CAPABILITY_OBSTACLE_TRANSPORT_CONTROL);
+    TEST_ASSERT_TRUE(BleBridgeProtocol::isKnownMessageType(0x13));
+}
+
+void test_obstacle_transport_payload_and_watchdog()
+{
+    const uint8_t paused[10] = {1, 3, 4, 1, 7, 0, 0, 0, 0, 0};
+    ObstacleTransportController controller;
+    controller.beginSession(true, 100);
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_TRANSPORT_CHANGED,
+                            controller.ingest(paused, 200));
+    ObstacleTransportView view = controller.view(200);
+    TEST_ASSERT_TRUE(view.supported);
+    TEST_ASSERT_TRUE(view.valid);
+    TEST_ASSERT_TRUE(view.paused);
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_TRANSPORT_GEAR_D, view.realGear);
+    TEST_ASSERT_EQUAL_UINT32(7, view.stateGeneration);
+
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_TRANSPORT_NO_CHANGE,
+                            controller.service(3199));
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_TRANSPORT_TIMED_OUT,
+                            controller.service(3200));
+    view = controller.view(3200);
+    TEST_ASSERT_FALSE(view.valid);
+    TEST_ASSERT_FALSE(view.paused);
+    TEST_ASSERT_EQUAL_UINT32(1, view.timeoutCount);
+}
+
+void test_obstacle_transport_resume_requires_strict_payload()
+{
+    ObstacleTransportController controller;
+    controller.beginSession(true, 10);
+    uint8_t paused[10] = {1, 3, 2, 2, 1, 0, 0, 0, 0, 0};
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_TRANSPORT_CHANGED,
+                            controller.ingest(paused, 20));
+
+    uint8_t resumed[10] = {1, 2, 1, 0, 2, 0, 0, 0, 0, 0};
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_TRANSPORT_CHANGED,
+                            controller.ingest(resumed, 30));
+    TEST_ASSERT_FALSE(controller.view(30).paused);
+
+    resumed[3] = 1;
+    TEST_ASSERT_EQUAL_UINT8(OBSTACLE_TRANSPORT_REJECTED,
+                            controller.ingest(resumed, 40));
+    TEST_ASSERT_EQUAL_UINT32(1, controller.view(40).badPayloadCount);
 }
 
 void test_brake_state_active_payload_decodes()
@@ -375,6 +422,37 @@ void test_obstacle_snapshot_marks_wrong_dlc_invalid_without_stale_payload()
     TEST_ASSERT_EQUAL_UINT32(2, view.generation255);
 }
 
+void test_obstacle_snapshot_invalidate_clears_data_without_reusing_it()
+{
+    CanFrame frame255 = {.id = 0x255, .dlc = 4};
+    frame255.data[3] = 0x01;
+    obstacleCanSnapshot.observe(frame255, 10);
+    CanFrame frame12B = {.id = 0x12B, .dlc = 4};
+    frame12B.data[1] = 0x30;
+    obstacleCanSnapshot.observe(frame12B, 11);
+
+    ObstacleCanView before;
+    TEST_ASSERT_TRUE(obstacleCanSnapshot.read(before));
+    obstacleCanSnapshot.invalidate();
+    ObstacleCanView after;
+    TEST_ASSERT_TRUE(obstacleCanSnapshot.read(after));
+    TEST_ASSERT_FALSE(after.has255);
+    TEST_ASSERT_FALSE(after.has12B);
+    TEST_ASSERT_FALSE(after.dlc255Valid);
+    TEST_ASSERT_FALSE(after.dlc12BValid);
+    TEST_ASSERT_EQUAL_UINT8(0, after.raw255[3]);
+    TEST_ASSERT_EQUAL_UINT8(0, after.raw12B[1]);
+    TEST_ASSERT_TRUE(after.invalidationGeneration >
+                     before.invalidationGeneration);
+}
+
+void test_obstacle_pause_diagnostics_default_to_zero()
+{
+    BleBridgeDiagnostics diagnostics;
+    TEST_ASSERT_EQUAL_UINT32(0, diagnostics.obstaclePausedCanFrameSkipCount);
+    TEST_ASSERT_EQUAL_UINT32(0, diagnostics.obstaclePausedTxSlotCount);
+}
+
 void test_nag_controller_increments_revision_once_for_real_change()
 {
     NagStateController controller;
@@ -457,6 +535,8 @@ int main()
     RUN_TEST(test_unbind_packets_preserve_transaction_and_identity);
     RUN_TEST(test_unbind_packet_rejects_zero_identity_and_wrong_result);
     RUN_TEST(test_brake_state_contract_and_capabilities);
+    RUN_TEST(test_obstacle_transport_payload_and_watchdog);
+    RUN_TEST(test_obstacle_transport_resume_requires_strict_payload);
     RUN_TEST(test_brake_state_active_payload_decodes);
     RUN_TEST(test_brake_state_release_payload_decodes);
     RUN_TEST(test_brake_state_session_resync_release_payload_decodes);
@@ -474,6 +554,8 @@ int main()
     RUN_TEST(test_periodic_obstacle_contract_is_50ms_and_not_query);
     RUN_TEST(test_obstacle_snapshot_keeps_latest_255_and_12b);
     RUN_TEST(test_obstacle_snapshot_marks_wrong_dlc_invalid_without_stale_payload);
+    RUN_TEST(test_obstacle_snapshot_invalidate_clears_data_without_reusing_it);
+    RUN_TEST(test_obstacle_pause_diagnostics_default_to_zero);
     RUN_TEST(test_nag_controller_increments_revision_once_for_real_change);
     RUN_TEST(test_nag_controller_rejects_stale_conflicting_revision);
     RUN_TEST(test_nag_controller_duplicate_command_is_idempotent);
