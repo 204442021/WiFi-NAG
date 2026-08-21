@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 
 #include "nag_das_feedback.h"
@@ -10,9 +11,24 @@ struct NagAdaptiveConfig
     int16_t preventiveNegativeMaxCentiNm = 180;
     int16_t preventivePositiveMinCentiNm = 150;
     int16_t preventivePositiveMaxCentiNm = 180;
+
+    // V4.4 canonical corrective layer: one range for both directions.
     int16_t correctiveMinCentiNm = 180;
     int16_t correctiveMaxCentiNm = 200;
     bool maintenanceEnabled = true;
+
+    // Backward-compatible V4.3 WebUI/NVS transport fields. They are collapsed
+    // into the single corrective range by normalizeConfig().
+    int16_t correctiveNegativeMinCentiNm = 180;
+    int16_t correctiveNegativeMaxCentiNm = 200;
+    int16_t correctivePositiveMinCentiNm = 180;
+    int16_t correctivePositiveMaxCentiNm = 200;
+
+    // V4.4 does NOT use a torque direction deadband. This legacy persisted
+    // slot is intentionally reused only as the maintenance-layer switch:
+    // zero = maintenance off, non-zero = maintenance on.
+    int16_t torqueDeadbandCentiNm = 5;
+
     uint32_t activityMinMs = 10000;
     uint32_t activityMaxMs = 10000;
     uint32_t releaseMinMs = 200;
@@ -127,8 +143,29 @@ public:
                           value.preventiveNegativeMaxCentiNm, 150, 180);
         normalizeI16Range(value.preventivePositiveMinCentiNm,
                           value.preventivePositiveMaxCentiNm, 150, 180);
+
+        normalizeI16Range(value.correctiveNegativeMinCentiNm,
+                          value.correctiveNegativeMaxCentiNm, 180, 200);
+        normalizeI16Range(value.correctivePositiveMinCentiNm,
+                          value.correctivePositiveMaxCentiNm, 180, 200);
+
+        // Existing V4.3 persisted direction ranges are merged into one range.
+        value.correctiveMinCentiNm = std::min(value.correctiveNegativeMinCentiNm,
+                                              value.correctivePositiveMinCentiNm);
+        value.correctiveMaxCentiNm = std::max(value.correctiveNegativeMaxCentiNm,
+                                              value.correctivePositiveMaxCentiNm);
         normalizeI16Range(value.correctiveMinCentiNm,
                           value.correctiveMaxCentiNm, 180, 200);
+        value.correctiveNegativeMinCentiNm = value.correctiveMinCentiNm;
+        value.correctiveNegativeMaxCentiNm = value.correctiveMaxCentiNm;
+        value.correctivePositiveMinCentiNm = value.correctiveMinCentiNm;
+        value.correctivePositiveMaxCentiNm = value.correctiveMaxCentiNm;
+
+        // No deadband is applied. Keep the old persisted value only as a
+        // backward-compatible switch transport so V4.3 NVS survives OTA.
+        value.maintenanceEnabled = value.torqueDeadbandCentiNm != 0;
+        value.torqueDeadbandCentiNm = value.maintenanceEnabled ? 5 : 0;
+
         normalizeU32Range(value.activityMinMs, value.activityMaxMs, 8000, 12000);
         normalizeU32Range(value.releaseMinMs, value.releaseMaxMs, 100, 1000);
         normalizeU32Range(value.restMinMs, value.restMaxMs, 1000, 2000);
