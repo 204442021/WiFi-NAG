@@ -35,15 +35,17 @@ jobs:
 
       - name: Run V4.4 and safety Python regressions
         run: |
-          python -m unittest -v \
-            test.test_v44_adaptive_regression \
-            test.test_ble_adaptive_config_contract \
-            test.test_ble_obstacle_shift_regression \
-            test.test_ble_pairing_unbind_regression \
-            test.test_can_restart_safety_regression \
-            test.test_dashboard_main_chain_regression \
-            test.test_wifi_settings_regression \
-            test.test_v20_restore_regression
+          for test_file in \
+            test/test_v44_adaptive_regression.py \
+            test/test_ble_adaptive_config_contract.py \
+            test/test_ble_obstacle_shift_regression.py \
+            test/test_ble_pairing_unbind_regression.py \
+            test/test_can_restart_safety_regression.py \
+            test/test_dashboard_main_chain_regression.py \
+            test/test_wifi_settings_regression.py \
+            test/test_v20_restore_regression.py; do
+            python "$test_file"
+          done
 
       - name: Verify dashboard payload
         run: python scripts/minify_dashboard.py --check
