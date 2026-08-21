@@ -588,6 +588,39 @@ void test_normalize_config_swaps_and_clamps_every_range()
     TEST_ASSERT_EQUAL_UINT32(2000, upper.dasFreshTimeoutMs);
 }
 
+void test_rejected_das_frames_reset_fault_recovery_interval()
+{
+    NagAdaptiveController controller;
+    controller.requestReset();
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(8), 0));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 100));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 600));
+
+    CanFrame wrongId = makeDasFrame(0);
+    wrongId.id = 0x123;
+    TEST_ASSERT_FALSE(controller.observeDas(wrongId, 700));
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_FAULT_HOLD,
+                            controller.snapshot(700).phase);
+
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 800));
+    CanFrame shortFrame = makeDasFrame(1);
+    shortFrame.dlc = 7;
+    TEST_ASSERT_FALSE(controller.observeDas(shortFrame, 900));
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_FAULT_HOLD,
+                            controller.snapshot(900).phase);
+
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 1000));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 1500));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 2000));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 2500));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 2999));
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_FAULT_HOLD,
+                            controller.snapshot(2999).phase);
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 3000));
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_REST,
+                            controller.snapshot(3000).phase);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -618,5 +651,6 @@ int main()
     RUN_TEST(test_request_reset_recovers_fault_hold_immediately);
     RUN_TEST(test_epas_gap_clears_direction_reversal_candidate_timer);
     RUN_TEST(test_normalize_config_swaps_and_clamps_every_range);
+    RUN_TEST(test_rejected_das_frames_reset_fault_recovery_interval);
     return UNITY_END();
 }

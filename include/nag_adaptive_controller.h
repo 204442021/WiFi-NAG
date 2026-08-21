@@ -152,6 +152,8 @@ public:
                                              das_.raw() <= 1 &&
                                              das_.fresh(nowMs, config_.dasFreshTimeoutMs);
         const bool accepted = das_.observe(frame, nowMs);
+        if (!accepted && phase_ == PHASE_FAULT_HOLD)
+            faultRecoveryActive_ = false;
         if (frame.id != NagDasFeedbackTracker::kDasCanId || frame.dlc < 8)
             return false;
 
@@ -166,7 +168,7 @@ public:
 
         if (phase_ == PHASE_FAULT_HOLD)
         {
-            if (hos <= 1)
+            if (accepted && hos <= 1)
             {
                 if (!continuesNormalRecovery)
                 {
