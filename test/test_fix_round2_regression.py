@@ -95,11 +95,11 @@ class FixRound2RegressionTests(unittest.TestCase):
             "ARMING",
             "MAINTENANCE",
             "CORRECTIVE",
-            "VERIFY",
-            "RELEASE",
             "REST",
             "FAULT_HOLD",
-            "±1.80 Nm",
+            "±2.50 Nm",
+            "10 秒",
+            "1～3 秒",
             "Gate B/C",
             "docs/nag-adaptive-closed-loop.md",
         ):
@@ -111,8 +111,8 @@ class FixRound2RegressionTests(unittest.TestCase):
         for obsolete in (
             "50.0°",
             "45.0°",
-            "连续发送 `10 s`",
-            "随机只监听 `1 .. 3 s`",
+            "默认预防幅值约为 `0.15 .. 0.18 Nm`",
+            "执行 3..5 个成功发送帧",
         ):
             self.assertNotIn(obsolete, section)
 

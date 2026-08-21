@@ -25,7 +25,7 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-custom-dirty", "nag-custom-defaults", "nag-custom-save",
     "nag-pv-neg-min", "nag-pv-neg-max", "nag-pv-pos-min", "nag-pv-pos-max",
     "nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max",
-    "nag-active-min", "nag-active-max", "nag-release-min", "nag-release-max",
+    "nag-active-min", "nag-active-max",
     "nag-rest-min", "nag-rest-max", "nag-direction-deadband",
     "nag-custom-hard-cap", "nag-custom-das-timeout",
 )
@@ -228,8 +228,8 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
 
         for label, html in (("source", self.source), ("generated", self.generated_html)):
             for text in (
-                "预防层", "纠正层", "节奏与休息", "安全边界",
-                "休息期不额外发送 0x370", "本地发送成功不等于 DAS 接受",
+                "预防层", "纠正层", "注入与停发间隔", "安全边界",
+                "间隔期不额外发送 0x370", "本地发送成功不等于 DAS 接受",
             ):
                 with self.subTest(file=label, text=text):
                     self.assertIn(text, html)

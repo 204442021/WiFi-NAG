@@ -75,12 +75,12 @@ The only active CAN write behavior is Nag echo on `0x370 / 880`. DAS `0x39B / 92
 ### Mode ADAPTIVE (V4.3-V13 closed loop)
 
 - Requires fresh DAS HOS feedback from read-only `0x39B` and three valid OEM `0x370` frames before sending.
-- Uses HOS `0` for preventive `MAINTENANCE`; HOS `1` requests smooth `RELEASE`, which may send decaying echoes until the target reaches zero.
-- Treats HOS `0..2` as the normal range and uses HOS `3..5` for corrective bursts. `REST` and `VERIFY` are no-send phases.
-- Fails closed on stale DAS feedback, HOS `6..15`, or two corrective attempts without the warning returning to HOS `0..2`.
+- Treats HOS `0..2` as normal: every valid OEM `0x370` gets a random `1.50..1.80 Nm` echo for about `10 s`, followed by `1..3 s` with no injected frame, then the cycle repeats.
+- Treats HOS `3..5` as continuous correction: the previous target is cleared, then every valid OEM frame gets a random `1.80..2.50 Nm` echo until DAS returns to HOS `0..2`.
+- Fails closed on stale DAS feedback or HOS `6..15`; corrective bursts, verification waits, and attempt limits are not used.
 - Selects injection direction opposite trusted measured steering torque, with a direction deadband and angle fallback.
-- Defaults to `0.15..0.18 Nm` preventive and `1.50..1.80 Nm` corrective magnitudes; every outgoing target is hard-clamped to `-1.80..+1.80 Nm`.
-- A rest target of zero means no additional `0x370` is transmitted, not a fabricated zero-torque echo.
+- Every outgoing target is hard-clamped to `-2.50..+2.50 Nm`; HOS `6..15` still stops transmission immediately.
+- The rest interval does not transmit an additional `0x370`; it is true no-send time, not a `0 Nm` injection.
 - Local send attempts/successes are reported separately from DAS acknowledgement/timeout/latency evidence.
 - Adaptive policy settings are bounded in the WebUI and persisted in NVS only after explicit save.
 

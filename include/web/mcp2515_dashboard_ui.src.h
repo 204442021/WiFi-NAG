@@ -609,24 +609,23 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
         <div class="setting-info">
           <div class="setting-name">自定义策略</div><div class="setting-desc">参数先保存在本页，确认后再统一同步到设备。</div>
           <div class="nag-custom-shell">
-            <section class="nag-strategy-card nag-readiness-card"><div><div class="nag-strategy-kicker">策略就绪状态</div><div class="nag-strategy-title" id="nag-custom-readiness-reason" role="status" aria-live="polite" aria-atomic="true">自适应策略未启用</div><div class="nag-strategy-copy">状态由模式、DAS 新鲜度和闭环阶段共同决定。</div></div><div class="nag-readiness-state disabled" id="nag-custom-readiness" role="status" aria-live="polite" aria-atomic="true">DISABLED</div></section>
+            <section class="nag-strategy-card nag-readiness-card"><div><div class="nag-strategy-kicker">策略就绪状态</div><div class="nag-strategy-title" id="nag-custom-readiness-reason" role="status" aria-live="polite" aria-atomic="true">自适应策略未启用</div><div class="nag-strategy-copy">状态由模式、DAS 新鲜度和闭环阶段共同决定。</div></div><div class="nag-readiness-state disabled" id="nag-custom-readiness" role="status" aria-live="polite" aria-atomic="true">已关闭</div></section>
             <div class="nag-custom-grid">
               <section class="nag-strategy-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">低风险维持</div><div class="nag-strategy-title">预防层</div><div class="nag-strategy-copy">用于维持 H0～H2 正常区间，H2 为当前系统常态。</div></div></div><div class="nag-field-grid">
-                <div class="nag-field-group"><div class="nag-field-label">负方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-pv-neg-min" type="number" min="0.10" max="0.50" step="0.01" value="0.15"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-pv-neg-max" type="number" min="0.10" max="0.50" step="0.01" value="0.18"></label></div></div>
-                <div class="nag-field-group"><div class="nag-field-label">正方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-pv-pos-min" type="number" min="0.10" max="0.50" step="0.01" value="0.15"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-pv-pos-max" type="number" min="0.10" max="0.50" step="0.01" value="0.18"></label></div></div>
+                <div class="nag-field-group"><div class="nag-field-label">负方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-pv-neg-min" type="number" min="1.50" max="1.80" step="0.01" value="1.50"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-pv-neg-max" type="number" min="1.50" max="1.80" step="0.01" value="1.80"></label></div></div>
+                <div class="nag-field-group"><div class="nag-field-label">正方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-pv-pos-min" type="number" min="1.50" max="1.80" step="0.01" value="1.50"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-pv-pos-max" type="number" min="1.50" max="1.80" step="0.01" value="1.80"></label></div></div>
               </div></section>
-              <section class="nag-strategy-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">提醒纠偏</div><div class="nag-strategy-title">纠正层</div><div class="nag-strategy-copy">仅在 Hands-On 2–7 时使用的纠正脉冲区间。</div></div></div><div class="nag-field-grid">
-                <div class="nag-field-group"><div class="nag-field-label">负方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-cr-neg-min" type="number" min="0.50" max="1.80" step="0.01" value="1.50"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-cr-neg-max" type="number" min="0.50" max="1.80" step="0.01" value="1.80"></label></div></div>
-                <div class="nag-field-group"><div class="nag-field-label">正方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-cr-pos-min" type="number" min="0.50" max="1.80" step="0.01" value="1.50"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-cr-pos-max" type="number" min="0.50" max="1.80" step="0.01" value="1.80"></label></div></div>
+              <section class="nag-strategy-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">连续纠偏</div><div class="nag-strategy-title">纠正层</div><div class="nag-strategy-copy">仅在 H3～H5 使用；每个有效原车帧连续注入，直到回到 H0～H2。</div></div></div><div class="nag-field-grid">
+                <div class="nag-field-group"><div class="nag-field-label">负方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-cr-neg-min" type="number" min="1.80" max="2.50" step="0.01" value="1.80"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-cr-neg-max" type="number" min="1.80" max="2.50" step="0.01" value="2.50"></label></div></div>
+                <div class="nag-field-group"><div class="nag-field-label">正方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-cr-pos-min" type="number" min="1.80" max="2.50" step="0.01" value="1.80"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-cr-pos-max" type="number" min="1.80" max="2.50" step="0.01" value="2.50"></label></div></div>
               </div></section>
-              <section class="nag-strategy-card nag-rhythm-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">闭环周期</div><div class="nag-strategy-title">节奏与休息</div><div class="nag-strategy-copy">分别控制活动、释放、休息窗口和方向死区。</div></div></div><div class="nag-rhythm-grid">
-                <div class="nag-field-group"><div class="nag-field-label">活动 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-active-min" type="number" min="0.4" max="3.0" step="0.1" value="0.8"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-active-max" type="number" min="0.4" max="3.0" step="0.1" value="1.4"></label></div></div>
-                <div class="nag-field-group"><div class="nag-field-label">释放 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-release-min" type="number" min="0.1" max="1.0" step="0.1" value="0.2"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-release-max" type="number" min="0.1" max="1.0" step="0.1" value="0.4"></label></div></div>
-                <div class="nag-field-group"><div class="nag-field-label">休息 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-rest-min" type="number" min="0.5" max="5.0" step="0.1" value="1.5"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-rest-max" type="number" min="0.5" max="5.0" step="0.1" value="2.5"></label></div></div>
+              <section class="nag-strategy-card nag-rhythm-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">闭环周期</div><div class="nag-strategy-title">注入与停发间隔</div><div class="nag-strategy-copy">H0～H2 先连续注入约 10 秒，再停止发送 1～3 秒，然后循环。</div></div></div><div class="nag-rhythm-grid">
+                <div class="nag-field-group"><div class="nag-field-label">非零注入 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-active-min" type="number" min="8.0" max="12.0" step="0.1" value="10.0"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-active-max" type="number" min="8.0" max="12.0" step="0.1" value="10.0"></label></div></div>
+                <div class="nag-field-group"><div class="nag-field-label">停发间隔 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-rest-min" type="number" min="1.0" max="3.0" step="0.1" value="1.0"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-rest-max" type="number" min="1.0" max="3.0" step="0.1" value="3.0"></label></div></div>
                 <div class="nag-field-group"><div class="nag-field-label">方向死区 / Nm</div><label class="nag-adaptive-field"><span>0–0.50 Nm</span><input class="sniff-input" id="nag-direction-deadband" type="number" min="0" max="0.50" step="0.01" value="0.05"></label></div>
               </div></section>
             </div>
-            <aside class="nag-safety-panel"><div class="nag-safety-title">安全边界</div><div class="nag-safety-grid"><div class="nag-safety-item"><span>硬限幅</span><b id="nag-custom-hard-cap">±1.80 Nm</b></div><div class="nag-safety-item"><span>DAS 超时阈值</span><b id="nag-custom-das-timeout">750 ms</b></div><div class="nag-safety-item"><span>休息语义</span><b>休息期不额外发送 0x370</b></div></div><div class="nag-strategy-copy">本地发送成功不等于 DAS 接受；反馈失效时闭环立即停止注入。</div></aside>
+            <aside class="nag-safety-panel"><div class="nag-safety-title">安全边界</div><div class="nag-safety-grid"><div class="nag-safety-item"><span>硬限幅</span><b id="nag-custom-hard-cap">±2.50 Nm</b></div><div class="nag-safety-item"><span>DAS 超时阈值</span><b id="nag-custom-das-timeout">750 ms</b></div><div class="nag-safety-item"><span>停发语义</span><b>间隔期不额外发送 0x370</b></div></div><div class="nag-strategy-copy">H6 以上或反馈失效时立即保护停发；本地发送成功不等于 DAS 接受。</div></aside>
             <div class="nag-adaptive-live"><span class="nag-status-pill" id="nag-adaptive-phase">阶段：--</span><span class="nag-status-pill" id="nag-adaptive-torque-live">真实扭矩：--</span><span class="nag-status-pill" id="nag-adaptive-handson-live">Hands-On：--</span><span class="nag-status-pill" id="nag-adaptive-source-live">方向依据：--</span></div>
             <div class="nag-custom-actionbar"><div><div class="nag-action-state" id="nag-custom-dirty" role="status" aria-live="polite" aria-atomic="true">正在读取设备策略</div><div class="setting-desc" id="nag-adaptive-msg" role="status" aria-live="polite" aria-atomic="true"></div></div><div class="nag-action-buttons"><button class="sniff-btn" id="nag-custom-defaults" type="button" onclick="restoreNagCustomDefaults()">恢复建议值</button><button class="sniff-btn primary" id="nag-custom-save" type="button" onclick="saveNagAdaptive()">读取中...</button></div></div>
           </div>
@@ -857,7 +856,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
           <div class="nag-diag-metric"><span>目标扭矩</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-target">--</strong></div>
           <div class="nag-diag-metric"><span>方向来源</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-direction">--</strong><small id="nag-direction-meta">--</small></div>
           <div class="nag-diag-metric"><span>阶段剩余时间</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-timer">--</strong></div>
-          <div class="nag-diag-metric"><span>纠偏尝试 / 连发进度</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-burst">--</strong></div>
+          <div class="nag-diag-metric"><span>连续纠偏帧</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-burst">--</strong></div>
         </div></article>
         <article class="nag-diag-group"><h3>本地发送</h3><div class="nag-diag-metrics">
           <div class="nag-diag-metric"><span>尝试 / 成功 / 失败</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-tx">0 / 0 / 0</strong></div>
@@ -867,7 +866,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
         <article class="nag-diag-group"><h3>DAS 响应</h3><div class="nag-diag-metrics">
           <div class="nag-diag-metric"><span>DAS 确认次数</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-ack">0</strong></div>
           <div class="nag-diag-metric"><span>最近 / 最大延迟</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-latency">-- / --</strong></div>
-          <div class="nag-diag-metric"><span>确认超时次数</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-timeout">0</strong></div>
+          <div class="nag-diag-metric"><span>旧策略超时计数</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-timeout">0</strong></div>
           <div class="nag-diag-metric"><span>HOS 升级次数</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-escalations">0</strong></div>
         </div></article>
       </div>
@@ -1139,9 +1138,9 @@ function clientCountText(n){
 function injectionStatusLabel(armed){return armed?trText('Enabled'):trText('Disabled');}
 let state={can:true,nagMode:0};
 const nagCustomDefaults={
-  preventiveNegative:[0.15,0.18], preventivePositive:[0.15,0.18],
-  correctiveNegative:[1.50,1.80], correctivePositive:[1.50,1.80],
-  activity:[0.8,1.4], release:[0.2,0.4], rest:[1.5,2.5],
+  preventiveNegative:[1.50,1.80], preventivePositive:[1.50,1.80],
+  correctiveNegative:[1.80,2.50], correctivePositive:[1.80,2.50],
+  activity:[10.0,10.0], release:[0.2,0.4], rest:[1.0,3.0],
   directionDeadband:0.05, dasFreshTimeoutMs:750
 };
 const cloneNagCustomDefaults=()=>JSON.parse(JSON.stringify(nagCustomDefaults));
@@ -1154,8 +1153,8 @@ let nagCustomLoadError='';
 let nagCustomRevision=0;
 const phaseNames={
   disabled:'关闭', 'wait-das':'等待 DAS', arming:'确认 OEM 帧',
-  maintenance:'预防扫动', release:'平滑释放', rest:'无发送休息',
-  corrective:'纠正脉冲', verify:'等待 DAS 确认',
+  maintenance:'连续预防注入', release:'兼容释放阶段', rest:'停发间隔',
+  corrective:'连续纠偏注入', verify:'兼容确认阶段',
   'fault-hold':'保护停发'
 };
 const nagDiagnosticSemanticTones={release: 'caution', rest: 'caution', verify: 'caution', collision: 'caution', sendFailure: 'error'};
@@ -1171,13 +1170,12 @@ let nagDiagnosticsTimer=null;
 let nagDiagnosticsEpoch=0;
 let nagDiagnosticsLoadingEpoch=-1;
 const nagCustomFieldDefs=[
-  ['preventiveNegative',0,'nag-pv-neg-min','preventiveNegativeMinNm',0.10,0.50,2],['preventiveNegative',1,'nag-pv-neg-max','preventiveNegativeMaxNm',0.10,0.50,2],
-  ['preventivePositive',0,'nag-pv-pos-min','preventivePositiveMinNm',0.10,0.50,2],['preventivePositive',1,'nag-pv-pos-max','preventivePositiveMaxNm',0.10,0.50,2],
-  ['correctiveNegative',0,'nag-cr-neg-min','correctiveNegativeMinNm',0.50,1.80,2],['correctiveNegative',1,'nag-cr-neg-max','correctiveNegativeMaxNm',0.50,1.80,2],
-  ['correctivePositive',0,'nag-cr-pos-min','correctivePositiveMinNm',0.50,1.80,2],['correctivePositive',1,'nag-cr-pos-max','correctivePositiveMaxNm',0.50,1.80,2],
-  ['activity',0,'nag-active-min','activityMinSec',0.4,3.0,1],['activity',1,'nag-active-max','activityMaxSec',0.4,3.0,1],
-  ['release',0,'nag-release-min','releaseMinSec',0.1,1.0,1],['release',1,'nag-release-max','releaseMaxSec',0.1,1.0,1],
-  ['rest',0,'nag-rest-min','restMinSec',0.5,5.0,1],['rest',1,'nag-rest-max','restMaxSec',0.5,5.0,1],
+  ['preventiveNegative',0,'nag-pv-neg-min','preventiveNegativeMinNm',1.50,1.80,2],['preventiveNegative',1,'nag-pv-neg-max','preventiveNegativeMaxNm',1.50,1.80,2],
+  ['preventivePositive',0,'nag-pv-pos-min','preventivePositiveMinNm',1.50,1.80,2],['preventivePositive',1,'nag-pv-pos-max','preventivePositiveMaxNm',1.50,1.80,2],
+  ['correctiveNegative',0,'nag-cr-neg-min','correctiveNegativeMinNm',1.80,2.50,2],['correctiveNegative',1,'nag-cr-neg-max','correctiveNegativeMaxNm',1.80,2.50,2],
+  ['correctivePositive',0,'nag-cr-pos-min','correctivePositiveMinNm',1.80,2.50,2],['correctivePositive',1,'nag-cr-pos-max','correctivePositiveMaxNm',1.80,2.50,2],
+  ['activity',0,'nag-active-min','activityMinSec',8.0,12.0,1],['activity',1,'nag-active-max','activityMaxSec',8.0,12.0,1],
+  ['rest',0,'nag-rest-min','restMinSec',1.0,3.0,1],['rest',1,'nag-rest-max','restMaxSec',1.0,3.0,1],
   ['directionDeadband',null,'nag-direction-deadband','directionDeadbandNm',0,0.50,2]
 ];
 let otaFile=null;
@@ -1913,7 +1911,7 @@ function updateNagDiagnostics(d){
   else if(phase==='fault-hold'){health='保护停发';healthTone='error';}
   else if(!dasFresh||phase==='wait-das'){health='等待 DAS';healthTone=dasSeen?'error':'muted';}
   else if(phase==='maintenance'||phase==='corrective'){health='运行中';healthTone='active';}
-  else if(nagDiagnosticSemanticTones[phase]){health=phase==='rest'?'就绪':'运行中';healthTone=nagDiagnosticSemanticTones[phase];}
+  else if(nagDiagnosticSemanticTones[phase]){health='运行中';healthTone=nagDiagnosticSemanticTones[phase];}
   const healthEl=$('nag-diag-health');if(healthEl){healthEl.textContent=health;healthEl.className='nag-diag-health nag-tone-'+healthTone;}
   setText('nag-diag-reason',blockNames[block]||block);
   const epasFrames=nagDiagnosticFinite(d.nagOemEpasFrames),epasSeen=epasFrames!==null&&epasFrames>0,epasAge=nagDiagnosticAge(d.nagLastOemEpasAgeMs),epasFrameText=epasFrames===null?'--':nagDiagnosticInteger(epasFrames)+(dashLang==='zh'?' 帧':' frames');
@@ -1929,8 +1927,8 @@ function updateNagDiagnostics(d){
   const source=String(d.nagDirectionSource===undefined?'--':d.nagDirectionSource),sourceNames={torque:'实测扭矩',angle:'方向盘角度',hold:'保持上一方向'};
   setNagDiagnosticValue('nag-diag-direction',sourceNames[source]||source,source==='--'?'muted':'active');
   setNagDiagnosticValue('nag-diag-timer',nagDiagnosticAge(d.nagAdaptivePhaseRemainingMs),phaseTone);
-  const attempt=nagDiagnosticInteger(d.nagCorrectiveAttempt),burst=nagDiagnosticInteger(d.nagCorrectiveBurstFrame),burstTarget=nagDiagnosticInteger(d.nagCorrectiveBurstFrameTarget);
-  setNagDiagnosticValue('nag-diag-burst',(dashLang==='zh'?'尝试 ':'try ')+attempt+' · '+burst+'/'+burstTarget,phase==='corrective'?'active':'muted');
+  const burst=nagDiagnosticInteger(d.nagCorrectiveBurstFrame);
+  setNagDiagnosticValue('nag-diag-burst',burst+(dashLang==='zh'?' 帧':' frames'),phase==='corrective'?'active':'muted');
   const sends=nagDiagnosticFinite(d.nagSendAttempts),failures=nagDiagnosticFinite(d.nagSendFailures),success=sends===null||failures===null?null:Math.max(0,Math.trunc(sends)-Math.trunc(failures));
   setNagDiagnosticValue('nag-diag-tx',nagDiagnosticInteger(sends)+' / '+nagDiagnosticInteger(success)+' / '+nagDiagnosticInteger(failures),failures!==null&&failures>0?nagDiagnosticSemanticTones.sendFailure:(sends!==null&&sends>0?'active':'muted'));
   if(d.nagInjectedTorqueValid!==undefined||d.nagInjectedTorqueNm!==undefined){const injectedValid=!!d.nagInjectedTorqueValid,injected=nagDiagnosticFinite(d.nagInjectedTorqueNm),injectedAge=d.nagInjectedAgeMs;setNagDiagnosticValue('nag-diag-last-tx',injectedValid&&injected!==null?((injected>=0?'+':'')+injected.toFixed(2)+' Nm / '+nagDiagnosticAge(injectedAge)):'--',injectedValid&&injected!==null?'active':'muted');}

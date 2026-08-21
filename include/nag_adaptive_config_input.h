@@ -198,41 +198,41 @@ inline bool parseMode(const char *value, uint8_t &out, Error &error)
 
 inline const char *validate(const NagAdaptiveConfig &config)
 {
-    if (config.preventiveNegativeMinCentiNm < 10 ||
-        config.preventiveNegativeMinCentiNm > 50)
+    if (config.preventiveNegativeMinCentiNm < 150 ||
+        config.preventiveNegativeMinCentiNm > 180)
         return "preventiveNegativeMinNm";
     if (config.preventiveNegativeMaxCentiNm < config.preventiveNegativeMinCentiNm ||
-        config.preventiveNegativeMaxCentiNm > 50)
+        config.preventiveNegativeMaxCentiNm > 180)
         return "preventiveNegativeMaxNm";
-    if (config.preventivePositiveMinCentiNm < 10 ||
-        config.preventivePositiveMinCentiNm > 50)
+    if (config.preventivePositiveMinCentiNm < 150 ||
+        config.preventivePositiveMinCentiNm > 180)
         return "preventivePositiveMinNm";
     if (config.preventivePositiveMaxCentiNm < config.preventivePositiveMinCentiNm ||
-        config.preventivePositiveMaxCentiNm > 50)
+        config.preventivePositiveMaxCentiNm > 180)
         return "preventivePositiveMaxNm";
-    if (config.correctiveNegativeMinCentiNm < 50 ||
-        config.correctiveNegativeMinCentiNm > 180)
+    if (config.correctiveNegativeMinCentiNm < 180 ||
+        config.correctiveNegativeMinCentiNm > 250)
         return "correctiveNegativeMinNm";
     if (config.correctiveNegativeMaxCentiNm < config.correctiveNegativeMinCentiNm ||
-        config.correctiveNegativeMaxCentiNm > 180)
+        config.correctiveNegativeMaxCentiNm > 250)
         return "correctiveNegativeMaxNm";
-    if (config.correctivePositiveMinCentiNm < 50 ||
-        config.correctivePositiveMinCentiNm > 180)
+    if (config.correctivePositiveMinCentiNm < 180 ||
+        config.correctivePositiveMinCentiNm > 250)
         return "correctivePositiveMinNm";
     if (config.correctivePositiveMaxCentiNm < config.correctivePositiveMinCentiNm ||
-        config.correctivePositiveMaxCentiNm > 180)
+        config.correctivePositiveMaxCentiNm > 250)
         return "correctivePositiveMaxNm";
-    if (config.activityMinMs < 400 || config.activityMinMs > 3000)
+    if (config.activityMinMs < 8000 || config.activityMinMs > 12000)
         return "activityMinSec";
-    if (config.activityMaxMs < config.activityMinMs || config.activityMaxMs > 3000)
+    if (config.activityMaxMs < config.activityMinMs || config.activityMaxMs > 12000)
         return "activityMaxSec";
     if (config.releaseMinMs < 100 || config.releaseMinMs > 1000)
         return "releaseMinSec";
     if (config.releaseMaxMs < config.releaseMinMs || config.releaseMaxMs > 1000)
         return "releaseMaxSec";
-    if (config.restMinMs < 500 || config.restMinMs > 5000)
+    if (config.restMinMs < 1000 || config.restMinMs > 3000)
         return "restMinSec";
-    if (config.restMaxMs < config.restMinMs || config.restMaxMs > 5000)
+    if (config.restMaxMs < config.restMinMs || config.restMaxMs > 3000)
         return "restMaxSec";
     if (config.torqueDeadbandCentiNm < 0 || config.torqueDeadbandCentiNm > 50)
         return "directionDeadbandNm";

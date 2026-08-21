@@ -6,21 +6,21 @@
 
 struct NagAdaptiveConfig
 {
-    int16_t preventiveNegativeMinCentiNm = 15;
-    int16_t preventiveNegativeMaxCentiNm = 18;
-    int16_t preventivePositiveMinCentiNm = 15;
-    int16_t preventivePositiveMaxCentiNm = 18;
-    int16_t correctiveNegativeMinCentiNm = 150;
-    int16_t correctiveNegativeMaxCentiNm = 180;
-    int16_t correctivePositiveMinCentiNm = 150;
-    int16_t correctivePositiveMaxCentiNm = 180;
+    int16_t preventiveNegativeMinCentiNm = 150;
+    int16_t preventiveNegativeMaxCentiNm = 180;
+    int16_t preventivePositiveMinCentiNm = 150;
+    int16_t preventivePositiveMaxCentiNm = 180;
+    int16_t correctiveNegativeMinCentiNm = 180;
+    int16_t correctiveNegativeMaxCentiNm = 250;
+    int16_t correctivePositiveMinCentiNm = 180;
+    int16_t correctivePositiveMaxCentiNm = 250;
     int16_t torqueDeadbandCentiNm = 5;
-    uint32_t activityMinMs = 800;
-    uint32_t activityMaxMs = 1400;
+    uint32_t activityMinMs = 10000;
+    uint32_t activityMaxMs = 10000;
     uint32_t releaseMinMs = 200;
     uint32_t releaseMaxMs = 400;
-    uint32_t restMinMs = 1500;
-    uint32_t restMaxMs = 2500;
+    uint32_t restMinMs = 1000;
+    uint32_t restMaxMs = 3000;
     uint32_t dasFreshTimeoutMs = 750;
 };
 
@@ -125,17 +125,17 @@ public:
     static NagAdaptiveConfig normalizeConfig(NagAdaptiveConfig value)
     {
         normalizeI16Range(value.preventiveNegativeMinCentiNm,
-                          value.preventiveNegativeMaxCentiNm, 10, 50);
+                          value.preventiveNegativeMaxCentiNm, 150, 180);
         normalizeI16Range(value.preventivePositiveMinCentiNm,
-                          value.preventivePositiveMaxCentiNm, 10, 50);
+                          value.preventivePositiveMaxCentiNm, 150, 180);
         normalizeI16Range(value.correctiveNegativeMinCentiNm,
-                          value.correctiveNegativeMaxCentiNm, 50, 180);
+                          value.correctiveNegativeMaxCentiNm, 180, 250);
         normalizeI16Range(value.correctivePositiveMinCentiNm,
-                          value.correctivePositiveMaxCentiNm, 50, 180);
+                          value.correctivePositiveMaxCentiNm, 180, 250);
         value.torqueDeadbandCentiNm = clampI16(value.torqueDeadbandCentiNm, 0, 50);
-        normalizeU32Range(value.activityMinMs, value.activityMaxMs, 400, 3000);
+        normalizeU32Range(value.activityMinMs, value.activityMaxMs, 8000, 12000);
         normalizeU32Range(value.releaseMinMs, value.releaseMaxMs, 100, 1000);
-        normalizeU32Range(value.restMinMs, value.restMaxMs, 500, 5000);
+        normalizeU32Range(value.restMinMs, value.restMaxMs, 1000, 3000);
         value.dasFreshTimeoutMs = clampU32(value.dasFreshTimeoutMs, 100, 2000);
         return value;
     }
@@ -206,7 +206,7 @@ public:
                 if (static_cast<uint32_t>(nowMs - faultRecoveryStartedAtMs_) >= 2000U)
                 {
                     faultRecoveryActive_ = false;
-                    beginRest(nowMs, rngState_);
+                    beginMaintenance(nowMs, rngState_);
                 }
             }
             else
@@ -222,11 +222,11 @@ public:
             {
                 correctiveActive_ = true;
                 hosEscalationCount_++;
-                beginCorrective(nowMs, 1);
+                beginCorrective(nowMs);
             }
             else if (phase_ != PHASE_CORRECTIVE && phase_ != PHASE_VERIFY)
             {
-                beginCorrective(nowMs, correctiveAttempt_ == 0 ? 1 : correctiveAttempt_);
+                beginCorrective(nowMs);
             }
             return accepted;
         }
@@ -243,15 +243,11 @@ public:
             }
             correctiveActive_ = false;
             acknowledgementStarted_ = false;
-            beginRelease(nowMs);
+            beginMaintenance(nowMs, rngState_);
         }
         else if (phase_ == PHASE_WAIT_DAS)
         {
             beginArming();
-        }
-        else if (hos == 1 && phase_ == PHASE_MAINTENANCE)
-        {
-            beginRelease(nowMs);
         }
         return accepted;
     }
@@ -305,37 +301,19 @@ public:
         if (phase_ == PHASE_ARMING)
         {
             if (das_.raw() >= 3 && das_.raw() <= 5)
-                beginCorrective(nowMs, correctiveAttempt_ == 0 ? 1 : correctiveAttempt_);
+                beginCorrective(nowMs);
             else
                 beginMaintenance(nowMs, entropy);
         }
 
-        if (phase_ == PHASE_MAINTENANCE && das_.raw() == 1)
-            beginRelease(nowMs);
         if (phase_ == PHASE_MAINTENANCE && phaseExpired(nowMs))
-            beginRelease(nowMs);
+            beginRest(nowMs, entropy);
 
         if (phase_ == PHASE_REST)
         {
             if (!phaseExpired(nowMs))
                 return blockedDecision(BLOCK_REST);
             beginMaintenance(nowMs, entropy);
-        }
-
-        if (phase_ == PHASE_VERIFY)
-        {
-            if (!phaseExpired(nowMs))
-                return blockedDecision(BLOCK_VERIFY);
-            if (correctiveAttempt_ == 1 && das_.raw() >= 3 && das_.raw() <= 5)
-                beginCorrective(nowMs, 2);
-            else if (correctiveAttempt_ >= 2)
-            {
-                acknowledgementTimeoutCount_++;
-                enterFault(BLOCK_ACK_TIMEOUT);
-                return blockedDecision(BLOCK_ACK_TIMEOUT);
-            }
-            else
-                beginRelease(nowMs);
         }
 
         if (phase_ == PHASE_RELEASE)
@@ -346,15 +324,13 @@ public:
 
         if (phase_ == PHASE_CORRECTIVE)
         {
-            prepareCorrective(entropy);
-            walkMagnitude(5, true, entropy);
+            selectRandomMagnitude(true, entropy);
             return sendDecision(true);
         }
 
         if (phase_ == PHASE_MAINTENANCE)
         {
-            preparePreventive(entropy);
-            walkMagnitude(1, false, entropy);
+            selectRandomMagnitude(false, entropy);
             return sendDecision(false);
         }
 
@@ -371,9 +347,7 @@ public:
         lastSuccessfullyTransmittedTorqueCentiNm_ = decision.targetTorqueCentiNm;
         outputActive_ = decision.targetTorqueCentiNm != 0;
 
-        if (phase_ != PHASE_CORRECTIVE ||
-            !decision.corrective || decision.attempt != correctiveAttempt_ ||
-            decision.burstFrame != correctiveBurstFrame_)
+        if (phase_ != PHASE_CORRECTIVE || !decision.corrective)
             return;
 
         if (!acknowledgementStarted_)
@@ -381,15 +355,8 @@ public:
             acknowledgementStarted_ = true;
             acknowledgementStartedAtMs_ = nowMs;
         }
-        correctiveBurstFrame_++;
-        if (correctiveBurstFrame_ >= correctiveBurstFrameTarget_)
-        {
-            phase_ = PHASE_VERIFY;
-            blockReason_ = BLOCK_VERIFY;
-            phaseStartedAtMs_ = nowMs;
-            phaseDurationMs_ = correctiveAttempt_ == 1 ? 500U : 1000U;
-            targetTorqueCentiNm_ = 0;
-        }
+        if (correctiveBurstFrame_ < 0xFFU)
+            correctiveBurstFrame_++;
     }
 
     NagAdaptiveSnapshot snapshot(uint32_t nowMs) const
@@ -540,6 +507,9 @@ private:
         phaseStartedAtMs_ = nowMs;
         phaseDurationMs_ = triangularDuration(config_.activityMinMs, config_.activityMaxMs, entropy);
         currentMagnitudeCentiNm_ = 0;
+        correctiveAttempt_ = 0;
+        correctiveBurstFrame_ = 0;
+        correctiveBurstFrameTarget_ = 0;
         preparePreventive(entropy);
     }
 
@@ -568,17 +538,20 @@ private:
         outputActive_ = false;
     }
 
-    void beginCorrective(uint32_t nowMs, uint8_t attempt)
+    void beginCorrective(uint32_t nowMs)
     {
         phase_ = PHASE_CORRECTIVE;
         blockReason_ = BLOCK_NONE;
         phaseStartedAtMs_ = nowMs;
         phaseDurationMs_ = 0;
-        correctiveAttempt_ = attempt;
+        correctiveAttempt_ = 1;
         correctiveBurstFrame_ = 0;
         correctiveBurstFrameTarget_ = 0;
         currentMagnitudeCentiNm_ = 0;
         targetTorqueCentiNm_ = 0;
+        lastSuccessfullyTransmittedTorqueCentiNm_ = 0;
+        outputActive_ = false;
+        acknowledgementStarted_ = false;
     }
 
     void enterFault(BlockReason reason)
@@ -667,7 +640,7 @@ private:
         const double weight = 1.0 - (3.0 * x * x - 2.0 * x * x * x);
         const double scaled = static_cast<double>(releaseStartTorqueCentiNm_) * weight;
         const int32_t rounded = static_cast<int32_t>(scaled >= 0.0 ? scaled + 0.5 : scaled - 0.5);
-        targetTorqueCentiNm_ = clampI16(rounded, -180, 180);
+        targetTorqueCentiNm_ = clampI16(rounded, -250, 250);
         if (targetTorqueCentiNm_ == 0)
         {
             beginRest(nowMs, entropy);
@@ -693,8 +666,6 @@ private:
 
     void prepareCorrective(uint32_t entropy)
     {
-        if (correctiveBurstFrameTarget_ == 0)
-            correctiveBurstFrameTarget_ = static_cast<uint8_t>(3U + nextRandom(entropy) % 3U);
         if (injectionSign_ == 0 || currentMagnitudeCentiNm_ != 0)
             return;
         int16_t minValue;
@@ -703,7 +674,7 @@ private:
         currentMagnitudeCentiNm_ = triangularMagnitude(minValue, maxValue, entropy);
     }
 
-    void walkMagnitude(int16_t maxStep, bool corrective, uint32_t entropy)
+    void selectRandomMagnitude(bool corrective, uint32_t entropy)
     {
         int16_t minValue;
         int16_t maxValue;
@@ -711,10 +682,7 @@ private:
             correctiveRange(minValue, maxValue);
         else
             preventiveRange(minValue, maxValue);
-        const uint32_t width = static_cast<uint32_t>(maxStep * 2 + 1);
-        const int16_t step = static_cast<int16_t>(nextRandom(entropy) % width) - maxStep;
-        currentMagnitudeCentiNm_ = clampI16(
-            static_cast<int32_t>(currentMagnitudeCentiNm_) + step, minValue, maxValue);
+        currentMagnitudeCentiNm_ = triangularMagnitude(minValue, maxValue, entropy);
     }
 
     void preventiveRange(int16_t &minValue, int16_t &maxValue) const
@@ -748,7 +716,7 @@ private:
     NagAdaptiveDecision sendDecision(bool corrective)
     {
         targetTorqueCentiNm_ = clampI16(
-            static_cast<int32_t>(injectionSign_) * currentMagnitudeCentiNm_, -180, 180);
+            static_cast<int32_t>(injectionSign_) * currentMagnitudeCentiNm_, -250, 250);
         NagAdaptiveDecision decision;
         decision.shouldSend = true;
         decision.targetTorqueCentiNm = targetTorqueCentiNm_;

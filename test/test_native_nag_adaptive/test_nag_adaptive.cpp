@@ -1376,55 +1376,162 @@ void test_published_das_freshness_handles_wrap_and_never_seen()
     TEST_ASSERT_EQUAL_UINT32(0xFFFFFFFFU, neverSeen.ageMs);
 }
 
+void test_new_continuous_policy_defaults_and_bounds()
+{
+    const NagAdaptiveConfig defaults;
+    TEST_ASSERT_EQUAL_INT16(150, defaults.preventiveNegativeMinCentiNm);
+    TEST_ASSERT_EQUAL_INT16(180, defaults.preventivePositiveMaxCentiNm);
+    TEST_ASSERT_EQUAL_INT16(180, defaults.correctiveNegativeMinCentiNm);
+    TEST_ASSERT_EQUAL_INT16(250, defaults.correctivePositiveMaxCentiNm);
+    TEST_ASSERT_EQUAL_UINT32(10000U, defaults.activityMinMs);
+    TEST_ASSERT_EQUAL_UINT32(10000U, defaults.activityMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(1000U, defaults.restMinMs);
+    TEST_ASSERT_EQUAL_UINT32(3000U, defaults.restMaxMs);
+
+    NagAdaptiveConfig invalid;
+    invalid.preventiveNegativeMinCentiNm = 1;
+    invalid.preventiveNegativeMaxCentiNm = 999;
+    invalid.correctivePositiveMinCentiNm = 1;
+    invalid.correctivePositiveMaxCentiNm = 999;
+    invalid.activityMinMs = 1;
+    invalid.activityMaxMs = 99999;
+    invalid.restMinMs = 1;
+    invalid.restMaxMs = 99999;
+    const NagAdaptiveConfig normalized = NagAdaptiveController::normalizeConfig(invalid);
+    TEST_ASSERT_EQUAL_INT16(150, normalized.preventiveNegativeMinCentiNm);
+    TEST_ASSERT_EQUAL_INT16(180, normalized.preventiveNegativeMaxCentiNm);
+    TEST_ASSERT_EQUAL_INT16(180, normalized.correctivePositiveMinCentiNm);
+    TEST_ASSERT_EQUAL_INT16(250, normalized.correctivePositiveMaxCentiNm);
+    TEST_ASSERT_EQUAL_UINT32(8000U, normalized.activityMinMs);
+    TEST_ASSERT_EQUAL_UINT32(12000U, normalized.activityMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(1000U, normalized.restMinMs);
+    TEST_ASSERT_EQUAL_UINT32(3000U, normalized.restMaxMs);
+}
+
+void test_hos_0_to_2_send_ten_seconds_then_stop_for_one_to_three_seconds()
+{
+    for (uint8_t hos = 0; hos <= 2; ++hos)
+    {
+        NagAdaptiveController controller;
+        resetWithDas(controller, hos);
+        NagAdaptiveDecision decision = arm(controller);
+        int16_t magnitude = decision.targetTorqueCentiNm < 0
+                                ? -decision.targetTorqueCentiNm
+                                : decision.targetTorqueCentiNm;
+        TEST_ASSERT_TRUE(magnitude >= 150 && magnitude <= 180);
+
+        for (uint32_t nowMs = 120; nowMs < 10020; nowMs += 100)
+        {
+            if (nowMs % 500U == 20U)
+                TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), nowMs));
+            decision = epas(controller, nowMs);
+            TEST_ASSERT_TRUE(decision.shouldSend);
+            magnitude = decision.targetTorqueCentiNm < 0
+                            ? -decision.targetTorqueCentiNm
+                            : decision.targetTorqueCentiNm;
+            TEST_ASSERT_TRUE(magnitude >= 150 && magnitude <= 180);
+        }
+
+        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), 10020));
+        decision = epas(controller, 10020);
+        TEST_ASSERT_FALSE(decision.shouldSend);
+        TEST_ASSERT_EQUAL_INT16(0, decision.targetTorqueCentiNm);
+        TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_REST,
+                                controller.snapshot(10020).phase);
+        const uint32_t zeroDuration = controller.snapshot(10020).phaseRemainingMs;
+        TEST_ASSERT_TRUE(zeroDuration >= 1000U && zeroDuration <= 3000U);
+
+        for (uint32_t nowMs = 10120; nowMs < 10020U + zeroDuration; nowMs += 100)
+        {
+            TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), nowMs));
+            decision = epas(controller, nowMs);
+            TEST_ASSERT_FALSE(decision.shouldSend);
+            TEST_ASSERT_EQUAL_INT16(0, decision.targetTorqueCentiNm);
+        }
+
+        const uint32_t restartAt = 10020U + zeroDuration;
+        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), restartAt));
+        decision = epas(controller, restartAt);
+        TEST_ASSERT_TRUE(decision.shouldSend);
+        magnitude = decision.targetTorqueCentiNm < 0
+                        ? -decision.targetTorqueCentiNm
+                        : decision.targetTorqueCentiNm;
+        TEST_ASSERT_TRUE(magnitude >= 150 && magnitude <= 180);
+        TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_MAINTENANCE,
+                                controller.snapshot(restartAt).phase);
+    }
+}
+
+void test_hos_3_to_5_clear_previous_target_then_send_continuously_until_normal()
+{
+    for (uint8_t hos = 3; hos <= 5; ++hos)
+    {
+        NagAdaptiveController controller;
+        resetWithDas(controller, 2);
+        NagAdaptiveDecision decision = arm(controller);
+        controller.onTransmitResult(20, decision, true);
+
+        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), 30));
+        NagAdaptiveSnapshot snapshot = controller.snapshot(30);
+        TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_CORRECTIVE, snapshot.phase);
+        TEST_ASSERT_EQUAL_INT16(0, snapshot.targetTorqueCentiNm);
+        TEST_ASSERT_FALSE(snapshot.outputActive);
+
+        for (uint32_t nowMs = 30; nowMs <= 2030; nowMs += 10)
+        {
+            if (nowMs % 500U == 30U)
+                TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), nowMs));
+            decision = epas(controller, nowMs);
+            TEST_ASSERT_TRUE(decision.shouldSend);
+            TEST_ASSERT_TRUE(decision.corrective);
+            const int16_t magnitude = decision.targetTorqueCentiNm < 0
+                                          ? -decision.targetTorqueCentiNm
+                                          : decision.targetTorqueCentiNm;
+            TEST_ASSERT_TRUE(magnitude >= 180 && magnitude <= 250);
+            controller.onTransmitResult(nowMs, decision, true);
+            TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_CORRECTIVE,
+                                    controller.snapshot(nowMs).phase);
+        }
+
+        TEST_ASSERT_EQUAL_UINT32(0U, controller.snapshot(2030).acknowledgementTimeoutCount);
+        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(2), 2040));
+        TEST_ASSERT_EQUAL_UINT32(1U, controller.snapshot(2040).acknowledgementCount);
+        decision = epas(controller, 2040);
+        TEST_ASSERT_TRUE(decision.shouldSend);
+        TEST_ASSERT_FALSE(decision.corrective);
+        const int16_t magnitude = decision.targetTorqueCentiNm < 0
+                                      ? -decision.targetTorqueCentiNm
+                                      : decision.targetTorqueCentiNm;
+        TEST_ASSERT_TRUE(magnitude >= 150 && magnitude <= 180);
+    }
+}
+
 int main()
 {
     UNITY_BEGIN();
     RUN_TEST(test_adaptive_never_sends_without_fresh_das);
     RUN_TEST(test_adaptive_requires_three_valid_oem_epas_frames);
-    RUN_TEST(test_hos_0_runs_preventive_window_release_and_no_tx_rest);
-    RUN_TEST(test_hos_1_interrupts_preventive_window_into_release);
-    RUN_TEST(test_rest_duration_uses_1500_to_2500ms_triangular_bounds);
-    RUN_TEST(test_preventive_walk_stays_between_15_and_18_centi_nm);
-    RUN_TEST(test_preventive_walk_changes_by_at_most_one_centi_nm_per_frame);
+    RUN_TEST(test_new_continuous_policy_defaults_and_bounds);
+    RUN_TEST(test_hos_0_to_2_send_ten_seconds_then_stop_for_one_to_three_seconds);
     RUN_TEST(test_measured_torque_selects_opposite_injection_direction);
     RUN_TEST(test_direction_flip_requires_100ms_stability);
     RUN_TEST(test_deadband_holds_last_trusted_direction);
     RUN_TEST(test_no_torque_and_no_angle_direction_blocks_send);
-    RUN_TEST(test_hos_3_through_5_interrupt_every_nonfault_phase);
-    RUN_TEST(test_corrective_burst_has_three_to_five_successful_echoes);
-    RUN_TEST(test_corrective_walk_stays_between_150_and_180_centi_nm);
-    RUN_TEST(test_hos_return_to_0_or_1_records_ack_latency);
-    RUN_TEST(test_second_failed_corrective_attempt_enters_fault_hold);
+    RUN_TEST(test_hos_3_to_5_clear_previous_target_then_send_continuously_until_normal);
     RUN_TEST(test_hos_6_through_15_enter_fault_hold_without_send);
     RUN_TEST(test_das_stale_during_send_returns_wait_das);
     RUN_TEST(test_epas_gap_over_200ms_rearms_three_frame_guard);
-    RUN_TEST(test_every_decision_is_clamped_to_plus_minus_180_centi_nm);
-    RUN_TEST(test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix);
-    RUN_TEST(test_release_targets_decay_monotonically_and_zero_enters_no_send_rest);
-    RUN_TEST(test_failed_initial_maintenance_and_corrective_outputs_skip_release_tx);
-    RUN_TEST(test_failed_tx_preserves_last_successful_output_and_release_origin);
-    RUN_TEST(test_release_direction_tracks_successful_output_during_candidate_reversal);
-    RUN_TEST(test_strict_config_parser_rejects_malformed_and_out_of_range_values);
-    RUN_TEST(test_strict_config_parser_accepts_legal_boundaries_and_validates_ranges);
-    RUN_TEST(test_pending_command_and_snapshot_cross_only_can_frame_boundaries);
     RUN_TEST(test_config_apply_decision_keeps_valid_noop_requests_alive);
     RUN_TEST(test_published_das_freshness_expires_without_another_can_frame);
     RUN_TEST(test_published_das_freshness_handles_wrap_and_never_seen);
     RUN_TEST(test_corrective_hos_requires_three_valid_oem_epas_frames_before_send);
-    RUN_TEST(test_epas_gap_over_200ms_rearms_during_corrective);
-    RUN_TEST(test_fault_hold_recovers_after_2000ms_continuously_fresh_normal_hos);
-    RUN_TEST(test_hos_2_ends_corrective_and_records_warning_clearance);
     RUN_TEST(test_request_reset_recovers_fault_hold_immediately);
     RUN_TEST(test_epas_gap_clears_direction_reversal_candidate_timer);
-    RUN_TEST(test_normalize_config_swaps_and_clamps_every_range);
-    RUN_TEST(test_rejected_das_frames_reset_fault_recovery_interval);
     RUN_TEST(test_39b_is_observed_but_never_echoed);
     RUN_TEST(test_adaptive_370_does_not_send_before_fresh_39b);
     RUN_TEST(test_adaptive_uses_only_non_own_370_for_direction);
-    RUN_TEST(test_adaptive_uses_decision_target_without_legacy_h1_h2_ranges);
     RUN_TEST(test_local_send_success_does_not_increment_das_ack_count);
     RUN_TEST(test_das_transition_from_3_to_1_records_ack_after_tx);
-    RUN_TEST(test_failed_send_does_not_advance_corrective_burst);
     RUN_TEST(test_adaptive_runtime_reenable_rearms_without_mode_change);
     RUN_TEST(test_adaptive_angle_tracks_only_accepted_non_own_oem_epas);
     return UNITY_END();

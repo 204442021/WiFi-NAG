@@ -11,7 +11,7 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-custom-dirty", "nag-custom-defaults", "nag-custom-save",
     "nag-pv-neg-min", "nag-pv-neg-max", "nag-pv-pos-min", "nag-pv-pos-max",
     "nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max",
-    "nag-active-min", "nag-active-max", "nag-release-min", "nag-release-max",
+    "nag-active-min", "nag-active-max",
     "nag-rest-min", "nag-rest-max", "nag-direction-deadband",
     "nag-custom-hard-cap", "nag-custom-das-timeout",
 )
@@ -50,20 +50,20 @@ EXPECTED_NVS_KEYS = (
 )
 
 EXPECTED_NVS_DEFAULTS = {
-    "nag_pv_n_min": "0.15",
-    "nag_pv_n_max": "0.18",
-    "nag_pv_p_min": "0.15",
-    "nag_pv_p_max": "0.18",
-    "nag_cr_n_min": "1.50",
-    "nag_cr_n_max": "1.80",
-    "nag_cr_p_min": "1.50",
-    "nag_cr_p_max": "1.80",
-    "nag_act_min": "0.8",
-    "nag_act_max": "1.4",
+    "nag_pv_n_min": "1.50",
+    "nag_pv_n_max": "1.80",
+    "nag_pv_p_min": "1.50",
+    "nag_pv_p_max": "1.80",
+    "nag_cr_n_min": "1.80",
+    "nag_cr_n_max": "2.50",
+    "nag_cr_p_min": "1.80",
+    "nag_cr_p_max": "2.50",
+    "nag_act_min": "10.0",
+    "nag_act_max": "10.0",
     "nag_rel_min": "0.2",
     "nag_rel_max": "0.4",
-    "nag_rst_min": "1.5",
-    "nag_rst_max": "2.5",
+    "nag_rst_min": "1.0",
+    "nag_rst_max": "3.0",
     "nag_dir_db": "0.05",
     "nag_das_ms": "750",
 }
@@ -113,8 +113,8 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             self.assertRegex(self.source, rf'\bid="{re.escape(element_id)}"')
 
         for text in (
-            "预防层", "纠正层", "节奏与休息", "安全边界",
-            "休息期不额外发送 0x370", "本地发送成功不等于 DAS 接受",
+            "预防层", "纠正层", "注入与停发间隔", "安全边界",
+            "间隔期不额外发送 0x370", "本地发送成功不等于 DAS 接受",
         ):
             self.assertIn(text, self.source)
         for retired in (
@@ -125,21 +125,21 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         for element_id in ("nag-pv-neg-min", "nag-pv-neg-max", "nag-pv-pos-min", "nag-pv-pos-max"):
             self.assertRegex(
                 self.source,
-                rf'id="{element_id}"[^>]*min="0\.10"[^>]*max="0\.50"[^>]*step="0\.01"',
+                rf'id="{element_id}"[^>]*min="1\.50"[^>]*max="1\.80"[^>]*step="0\.01"',
             )
         for element_id in ("nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max"):
             self.assertRegex(
                 self.source,
-                rf'id="{element_id}"[^>]*min="0\.50"[^>]*max="1\.80"[^>]*step="0\.01"',
+                rf'id="{element_id}"[^>]*min="1\.80"[^>]*max="2\.50"[^>]*step="0\.01"',
             )
 
     def test_custom_strategy_uses_structured_draft_and_explicit_save_contract(self):
         compact = re.sub(r"\s+", "", self.source)
         self.assertIn(
-            "constnagCustomDefaults={preventiveNegative:[0.15,0.18],"
-            "preventivePositive:[0.15,0.18],correctiveNegative:[1.50,1.80],"
-            "correctivePositive:[1.50,1.80],activity:[0.8,1.4],"
-            "release:[0.2,0.4],rest:[1.5,2.5],directionDeadband:0.05,"
+            "constnagCustomDefaults={preventiveNegative:[1.50,1.80],"
+            "preventivePositive:[1.50,1.80],correctiveNegative:[1.80,2.50],"
+            "correctivePositive:[1.80,2.50],activity:[10.0,10.0],"
+            "release:[0.2,0.4],rest:[1.0,3.0],directionDeadband:0.05,"
             "dasFreshTimeoutMs:750};",
             compact,
         )
@@ -227,8 +227,8 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         compact = re.sub(r"\s+", "", self.source)
         self.assertIn(
             "constphaseNames={disabled:'关闭','wait-das':'等待DAS',"
-            "arming:'确认OEM帧',maintenance:'预防扫动',release:'平滑释放',"
-            "rest:'无发送休息',corrective:'纠正脉冲',verify:'等待DAS确认',"
+            "arming:'确认OEM帧',maintenance:'连续预防注入',release:'兼容释放阶段',"
+            "rest:'停发间隔',corrective:'连续纠偏注入',verify:'兼容确认阶段',"
             "'fault-hold':'保护停发'};",
             compact,
         )
@@ -364,7 +364,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         for label in (
             "NAG 自适应闭环", "原车 EPAS 0x370", "原车扭矩", "原车计数器",
             "手握状态", "控制阶段", "目标扭矩", "方向来源", "阶段剩余时间",
-            "纠偏尝试 / 连发进度", "尝试 / 成功 / 失败", "DAS 确认次数",
+            "连续纠偏帧", "尝试 / 成功 / 失败", "DAS 确认次数",
         ):
             self.assertIn(label, panel)
         for english in (
