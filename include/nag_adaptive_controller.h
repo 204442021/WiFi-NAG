@@ -10,11 +10,9 @@ struct NagAdaptiveConfig
     int16_t preventiveNegativeMaxCentiNm = 180;
     int16_t preventivePositiveMinCentiNm = 150;
     int16_t preventivePositiveMaxCentiNm = 180;
-    int16_t correctiveNegativeMinCentiNm = 180;
-    int16_t correctiveNegativeMaxCentiNm = 200;
-    int16_t correctivePositiveMinCentiNm = 180;
-    int16_t correctivePositiveMaxCentiNm = 200;
-    int16_t torqueDeadbandCentiNm = 5;
+    int16_t correctiveMinCentiNm = 180;
+    int16_t correctiveMaxCentiNm = 200;
+    bool maintenanceEnabled = true;
     uint32_t activityMinMs = 10000;
     uint32_t activityMaxMs = 10000;
     uint32_t releaseMinMs = 200;
@@ -112,6 +110,7 @@ public:
         BLOCK_VERIFY = 7,
         BLOCK_DAS_STATE = 8,
         BLOCK_ACK_TIMEOUT = 9,
+        BLOCK_MAINTENANCE_DISABLED = 10,
     };
 
     enum DirectionSource : uint8_t
@@ -128,11 +127,8 @@ public:
                           value.preventiveNegativeMaxCentiNm, 150, 180);
         normalizeI16Range(value.preventivePositiveMinCentiNm,
                           value.preventivePositiveMaxCentiNm, 150, 180);
-        normalizeI16Range(value.correctiveNegativeMinCentiNm,
-                          value.correctiveNegativeMaxCentiNm, 180, 200);
-        normalizeI16Range(value.correctivePositiveMinCentiNm,
-                          value.correctivePositiveMaxCentiNm, 180, 200);
-        value.torqueDeadbandCentiNm = clampI16(value.torqueDeadbandCentiNm, 0, 50);
+        normalizeI16Range(value.correctiveMinCentiNm,
+                          value.correctiveMaxCentiNm, 180, 200);
         normalizeU32Range(value.activityMinMs, value.activityMaxMs, 8000, 12000);
         normalizeU32Range(value.releaseMinMs, value.releaseMaxMs, 100, 1000);
         normalizeU32Range(value.restMinMs, value.restMaxMs, 1000, 2000);
@@ -167,7 +163,6 @@ public:
         targetTorqueCentiNm_ = 0;
         injectionSign_ = 0;
         outputActive_ = false;
-        candidateSign_ = 0;
         armingFrames_ = 0;
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
@@ -282,8 +277,6 @@ public:
         if (epasSeen_ && static_cast<uint32_t>(nowMs - lastEpasAtMs_) > 200U)
         {
             armingFrames_ = 0;
-            candidateSign_ = 0;
-            candidateStartedAtMs_ = 0;
             if (!correctiveActive_)
                 beginArming();
         }
@@ -306,14 +299,31 @@ public:
                 beginMaintenance(nowMs, entropy);
         }
 
-        if (phase_ == PHASE_MAINTENANCE && phaseExpired(nowMs))
-            beginRest(nowMs, entropy);
+        if (phase_ == PHASE_MAINTENANCE)
+        {
+            if (!config_.maintenanceEnabled)
+            {
+                targetTorqueCentiNm_ = 0;
+                currentMagnitudeCentiNm_ = 0;
+                outputActive_ = false;
+                return blockedDecision(BLOCK_MAINTENANCE_DISABLED);
+            }
+            if (phaseExpired(nowMs))
+                beginRest(nowMs, entropy);
+        }
 
         if (phase_ == PHASE_REST)
         {
             if (!phaseExpired(nowMs))
                 return blockedDecision(BLOCK_REST);
             beginMaintenance(nowMs, entropy);
+            if (!config_.maintenanceEnabled)
+            {
+                targetTorqueCentiNm_ = 0;
+                currentMagnitudeCentiNm_ = 0;
+                outputActive_ = false;
+                return blockedDecision(BLOCK_MAINTENANCE_DISABLED);
+            }
         }
 
         if (phase_ == PHASE_RELEASE)
@@ -453,8 +463,6 @@ private:
         targetTorqueCentiNm_ = 0;
         observedTorqueCentiNm_ = 0;
         injectionSign_ = 0;
-        candidateSign_ = 0;
-        candidateStartedAtMs_ = 0;
         armingFrames_ = 0;
         epasSeen_ = false;
         lastEpasAtMs_ = nowMs;
@@ -496,21 +504,25 @@ private:
         blockReason_ = BLOCK_ARMING;
         targetTorqueCentiNm_ = 0;
         armingFrames_ = 0;
-        candidateSign_ = 0;
-        candidateStartedAtMs_ = 0;
     }
 
     void beginMaintenance(uint32_t nowMs, uint32_t entropy)
     {
         phase_ = PHASE_MAINTENANCE;
-        blockReason_ = BLOCK_NONE;
+        blockReason_ = config_.maintenanceEnabled ? BLOCK_NONE : BLOCK_MAINTENANCE_DISABLED;
         phaseStartedAtMs_ = nowMs;
         phaseDurationMs_ = triangularDuration(config_.activityMinMs, config_.activityMaxMs, entropy);
         currentMagnitudeCentiNm_ = 0;
         correctiveAttempt_ = 0;
         correctiveBurstFrame_ = 0;
         correctiveBurstFrameTarget_ = 0;
-        preparePreventive(entropy);
+        if (config_.maintenanceEnabled)
+            preparePreventive(entropy);
+        else
+        {
+            targetTorqueCentiNm_ = 0;
+            outputActive_ = false;
+        }
     }
 
     void beginRelease(uint32_t nowMs)
@@ -567,61 +579,37 @@ private:
 
     void updateDirection(uint32_t nowMs, int16_t angleDeciDeg, int16_t torqueCentiNm)
     {
-        int8_t desiredSign = 0;
-        if (torqueCentiNm > config_.torqueDeadbandCentiNm)
-            desiredSign = -1;
-        else if (torqueCentiNm < -config_.torqueDeadbandCentiNm)
-            desiredSign = 1;
-
-        if (injectionSign_ == 0)
+        (void)nowMs;
+        if (torqueCentiNm > 0)
         {
-            if (desiredSign != 0)
-            {
-                injectionSign_ = desiredSign;
-                directionSource_ = DIRECTION_TORQUE;
-            }
-            else if (angleDeciDeg > 10)
-            {
-                injectionSign_ = -1;
-                directionSource_ = DIRECTION_ANGLE;
-            }
-            else if (angleDeciDeg < -10)
-            {
-                injectionSign_ = 1;
-                directionSource_ = DIRECTION_ANGLE;
-            }
-            else
-            {
-                directionSource_ = DIRECTION_NONE;
-            }
+            injectionSign_ = -1;
+            directionSource_ = DIRECTION_TORQUE;
             return;
         }
-
-        if (desiredSign == 0)
+        if (torqueCentiNm < 0)
         {
-            candidateSign_ = 0;
-            directionSource_ = DIRECTION_HOLD;
-        }
-        else if (desiredSign == injectionSign_)
-        {
-            candidateSign_ = 0;
+            injectionSign_ = 1;
             directionSource_ = DIRECTION_TORQUE;
+            return;
         }
-        else if (candidateSign_ != desiredSign)
+        if (injectionSign_ != 0)
         {
-            candidateSign_ = desiredSign;
-            candidateStartedAtMs_ = nowMs;
             directionSource_ = DIRECTION_HOLD;
+            return;
         }
-        else if (static_cast<uint32_t>(nowMs - candidateStartedAtMs_) >= 100U)
+        if (angleDeciDeg > 10)
         {
-            injectionSign_ = desiredSign;
-            candidateSign_ = 0;
-            directionSource_ = DIRECTION_TORQUE;
+            injectionSign_ = -1;
+            directionSource_ = DIRECTION_ANGLE;
+        }
+        else if (angleDeciDeg < -10)
+        {
+            injectionSign_ = 1;
+            directionSource_ = DIRECTION_ANGLE;
         }
         else
         {
-            directionSource_ = DIRECTION_HOLD;
+            directionSource_ = DIRECTION_NONE;
         }
     }
 
@@ -664,16 +652,6 @@ private:
         currentMagnitudeCentiNm_ = triangularMagnitude(minValue, maxValue, entropy);
     }
 
-    void prepareCorrective(uint32_t entropy)
-    {
-        if (injectionSign_ == 0 || currentMagnitudeCentiNm_ != 0)
-            return;
-        int16_t minValue;
-        int16_t maxValue;
-        correctiveRange(minValue, maxValue);
-        currentMagnitudeCentiNm_ = triangularMagnitude(minValue, maxValue, entropy);
-    }
-
     void selectRandomMagnitude(bool corrective, uint32_t entropy)
     {
         int16_t minValue;
@@ -701,16 +679,8 @@ private:
 
     void correctiveRange(int16_t &minValue, int16_t &maxValue) const
     {
-        if (injectionSign_ < 0)
-        {
-            minValue = config_.correctiveNegativeMinCentiNm;
-            maxValue = config_.correctiveNegativeMaxCentiNm;
-        }
-        else
-        {
-            minValue = config_.correctivePositiveMinCentiNm;
-            maxValue = config_.correctivePositiveMaxCentiNm;
-        }
+        minValue = config_.correctiveMinCentiNm;
+        maxValue = config_.correctiveMaxCentiNm;
     }
 
     NagAdaptiveDecision sendDecision(bool corrective)
@@ -801,11 +771,9 @@ private:
     int16_t currentMagnitudeCentiNm_ = 0;
     bool outputActive_ = false;
     int8_t injectionSign_ = 0;
-    int8_t candidateSign_ = 0;
     uint8_t armingFrames_ = 0;
     bool epasSeen_ = false;
     uint32_t lastEpasAtMs_ = 0;
-    uint32_t candidateStartedAtMs_ = 0;
     uint32_t phaseStartedAtMs_ = 0;
     uint32_t phaseDurationMs_ = 0;
     uint32_t rngState_ = 0;
