@@ -79,7 +79,7 @@ CANL -> 车辆 CAN-L
 - `VERIFY` 等待 DAS 确认且不发送；首次确认失败可进行第二次纠正，连续失败进入 `FAULT_HOLD`。
 - HOS 回到 0/1 或维护窗口结束后进入 `RELEASE`，只从最后一次成功发送的 signed torque 单调衰减到 0；没有成功输出则直接进入 `REST`。
 - `REST` 为 no-send 的动态休息窗口，结束后重新进入维护闭环。
-- HOS 8/9/15、DAS stale 或确认超时会阻止发送；普通 fault recovery 需要 2000 ms 连续稳定，显式 reset 立即 off/on。
+- HOS 8..15 均 fail-closed 并保守停发，其中 9..14 为未定义状态；DAS stale 或确认超时同样阻止发送。普通 fault recovery 需要 2000 ms 连续稳定，显式 reset 立即 off/on。
 - 所有动态扭矩均限制在 `±1.80 Nm`，counter、checksum、own-echo 跳过及 stale/fault no-send 约束保持不变。
 - 自适应参数保存在 NVS，重启后继续生效；详细状态机与参数见 [`docs/nag-adaptive-closed-loop.md`](docs/nag-adaptive-closed-loop.md)。
 - Gate B/C 实车验证仍为 **PENDING**，本文不声称已经完成实车验证。
