@@ -468,72 +468,244 @@ void test_every_decision_is_clamped_to_plus_minus_180_centi_nm()
 void test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix()
 {
     static constexpr uint32_t kSequenceCount = 100000;
+    static constexpr uint32_t kCombinationCount = 16U * 16U * 3U * 2U * 2U;
+    uint8_t coverage[16][16][3][2][2] = {};
     MockDriver driver;
+
+    const auto makeLiteralEpasFrame = [](uint8_t counter, int16_t torqueCentiNm) {
+        CanFrame frame = {.id = 0x370, .dlc = 8};
+        const uint16_t torqueRaw = static_cast<uint16_t>(2050 + torqueCentiNm);
+        frame.data[0] = 0x12;
+        frame.data[1] = 0x00;
+        frame.data[2] = static_cast<uint8_t>(0x80 | ((torqueRaw >> 8) & 0x0F));
+        frame.data[3] = static_cast<uint8_t>(torqueRaw & 0xFF);
+        frame.data[4] = 0x20;
+        frame.data[5] = 0x00;
+        frame.data[6] = static_cast<uint8_t>(0x40 | (counter & 0x0F));
+        uint16_t sum = 0;
+        for (uint8_t index = 0; index < 7; ++index)
+            sum += frame.data[index];
+        frame.data[7] = static_cast<uint8_t>((sum + 0x73) & 0xFF);
+        return frame;
+    };
+    const auto readLiteralTorqueCentiNm = [](const CanFrame &frame) {
+        const uint16_t raw = static_cast<uint16_t>(((frame.data[2] & 0x0F) << 8) |
+                                                   frame.data[3]);
+        return static_cast<int16_t>(raw) - 2050;
+    };
+
+    uint32_t allowedCases = 0;
+    uint32_t prohibitedCases = 0;
+    uint32_t attemptedAllowedCases = 0;
+    uint32_t successfulAllowedCases = 0;
+    uint32_t failedAllowedCases = 0;
     bool sawCounterWrap = false;
-    bool sawPositiveTorque = false;
-    bool sawNegativeTorque = false;
-    bool sawDeadband = false;
-    bool sawDasStale = false;
-    bool sawHos[16] = {};
+    bool sawPreventiveSend = false;
+    bool sawCorrectiveSend = false;
+    bool sawStaleBlock = false;
+    bool sawHosOneBlock = false;
+    bool sawBlockedHos = false;
+    bool sawNoDirectionBlock = false;
+    bool sawDriverFailure = false;
+    bool sawVerifyNoSend = false;
+    bool sawDasAcknowledgement = false;
+    bool representativeAcknowledged[4] = {};
 
     nagKillerRuntime = true;
     for (uint32_t sequence = 0; sequence < kSequenceCount; ++sequence)
     {
+        uint32_t combination = sequence % kCombinationCount;
+        const uint8_t counter0 = static_cast<uint8_t>(combination % 16U);
+        combination /= 16U;
+        const uint8_t hos = static_cast<uint8_t>(combination % 16U);
+        combination /= 16U;
+        const uint8_t directionCase = static_cast<uint8_t>(combination % 3U);
+        combination /= 3U;
+        const uint8_t freshnessCase = static_cast<uint8_t>(combination % 2U);
+        combination /= 2U;
+        const uint8_t localSendCase = static_cast<uint8_t>(combination % 2U);
+
         NagHandler handler;
         handler.setMode(NagHandler::MODE_ADAPTIVE);
         driver.reset();
+        driver.writeEnabled = localSendCase == 0;
 
-        const uint8_t hos = static_cast<uint8_t>((sequence / 16U) & 0x0FU);
-        const uint8_t counter0 = static_cast<uint8_t>(sequence & 0x0FU);
         const uint8_t counter1 = static_cast<uint8_t>((counter0 + 1U) & 0x0FU);
         const uint8_t counter2 = static_cast<uint8_t>((counter0 + 2U) & 0x0FU);
         const uint8_t expectedEchoCounter = static_cast<uint8_t>((counter2 + 1U) & 0x0FU);
-        const uint8_t directionCase = static_cast<uint8_t>((sequence / 256U) % 3U);
         const int16_t observedTorqueCentiNm = directionCase == 0 ? 20 :
                                               directionCase == 1 ? -20 : 0;
-        const bool dasStale = (sequence % 97U) == 0U;
-        const uint32_t epasStartMs = dasStale ? 501U : 0U;
+        const bool dasFresh = freshnessCase == 0;
+        const bool localSendSucceeds = localSendCase == 0;
+        const bool legalHos = hos == 0 || (hos >= 2 && hos <= 7);
+        const bool hasDirection = directionCase < 2;
+        const bool shouldAttempt = dasFresh && legalHos && hasDirection;
+        const uint32_t epasStartMs = dasFresh ? 0U : 501U;
 
-        sawHos[hos] = true;
-        sawCounterWrap = sawCounterWrap || counter1 < counter0 || counter2 < counter1;
-        sawPositiveTorque = sawPositiveTorque || observedTorqueCentiNm > 0;
-        sawNegativeTorque = sawNegativeTorque || observedTorqueCentiNm < 0;
-        sawDeadband = sawDeadband || observedTorqueCentiNm == 0;
-        sawDasStale = sawDasStale || dasStale;
+        coverage[counter0][hos][directionCase][freshnessCase][localSendCase]++;
+        sawCounterWrap = sawCounterWrap || counter1 < counter0 || counter2 < counter1 ||
+                         expectedEchoCounter < counter2;
 
         handleAt(handler, driver, makeDasFrame(hos), 0);
         handleAt(handler, driver,
-                 makeHandlerEpasFrame(counter0, observedTorqueCentiNm), epasStartMs);
+                 makeLiteralEpasFrame(counter0, observedTorqueCentiNm), epasStartMs);
         handleAt(handler, driver,
-                 makeHandlerEpasFrame(counter1, observedTorqueCentiNm), epasStartMs + 10U);
+                 makeLiteralEpasFrame(counter1, observedTorqueCentiNm), epasStartMs + 10U);
         handleAt(handler, driver,
-                 makeHandlerEpasFrame(counter2, observedTorqueCentiNm), epasStartMs + 20U);
+                 makeLiteralEpasFrame(counter2, observedTorqueCentiNm), epasStartMs + 20U);
 
-        const bool mustNotSend = dasStale || hos == 1 || hos >= 8 ||
-                                 observedTorqueCentiNm == 0;
-        if (mustNotSend)
-            TEST_ASSERT_EQUAL(0, driver.sent.size());
-
-        for (const CanFrame &echo : driver.sent)
+        const NagAdaptiveSnapshot initialSnapshot =
+            handler.adaptiveController.snapshot(epasStartMs + 20U);
+        if (!shouldAttempt)
         {
-            const int16_t sentTorqueCentiNm = NagHandler::rawToCentiNm(
-                NagHandler::readTorqueRaw(echo));
-            TEST_ASSERT_TRUE(sentTorqueCentiNm >= -180 && sentTorqueCentiNm <= 180);
-            TEST_ASSERT_EQUAL_UINT8(expectedEchoCounter, echo.data[6] & 0x0F);
-            if (observedTorqueCentiNm > 0)
-                TEST_ASSERT_LESS_THAN_INT16(0, sentTorqueCentiNm);
-            if (observedTorqueCentiNm < 0)
-                TEST_ASSERT_GREATER_THAN_INT16(0, sentTorqueCentiNm);
+            prohibitedCases++;
+            TEST_ASSERT_EQUAL(0, driver.sent.size());
+            TEST_ASSERT_EQUAL_UINT32(0, handler.nagSendAttemptCount);
+            TEST_ASSERT_EQUAL_UINT32(0, handler.nagSendFailureCount);
+            TEST_ASSERT_EQUAL_UINT32(0, handler.nagEchoCount);
+            TEST_ASSERT_EQUAL_UINT32(0, initialSnapshot.acknowledgementCount);
+            sawStaleBlock = sawStaleBlock || !dasFresh;
+            sawHosOneBlock = sawHosOneBlock || (dasFresh && hos == 1 && hasDirection);
+            sawBlockedHos = sawBlockedHos || (dasFresh && hos >= 8 && hasDirection);
+            sawNoDirectionBlock = sawNoDirectionBlock || (dasFresh && legalHos && !hasDirection);
+            continue;
+        }
+
+        allowedCases++;
+        attemptedAllowedCases++;
+        TEST_ASSERT_EQUAL_UINT32(1, handler.nagSendAttemptCount);
+        TEST_ASSERT_EQUAL_UINT32(0, initialSnapshot.acknowledgementCount);
+
+        if (!localSendSucceeds)
+        {
+            failedAllowedCases++;
+            sawDriverFailure = true;
+            TEST_ASSERT_EQUAL(0, driver.sent.size());
+            TEST_ASSERT_EQUAL_UINT32(1, handler.nagSendFailureCount);
+            TEST_ASSERT_EQUAL_UINT32(0, handler.nagEchoCount);
+            TEST_ASSERT_EQUAL_UINT32(0, handler.framesSent);
+            TEST_ASSERT_EQUAL_UINT32(0, initialSnapshot.acknowledgementCount);
+            if (hos >= 2)
+                TEST_ASSERT_EQUAL_UINT8(0, initialSnapshot.correctiveBurstFrame);
+            continue;
+        }
+
+        successfulAllowedCases++;
+        TEST_ASSERT_EQUAL_UINT32(0, handler.nagSendFailureCount);
+        TEST_ASSERT_EQUAL_UINT32(1, handler.nagEchoCount);
+        TEST_ASSERT_EQUAL_UINT32(1, handler.framesSent);
+        TEST_ASSERT_EQUAL(1, driver.sent.size());
+
+        const CanFrame &initialEcho = driver.sent[0];
+        const int16_t sentTorqueCentiNm = readLiteralTorqueCentiNm(initialEcho);
+        const int16_t sentMagnitudeCentiNm = sentTorqueCentiNm < 0 ?
+                                             static_cast<int16_t>(-sentTorqueCentiNm) :
+                                             sentTorqueCentiNm;
+        TEST_ASSERT_TRUE(sentTorqueCentiNm >= -180 && sentTorqueCentiNm <= 180);
+        TEST_ASSERT_EQUAL_UINT8(expectedEchoCounter, initialEcho.data[6] & 0x0F);
+        if (observedTorqueCentiNm > 0)
+            TEST_ASSERT_TRUE(sentTorqueCentiNm < 0);
+        else
+            TEST_ASSERT_TRUE(sentTorqueCentiNm > 0);
+
+        if (hos == 0)
+        {
+            sawPreventiveSend = true;
+            TEST_ASSERT_TRUE(sentMagnitudeCentiNm >= 15 && sentMagnitudeCentiNm <= 18);
+            TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_MAINTENANCE,
+                                    initialSnapshot.phase);
+        }
+        else
+        {
+            sawCorrectiveSend = true;
+            TEST_ASSERT_TRUE(sentMagnitudeCentiNm >= 150 && sentMagnitudeCentiNm <= 180);
+            TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_CORRECTIVE,
+                                    initialSnapshot.phase);
+            TEST_ASSERT_EQUAL_UINT8(1, initialSnapshot.correctiveBurstFrame);
+        }
+
+        int8_t representativeIndex = -1;
+        if (hos == 2 && counter0 == 0)
+            representativeIndex = static_cast<int8_t>(directionCase);
+        else if (hos == 7 && counter0 == 15)
+            representativeIndex = static_cast<int8_t>(2 + directionCase);
+
+        if (representativeIndex >= 0 && !representativeAcknowledged[representativeIndex])
+        {
+            uint32_t nowMs = epasStartMs + 30U;
+            uint8_t nextCounter = static_cast<uint8_t>((counter2 + 1U) & 0x0FU);
+            while (handler.adaptiveController.snapshot(nowMs).phase ==
+                   NagAdaptiveController::PHASE_CORRECTIVE)
+            {
+                const size_t sentBefore = driver.sent.size();
+                handleAt(handler, driver,
+                         makeLiteralEpasFrame(nextCounter, observedTorqueCentiNm), nowMs);
+                TEST_ASSERT_EQUAL(sentBefore + 1U, driver.sent.size());
+                const CanFrame &burstEcho = driver.sent.back();
+                const int16_t burstTorqueCentiNm = readLiteralTorqueCentiNm(burstEcho);
+                TEST_ASSERT_TRUE(burstTorqueCentiNm >= -180 && burstTorqueCentiNm <= 180);
+                TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>((nextCounter + 1U) & 0x0FU),
+                                        burstEcho.data[6] & 0x0F);
+                if (observedTorqueCentiNm > 0)
+                    TEST_ASSERT_TRUE(burstTorqueCentiNm < 0);
+                else
+                    TEST_ASSERT_TRUE(burstTorqueCentiNm > 0);
+                nextCounter = static_cast<uint8_t>((nextCounter + 1U) & 0x0FU);
+                nowMs += 10U;
+            }
+
+            TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_VERIFY,
+                                    handler.adaptiveController.snapshot(nowMs).phase);
+            const size_t sentBeforeVerify = driver.sent.size();
+            const uint32_t attemptsBeforeVerify = handler.nagSendAttemptCount;
+            handleAt(handler, driver,
+                     makeLiteralEpasFrame(nextCounter, observedTorqueCentiNm), nowMs);
+            TEST_ASSERT_EQUAL(sentBeforeVerify, driver.sent.size());
+            TEST_ASSERT_EQUAL_UINT32(attemptsBeforeVerify, handler.nagSendAttemptCount);
+            TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_VERIFY,
+                                    handler.adaptiveController.snapshot(nowMs).phase);
+            sawVerifyNoSend = true;
+
+            const uint32_t acknowledgementAtMs = nowMs + 50U;
+            handleAt(handler, driver, makeDasFrame(1), acknowledgementAtMs);
+            const NagAdaptiveSnapshot acknowledged =
+                handler.adaptiveController.snapshot(acknowledgementAtMs);
+            TEST_ASSERT_EQUAL(sentBeforeVerify, driver.sent.size());
+            TEST_ASSERT_EQUAL_UINT32(1, acknowledged.acknowledgementCount);
+            TEST_ASSERT_EQUAL_UINT32(
+                acknowledgementAtMs - (epasStartMs + 20U),
+                acknowledged.lastAcknowledgementLatencyMs);
+            TEST_ASSERT_EQUAL_UINT32(0, acknowledged.acknowledgementTimeoutCount);
+            representativeAcknowledged[representativeIndex] = true;
+            sawDasAcknowledgement = true;
         }
     }
 
+    for (uint8_t counter = 0; counter < 16; ++counter)
+        for (uint8_t hos = 0; hos < 16; ++hos)
+            for (uint8_t direction = 0; direction < 3; ++direction)
+                for (uint8_t freshness = 0; freshness < 2; ++freshness)
+                    for (uint8_t sendResult = 0; sendResult < 2; ++sendResult)
+                        TEST_ASSERT_GREATER_THAN_UINT8(
+                            0, coverage[counter][hos][direction][freshness][sendResult]);
+
+    TEST_ASSERT_EQUAL_UINT32(kSequenceCount, allowedCases + prohibitedCases);
+    TEST_ASSERT_EQUAL_UINT32(allowedCases, attemptedAllowedCases);
+    TEST_ASSERT_EQUAL_UINT32(allowedCases, successfulAllowedCases + failedAllowedCases);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, successfulAllowedCases);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, failedAllowedCases);
     TEST_ASSERT_TRUE(sawCounterWrap);
-    TEST_ASSERT_TRUE(sawPositiveTorque);
-    TEST_ASSERT_TRUE(sawNegativeTorque);
-    TEST_ASSERT_TRUE(sawDeadband);
-    TEST_ASSERT_TRUE(sawDasStale);
-    for (uint8_t hos = 0; hos < 16; ++hos)
-        TEST_ASSERT_TRUE(sawHos[hos]);
+    TEST_ASSERT_TRUE(sawPreventiveSend);
+    TEST_ASSERT_TRUE(sawCorrectiveSend);
+    TEST_ASSERT_TRUE(sawStaleBlock);
+    TEST_ASSERT_TRUE(sawHosOneBlock);
+    TEST_ASSERT_TRUE(sawBlockedHos);
+    TEST_ASSERT_TRUE(sawNoDirectionBlock);
+    TEST_ASSERT_TRUE(sawDriverFailure);
+    TEST_ASSERT_TRUE(sawVerifyNoSend);
+    TEST_ASSERT_TRUE(sawDasAcknowledgement);
+    for (uint8_t representative = 0; representative < 4; ++representative)
+        TEST_ASSERT_TRUE(representativeAcknowledged[representative]);
 }
 
 void test_release_targets_decay_monotonically_and_zero_enters_no_send_rest()
@@ -870,6 +1042,8 @@ void test_failed_send_does_not_advance_corrective_burst()
     TEST_ASSERT_EQUAL_INT16(0, handler.lastInjectedCenti());
     TEST_ASSERT_EQUAL_UINT32(0, handler.lastInjectedAtMs);
     TEST_ASSERT_EQUAL_UINT8(0, handler.adaptiveController.snapshot(20).correctiveBurstFrame);
+    TEST_ASSERT_EQUAL_UINT32(
+        0, handler.adaptiveController.snapshot(20).acknowledgementCount);
     const CanFrame failedEcho = makeExpectedEcho(
         failedInput, handler.adaptiveController.snapshot(20).targetTorqueCentiNm);
     TEST_ASSERT_FALSE(handler.isOwnEcho(failedEcho));
@@ -880,6 +1054,8 @@ void test_failed_send_does_not_advance_corrective_burst()
     TEST_ASSERT_EQUAL(1, driver.sent.size());
     TEST_ASSERT_EQUAL_UINT32(0, handler.nagCounterCollisionCount);
     TEST_ASSERT_EQUAL_UINT8(1, handler.adaptiveController.snapshot(30).correctiveBurstFrame);
+    TEST_ASSERT_EQUAL_UINT32(
+        0, handler.adaptiveController.snapshot(30).acknowledgementCount);
 }
 
 void test_adaptive_runtime_reenable_rearms_without_mode_change()
