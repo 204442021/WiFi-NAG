@@ -55,15 +55,15 @@ EXPECTED_NVS_DEFAULTS = {
     "nag_pv_p_min": "1.50",
     "nag_pv_p_max": "1.80",
     "nag_cr_n_min": "1.80",
-    "nag_cr_n_max": "2.50",
+    "nag_cr_n_max": "2.00",
     "nag_cr_p_min": "1.80",
-    "nag_cr_p_max": "2.50",
+    "nag_cr_p_max": "2.00",
     "nag_act_min": "10.0",
     "nag_act_max": "10.0",
     "nag_rel_min": "0.2",
     "nag_rel_max": "0.4",
     "nag_rst_min": "1.0",
-    "nag_rst_max": "3.0",
+    "nag_rst_max": "2.0",
     "nag_dir_db": "0.05",
     "nag_das_ms": "750",
 }
@@ -130,16 +130,16 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         for element_id in ("nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max"):
             self.assertRegex(
                 self.source,
-                rf'id="{element_id}"[^>]*min="1\.80"[^>]*max="2\.50"[^>]*step="0\.01"',
+                rf'id="{element_id}"[^>]*min="1\.80"[^>]*max="2\.00"[^>]*step="0\.01"',
             )
 
     def test_custom_strategy_uses_structured_draft_and_explicit_save_contract(self):
         compact = re.sub(r"\s+", "", self.source)
         self.assertIn(
             "constnagCustomDefaults={preventiveNegative:[1.50,1.80],"
-            "preventivePositive:[1.50,1.80],correctiveNegative:[1.80,2.50],"
-            "correctivePositive:[1.80,2.50],activity:[10.0,10.0],"
-            "release:[0.2,0.4],rest:[1.0,3.0],directionDeadband:0.05,"
+            "preventivePositive:[1.50,1.80],correctiveNegative:[1.80,2.00],"
+            "correctivePositive:[1.80,2.00],activity:[10.0,10.0],"
+            "release:[0.2,0.4],rest:[1.0,2.0],directionDeadband:0.05,"
             "dasFreshTimeoutMs:750};",
             compact,
         )

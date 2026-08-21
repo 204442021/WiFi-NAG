@@ -75,10 +75,10 @@ CANL -> 车辆 CAN-L
 - 未见 DAS 或最后一帧超过 freshness 窗口时进入 `WAIT_DAS`，保持 no-send；即使总线之后完全静默，Web/API 也会按最后时间戳把诊断更新为 stale。
 - DAS 恢复后进入 `ARMING`，需要连续 3 个有效 OEM EPAS 帧才允许输出。
 - HOS 0..2 属于正常范围，HOS 2 是当前系统常态；`MAINTENANCE` 对每个有效原车 `0x370` 都注入随机 `1.50 .. 1.80 Nm`，连续约 10 秒。
-- 10 秒非零注入后进入 `REST` 停发间隔，连续 1～3 秒不额外发送 `0x370`，随后自动开始下一轮非零注入；不会注入 `0 Nm`。
-- HOS 3..5 进入 `CORRECTIVE`：先清除上一目标，再对每个有效原车帧连续注入随机 `1.80 .. 2.50 Nm`，直到 DAS 回到 HOS 0..2；不再使用短 burst、`VERIFY` 或两次尝试上限。
+- 10 秒非零注入后进入 `REST` 停发间隔，连续 1～2 秒不额外发送 `0x370`，随后自动开始下一轮非零注入；不会注入 `0 Nm`。
+- HOS 3..5 进入 `CORRECTIVE`：先清除上一目标，再对每个有效原车帧连续注入随机 `1.80 .. 2.00 Nm`，直到 DAS 回到 HOS 0..2；不再使用短 burst、`VERIFY` 或两次尝试上限。
 - HOS 6..15 均 fail-closed 并进入 `FAULT_HOLD` 保护停发，其中 9..14 为未定义状态；DAS stale 同样阻止发送。HOS 0..2 连续稳定 2000 ms 后自动恢复，显式 reset 立即 off/on。
-- 所有动态扭矩均限制在 `±2.50 Nm`，counter、checksum、own-echo 跳过及 stale/fault no-send 约束保持不变。
+- 所有动态扭矩均限制在 `±2.00 Nm`，counter、checksum、own-echo 跳过及 stale/fault no-send 约束保持不变；首次刷入默认使用自适应模式。
 - 自适应参数保存在 NVS，重启后继续生效；详细状态机与参数见 [`docs/nag-adaptive-closed-loop.md`](docs/nag-adaptive-closed-loop.md)。
 - Gate B/C 实车验证仍为 **PENDING**，本文不声称已经完成实车验证。
 

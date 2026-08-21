@@ -211,16 +211,16 @@ inline const char *validate(const NagAdaptiveConfig &config)
         config.preventivePositiveMaxCentiNm > 180)
         return "preventivePositiveMaxNm";
     if (config.correctiveNegativeMinCentiNm < 180 ||
-        config.correctiveNegativeMinCentiNm > 250)
+        config.correctiveNegativeMinCentiNm > 200)
         return "correctiveNegativeMinNm";
     if (config.correctiveNegativeMaxCentiNm < config.correctiveNegativeMinCentiNm ||
-        config.correctiveNegativeMaxCentiNm > 250)
+        config.correctiveNegativeMaxCentiNm > 200)
         return "correctiveNegativeMaxNm";
     if (config.correctivePositiveMinCentiNm < 180 ||
-        config.correctivePositiveMinCentiNm > 250)
+        config.correctivePositiveMinCentiNm > 200)
         return "correctivePositiveMinNm";
     if (config.correctivePositiveMaxCentiNm < config.correctivePositiveMinCentiNm ||
-        config.correctivePositiveMaxCentiNm > 250)
+        config.correctivePositiveMaxCentiNm > 200)
         return "correctivePositiveMaxNm";
     if (config.activityMinMs < 8000 || config.activityMinMs > 12000)
         return "activityMinSec";
@@ -230,9 +230,9 @@ inline const char *validate(const NagAdaptiveConfig &config)
         return "releaseMinSec";
     if (config.releaseMaxMs < config.releaseMinMs || config.releaseMaxMs > 1000)
         return "releaseMaxSec";
-    if (config.restMinMs < 1000 || config.restMinMs > 3000)
+    if (config.restMinMs < 1000 || config.restMinMs > 2000)
         return "restMinSec";
-    if (config.restMaxMs < config.restMinMs || config.restMaxMs > 3000)
+    if (config.restMaxMs < config.restMinMs || config.restMaxMs > 2000)
         return "restMaxSec";
     if (config.torqueDeadbandCentiNm < 0 || config.torqueDeadbandCentiNm > 50)
         return "directionDeadbandNm";

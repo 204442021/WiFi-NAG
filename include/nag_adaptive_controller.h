@@ -11,16 +11,16 @@ struct NagAdaptiveConfig
     int16_t preventivePositiveMinCentiNm = 150;
     int16_t preventivePositiveMaxCentiNm = 180;
     int16_t correctiveNegativeMinCentiNm = 180;
-    int16_t correctiveNegativeMaxCentiNm = 250;
+    int16_t correctiveNegativeMaxCentiNm = 200;
     int16_t correctivePositiveMinCentiNm = 180;
-    int16_t correctivePositiveMaxCentiNm = 250;
+    int16_t correctivePositiveMaxCentiNm = 200;
     int16_t torqueDeadbandCentiNm = 5;
     uint32_t activityMinMs = 10000;
     uint32_t activityMaxMs = 10000;
     uint32_t releaseMinMs = 200;
     uint32_t releaseMaxMs = 400;
     uint32_t restMinMs = 1000;
-    uint32_t restMaxMs = 3000;
+    uint32_t restMaxMs = 2000;
     uint32_t dasFreshTimeoutMs = 750;
 };
 
@@ -129,13 +129,13 @@ public:
         normalizeI16Range(value.preventivePositiveMinCentiNm,
                           value.preventivePositiveMaxCentiNm, 150, 180);
         normalizeI16Range(value.correctiveNegativeMinCentiNm,
-                          value.correctiveNegativeMaxCentiNm, 180, 250);
+                          value.correctiveNegativeMaxCentiNm, 180, 200);
         normalizeI16Range(value.correctivePositiveMinCentiNm,
-                          value.correctivePositiveMaxCentiNm, 180, 250);
+                          value.correctivePositiveMaxCentiNm, 180, 200);
         value.torqueDeadbandCentiNm = clampI16(value.torqueDeadbandCentiNm, 0, 50);
         normalizeU32Range(value.activityMinMs, value.activityMaxMs, 8000, 12000);
         normalizeU32Range(value.releaseMinMs, value.releaseMaxMs, 100, 1000);
-        normalizeU32Range(value.restMinMs, value.restMaxMs, 1000, 3000);
+        normalizeU32Range(value.restMinMs, value.restMaxMs, 1000, 2000);
         value.dasFreshTimeoutMs = clampU32(value.dasFreshTimeoutMs, 100, 2000);
         return value;
     }
@@ -640,7 +640,7 @@ private:
         const double weight = 1.0 - (3.0 * x * x - 2.0 * x * x * x);
         const double scaled = static_cast<double>(releaseStartTorqueCentiNm_) * weight;
         const int32_t rounded = static_cast<int32_t>(scaled >= 0.0 ? scaled + 0.5 : scaled - 0.5);
-        targetTorqueCentiNm_ = clampI16(rounded, -250, 250);
+        targetTorqueCentiNm_ = clampI16(rounded, -200, 200);
         if (targetTorqueCentiNm_ == 0)
         {
             beginRest(nowMs, entropy);
@@ -716,7 +716,7 @@ private:
     NagAdaptiveDecision sendDecision(bool corrective)
     {
         targetTorqueCentiNm_ = clampI16(
-            static_cast<int32_t>(injectionSign_) * currentMagnitudeCentiNm_, -250, 250);
+            static_cast<int32_t>(injectionSign_) * currentMagnitudeCentiNm_, -200, 200);
         NagAdaptiveDecision decision;
         decision.shouldSend = true;
         decision.targetTorqueCentiNm = targetTorqueCentiNm_;

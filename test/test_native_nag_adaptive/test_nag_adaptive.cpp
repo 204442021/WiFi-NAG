@@ -1382,11 +1382,11 @@ void test_new_continuous_policy_defaults_and_bounds()
     TEST_ASSERT_EQUAL_INT16(150, defaults.preventiveNegativeMinCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, defaults.preventivePositiveMaxCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, defaults.correctiveNegativeMinCentiNm);
-    TEST_ASSERT_EQUAL_INT16(250, defaults.correctivePositiveMaxCentiNm);
+    TEST_ASSERT_EQUAL_INT16(200, defaults.correctivePositiveMaxCentiNm);
     TEST_ASSERT_EQUAL_UINT32(10000U, defaults.activityMinMs);
     TEST_ASSERT_EQUAL_UINT32(10000U, defaults.activityMaxMs);
     TEST_ASSERT_EQUAL_UINT32(1000U, defaults.restMinMs);
-    TEST_ASSERT_EQUAL_UINT32(3000U, defaults.restMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(2000U, defaults.restMaxMs);
 
     NagAdaptiveConfig invalid;
     invalid.preventiveNegativeMinCentiNm = 1;
@@ -1401,11 +1401,11 @@ void test_new_continuous_policy_defaults_and_bounds()
     TEST_ASSERT_EQUAL_INT16(150, normalized.preventiveNegativeMinCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, normalized.preventiveNegativeMaxCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, normalized.correctivePositiveMinCentiNm);
-    TEST_ASSERT_EQUAL_INT16(250, normalized.correctivePositiveMaxCentiNm);
+    TEST_ASSERT_EQUAL_INT16(200, normalized.correctivePositiveMaxCentiNm);
     TEST_ASSERT_EQUAL_UINT32(8000U, normalized.activityMinMs);
     TEST_ASSERT_EQUAL_UINT32(12000U, normalized.activityMaxMs);
     TEST_ASSERT_EQUAL_UINT32(1000U, normalized.restMinMs);
-    TEST_ASSERT_EQUAL_UINT32(3000U, normalized.restMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(2000U, normalized.restMaxMs);
 }
 
 void test_hos_0_to_2_send_ten_seconds_then_stop_for_one_to_three_seconds()
@@ -1439,7 +1439,7 @@ void test_hos_0_to_2_send_ten_seconds_then_stop_for_one_to_three_seconds()
         TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_REST,
                                 controller.snapshot(10020).phase);
         const uint32_t zeroDuration = controller.snapshot(10020).phaseRemainingMs;
-        TEST_ASSERT_TRUE(zeroDuration >= 1000U && zeroDuration <= 3000U);
+        TEST_ASSERT_TRUE(zeroDuration >= 1000U && zeroDuration <= 2000U);
 
         for (uint32_t nowMs = 10120; nowMs < 10020U + zeroDuration; nowMs += 100)
         {
@@ -1487,7 +1487,7 @@ void test_hos_3_to_5_clear_previous_target_then_send_continuously_until_normal()
             const int16_t magnitude = decision.targetTorqueCentiNm < 0
                                           ? -decision.targetTorqueCentiNm
                                           : decision.targetTorqueCentiNm;
-            TEST_ASSERT_TRUE(magnitude >= 180 && magnitude <= 250);
+            TEST_ASSERT_TRUE(magnitude >= 180 && magnitude <= 200);
             controller.onTransmitResult(nowMs, decision, true);
             TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_CORRECTIVE,
                                     controller.snapshot(nowMs).phase);

@@ -97,9 +97,9 @@ class FixRound2RegressionTests(unittest.TestCase):
             "CORRECTIVE",
             "REST",
             "FAULT_HOLD",
-            "±2.50 Nm",
+            "±2.00 Nm",
             "10 秒",
-            "1～3 秒",
+            "1～2 秒",
             "Gate B/C",
             "docs/nag-adaptive-closed-loop.md",
         ):
