@@ -3,6 +3,8 @@ name: WIFI-NAG V4.4-V13 Build
 on:
   push:
     branches: ["V4.4-V13"]
+  pull_request:
+    branches: ["V4.3-V13"]
   workflow_dispatch:
 
 permissions:
@@ -28,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip platformio -r scripts/requirements-dashboard.txt
 
+      - name: Generate V4.4 dashboard payload
+        run: python scripts/minify_dashboard.py
+
       - name: Run Python regressions
         run: python -m unittest discover -s test -p "test_*.py" -v
 
@@ -38,7 +43,7 @@ jobs:
         run: |
           pio test -e native_nag
           pio test -e native_nag_sweep
-          pio test -e native_nag_adaptive
+          pio test -e native_nag_v44
 
       - name: Run other native safety tests
         run: |
