@@ -2,6 +2,12 @@
 
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
 
+#include <cerrno>
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
+#include <limits>
+
 #ifdef ESP_PLATFORM
 #include "platform/espidf_runtime.h"
 #else
@@ -413,13 +419,33 @@ static const char *dashNagAdaptiveBlockName(NagAdaptiveController::BlockReason r
     }
 }
 
+static bool dashNagParseFiniteDouble(const String &value, double &parsed)
+{
+    const char *begin = value.c_str();
+    char *end = nullptr;
+    errno = 0;
+    parsed = std::strtod(begin, &end);
+    if (begin == end || errno == ERANGE || !std::isfinite(parsed))
+        return false;
+    while (*end != '\0' && std::isspace(static_cast<unsigned char>(*end)))
+        ++end;
+    return *end == '\0';
+}
+
 static int16_t dashNagParseNmCenti(const String &value, int16_t fallback)
 {
-    char *end = nullptr;
-    float parsed = strtof(value.c_str(), &end);
-    if (end == value.c_str())
+    double parsed = 0.0;
+    if (!dashNagParseFiniteDouble(value, parsed))
         return fallback;
-    return NagHandler::nmToCentiNm(parsed);
+    const double scaled = parsed * 100.0;
+    if (!std::isfinite(scaled))
+        return fallback;
+    const double rounded = scaled >= 0.0 ? std::floor(scaled + 0.5)
+                                         : std::ceil(scaled - 0.5);
+    if (rounded < static_cast<double>(std::numeric_limits<int16_t>::min()) ||
+        rounded > static_cast<double>(std::numeric_limits<int16_t>::max()))
+        return fallback;
+    return static_cast<int16_t>(rounded);
 }
 
 static String dashNagNmString(int16_t centiNm)
@@ -429,25 +455,32 @@ static String dashNagNmString(int16_t centiNm)
 
 static uint32_t dashNagParseSecondsMs(const String &value, uint32_t fallback)
 {
-    char *end = nullptr;
-    const float parsed = strtof(value.c_str(), &end);
-    if (end == value.c_str() || parsed < 0.0f)
+    double parsed = 0.0;
+    if (!dashNagParseFiniteDouble(value, parsed) || parsed < 0.0)
         return fallback;
-    return static_cast<uint32_t>(parsed * 1000.0f + 0.5f);
+    const double scaled = parsed * 1000.0;
+    if (!std::isfinite(scaled))
+        return fallback;
+    const double rounded = std::floor(scaled + 0.5);
+    if (rounded > static_cast<double>(std::numeric_limits<uint32_t>::max()))
+        return fallback;
+    return static_cast<uint32_t>(rounded);
 }
 
 static uint32_t dashNagParseMilliseconds(const String &value, uint32_t fallback)
 {
-    char *end = nullptr;
-    const long parsed = strtol(value.c_str(), &end, 10);
-    if (end == value.c_str() || parsed < 0)
+    double parsed = 0.0;
+    if (!dashNagParseFiniteDouble(value, parsed) || parsed < 0.0)
         return fallback;
-    return static_cast<uint32_t>(parsed);
+    const double rounded = std::floor(parsed + 0.5);
+    if (rounded > static_cast<double>(std::numeric_limits<uint32_t>::max()))
+        return fallback;
+    return static_cast<uint32_t>(rounded);
 }
 
 static String dashNagSecondsString(uint32_t milliseconds)
 {
-    return String(static_cast<float>(milliseconds) / 1000.0f, 1);
+    return String(static_cast<double>(milliseconds) / 1000.0, 3);
 }
 
 static bool dashNagAdaptiveConfigEqual(const NagAdaptiveConfig &left,
@@ -1158,9 +1191,6 @@ static void handleStatus()
         j += String((unsigned int)nag->handsOnRaw());
         j += ",\"nagHandsOnTier\":";
         j += String((unsigned int)nag->handsOnTier());
-        j += ",\"nagDirectionSource\":\"";
-        j += dashNagDirectionSourceName(nag->adaptiveController.directionSourceValue());
-        j += "\"";
         j += ",\"nagOwnEchoSkip\":";
         j += String((uint32_t)nag->nagOwnEchoSkipCount);
         dashAppendNagClosedLoopTelemetry(j, nag);

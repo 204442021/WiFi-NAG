@@ -44,6 +44,7 @@ EXPECTED_STATUS_FIELDS = (
     "nagDasSeen", "nagDasFresh", "nagDasAgeMs", "nagDasHos",
     "nagDasFrames", "nagOemEpasFrames", "nagLastOemEpasAgeMs",
     "nagLastOemEpasCounter", "nagObservedTorqueNm",
+    "nagDirectionSource",
     "nagAdaptivePhase", "nagAdaptiveBlockReason",
     "nagAdaptiveTargetTorqueNm", "nagAdaptivePhaseRemainingMs",
     "nagCorrectiveAttempt", "nagCorrectiveBurstFrame",
@@ -102,6 +103,44 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         self.assertLess(normalize_index, compare_index)
         self.assertLess(compare_index, set_index)
 
+    def test_numeric_parsing_rejects_nonfinite_partial_and_out_of_range_values(self):
+        for header in ("<cerrno>", "<cctype>", "<cmath>", "<cstdlib>", "<limits>"):
+            self.assertIn(f"#include {header}", self.dashboard)
+        for guard in (
+            "std::strtod",
+            "errno = 0",
+            "errno == ERANGE",
+            "std::isfinite(parsed)",
+            "std::isspace(static_cast<unsigned char>(*end))",
+            "*end == '\\0'",
+            "std::numeric_limits<int16_t>::min()",
+            "std::numeric_limits<int16_t>::max()",
+            "std::numeric_limits<uint32_t>::max()",
+        ):
+            self.assertIn(guard, self.dashboard)
+        self.assertNotIn("strtof(", self.dashboard)
+        self.assertNotIn("strtol(", self.dashboard)
+
+    def test_invalid_post_values_fall_back_without_resetting_controller(self):
+        for parser in (
+            "dashNagParseNmCenti",
+            "dashNagParseSecondsMs",
+            "dashNagParseMilliseconds",
+        ):
+            parser_start = self.dashboard.index(f"static ", self.dashboard.index(parser) - 20)
+            parser_end = self.dashboard.index("\n}", parser_start)
+            self.assertIn("return fallback;", self.dashboard[parser_start:parser_end])
+        self.assertIn(
+            "dashNagParseNmCenti(server.arg(name), adaptive.member)", self.dashboard
+        )
+        self.assertIn(
+            "dashNagParseSecondsMs(server.arg(name), adaptive.member)", self.dashboard
+        )
+        self.assertIn(
+            'server.arg("dasFreshTimeoutMs"), adaptive.dasFreshTimeoutMs',
+            self.dashboard,
+        )
+
     def test_config_equality_covers_every_closed_loop_member(self):
         equality_start = self.dashboard.index("dashNagAdaptiveConfigEqual")
         equality_end = self.dashboard.index("static bool dashApplyNagConfigArgs", equality_start)
@@ -136,6 +175,17 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
                 1,
                 f"{field} must be serialized exactly once by the shared helper",
             )
+
+    def test_duration_json_uses_lossless_millisecond_precision(self):
+        self.assertIn(
+            "return String(static_cast<double>(milliseconds) / 1000.0, 3);",
+            self.dashboard,
+        )
+        for member in (
+            "activityMinMs", "activityMaxMs", "releaseMinMs", "releaseMaxMs",
+            "restMinMs", "restMaxMs",
+        ):
+            self.assertIn(f"dashNagSecondsString(config.{member})", self.dashboard)
 
     def test_phase_block_and_direction_names_match_controller_contract(self):
         for name in (
