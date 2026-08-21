@@ -465,6 +465,77 @@ void test_every_decision_is_clamped_to_plus_minus_180_centi_nm()
     }
 }
 
+void test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix()
+{
+    static constexpr uint32_t kSequenceCount = 100000;
+    MockDriver driver;
+    bool sawCounterWrap = false;
+    bool sawPositiveTorque = false;
+    bool sawNegativeTorque = false;
+    bool sawDeadband = false;
+    bool sawDasStale = false;
+    bool sawHos[16] = {};
+
+    nagKillerRuntime = true;
+    for (uint32_t sequence = 0; sequence < kSequenceCount; ++sequence)
+    {
+        NagHandler handler;
+        handler.setMode(NagHandler::MODE_ADAPTIVE);
+        driver.reset();
+
+        const uint8_t hos = static_cast<uint8_t>((sequence / 16U) & 0x0FU);
+        const uint8_t counter0 = static_cast<uint8_t>(sequence & 0x0FU);
+        const uint8_t counter1 = static_cast<uint8_t>((counter0 + 1U) & 0x0FU);
+        const uint8_t counter2 = static_cast<uint8_t>((counter0 + 2U) & 0x0FU);
+        const uint8_t expectedEchoCounter = static_cast<uint8_t>((counter2 + 1U) & 0x0FU);
+        const uint8_t directionCase = static_cast<uint8_t>((sequence / 256U) % 3U);
+        const int16_t observedTorqueCentiNm = directionCase == 0 ? 20 :
+                                              directionCase == 1 ? -20 : 0;
+        const bool dasStale = (sequence % 97U) == 0U;
+        const uint32_t epasStartMs = dasStale ? 501U : 0U;
+
+        sawHos[hos] = true;
+        sawCounterWrap = sawCounterWrap || counter1 < counter0 || counter2 < counter1;
+        sawPositiveTorque = sawPositiveTorque || observedTorqueCentiNm > 0;
+        sawNegativeTorque = sawNegativeTorque || observedTorqueCentiNm < 0;
+        sawDeadband = sawDeadband || observedTorqueCentiNm == 0;
+        sawDasStale = sawDasStale || dasStale;
+
+        handleAt(handler, driver, makeDasFrame(hos), 0);
+        handleAt(handler, driver,
+                 makeHandlerEpasFrame(counter0, observedTorqueCentiNm), epasStartMs);
+        handleAt(handler, driver,
+                 makeHandlerEpasFrame(counter1, observedTorqueCentiNm), epasStartMs + 10U);
+        handleAt(handler, driver,
+                 makeHandlerEpasFrame(counter2, observedTorqueCentiNm), epasStartMs + 20U);
+
+        const bool mustNotSend = dasStale || hos == 1 || hos >= 8 ||
+                                 observedTorqueCentiNm == 0;
+        if (mustNotSend)
+            TEST_ASSERT_EQUAL(0, driver.sent.size());
+
+        for (const CanFrame &echo : driver.sent)
+        {
+            const int16_t sentTorqueCentiNm = NagHandler::rawToCentiNm(
+                NagHandler::readTorqueRaw(echo));
+            TEST_ASSERT_TRUE(sentTorqueCentiNm >= -180 && sentTorqueCentiNm <= 180);
+            TEST_ASSERT_EQUAL_UINT8(expectedEchoCounter, echo.data[6] & 0x0F);
+            if (observedTorqueCentiNm > 0)
+                TEST_ASSERT_LESS_THAN_INT16(0, sentTorqueCentiNm);
+            if (observedTorqueCentiNm < 0)
+                TEST_ASSERT_GREATER_THAN_INT16(0, sentTorqueCentiNm);
+        }
+    }
+
+    TEST_ASSERT_TRUE(sawCounterWrap);
+    TEST_ASSERT_TRUE(sawPositiveTorque);
+    TEST_ASSERT_TRUE(sawNegativeTorque);
+    TEST_ASSERT_TRUE(sawDeadband);
+    TEST_ASSERT_TRUE(sawDasStale);
+    for (uint8_t hos = 0; hos < 16; ++hos)
+        TEST_ASSERT_TRUE(sawHos[hos]);
+}
+
 void test_release_targets_decay_monotonically_and_zero_enters_no_send_rest()
 {
     NagAdaptiveController controller;
@@ -896,6 +967,7 @@ int main()
     RUN_TEST(test_das_stale_during_send_returns_wait_das);
     RUN_TEST(test_epas_gap_over_200ms_rearms_three_frame_guard);
     RUN_TEST(test_every_decision_is_clamped_to_plus_minus_180_centi_nm);
+    RUN_TEST(test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix);
     RUN_TEST(test_release_targets_decay_monotonically_and_zero_enters_no_send_rest);
     RUN_TEST(test_corrective_hos_requires_three_valid_oem_epas_frames_before_send);
     RUN_TEST(test_epas_gap_over_200ms_rearms_during_corrective);
