@@ -148,6 +148,9 @@ public:
     bool observeDas(const CanFrame &frame, uint32_t nowMs)
     {
         applyReset(nowMs);
+        const bool continuesNormalRecovery = faultRecoveryActive_ && das_.seen() &&
+                                             das_.raw() <= 1 &&
+                                             das_.fresh(nowMs, config_.dasFreshTimeoutMs);
         const bool accepted = das_.observe(frame, nowMs);
         if (frame.id != NagDasFeedbackTracker::kDasCanId || frame.dlc < 8)
             return false;
@@ -158,8 +161,30 @@ public:
             enterFault(BLOCK_DAS_STATE);
             return accepted;
         }
-        if (!enabled_ || phase_ == PHASE_FAULT_HOLD)
+        if (!enabled_)
             return accepted;
+
+        if (phase_ == PHASE_FAULT_HOLD)
+        {
+            if (hos <= 1)
+            {
+                if (!continuesNormalRecovery)
+                {
+                    faultRecoveryActive_ = true;
+                    faultRecoveryStartedAtMs_ = nowMs;
+                }
+                if (static_cast<uint32_t>(nowMs - faultRecoveryStartedAtMs_) >= 2000U)
+                {
+                    faultRecoveryActive_ = false;
+                    beginRest(nowMs, rngState_);
+                }
+            }
+            else
+            {
+                faultRecoveryActive_ = false;
+            }
+            return accepted;
+        }
 
         if (hos >= 2)
         {
@@ -212,7 +237,11 @@ public:
         if (!enabled_)
             return blockedDecision(BLOCK_DISABLED);
         if (phase_ == PHASE_FAULT_HOLD)
+        {
+            if (faultRecoveryActive_ && !das_.fresh(nowMs, config_.dasFreshTimeoutMs))
+                faultRecoveryActive_ = false;
             return blockedDecision(static_cast<BlockReason>(blockReason_));
+        }
         if (!das_.seen())
         {
             enterWait(BLOCK_DAS_MISSING);
@@ -224,24 +253,27 @@ public:
             return blockedDecision(BLOCK_DAS_STALE);
         }
 
-        if (epasSeen_ && static_cast<uint32_t>(nowMs - lastEpasAtMs_) > 200U &&
-            !correctiveActive_)
+        if (epasSeen_ && static_cast<uint32_t>(nowMs - lastEpasAtMs_) > 200U)
         {
-            beginArming();
+            armingFrames_ = 0;
+            candidateSign_ = 0;
+            candidateStartedAtMs_ = 0;
+            if (!correctiveActive_)
+                beginArming();
         }
+        if (phase_ == PHASE_WAIT_DAS)
+            beginArming();
         epasSeen_ = true;
         lastEpasAtMs_ = nowMs;
         updateDirection(nowMs, steeringAngleDeciDeg, observedTorqueCentiNm);
 
-        if (phase_ == PHASE_WAIT_DAS)
-            beginArming();
+        if (armingFrames_ < 3)
+            armingFrames_++;
+        if (armingFrames_ < 3)
+            return blockedDecision(BLOCK_ARMING);
 
         if (phase_ == PHASE_ARMING)
         {
-            if (armingFrames_ < 3)
-                armingFrames_++;
-            if (armingFrames_ < 3)
-                return blockedDecision(BLOCK_ARMING);
             if (das_.raw() >= 2 && das_.raw() <= 7)
                 beginCorrective(nowMs, correctiveAttempt_ == 0 ? 1 : correctiveAttempt_);
             else
@@ -438,6 +470,7 @@ private:
         epasSeen_ = false;
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
+        faultRecoveryActive_ = false;
     }
 
     void beginArming()
@@ -446,6 +479,8 @@ private:
         blockReason_ = BLOCK_ARMING;
         targetTorqueCentiNm_ = 0;
         armingFrames_ = 0;
+        candidateSign_ = 0;
+        candidateStartedAtMs_ = 0;
     }
 
     void beginMaintenance(uint32_t nowMs, uint32_t entropy)
@@ -497,6 +532,7 @@ private:
         targetTorqueCentiNm_ = 0;
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
+        faultRecoveryActive_ = false;
     }
 
     void updateDirection(uint32_t nowMs, int16_t angleDeciDeg, int16_t torqueCentiNm)
@@ -580,7 +616,12 @@ private:
             beginRest(nowMs, entropy);
             return blockedDecision(BLOCK_REST);
         }
-        return sendDecision(false);
+        NagAdaptiveDecision decision;
+        decision.shouldSend = true;
+        decision.targetTorqueCentiNm = targetTorqueCentiNm_;
+        decision.injectionSign = injectionSign_;
+        blockReason_ = BLOCK_NONE;
+        return decision;
     }
 
     void preparePreventive(uint32_t entropy)
@@ -752,4 +793,6 @@ private:
     uint32_t acknowledgementTimeoutCount_ = 0;
     uint32_t lastAcknowledgementLatencyMs_ = 0;
     uint32_t maxAcknowledgementLatencyMs_ = 0;
+    bool faultRecoveryActive_ = false;
+    uint32_t faultRecoveryStartedAtMs_ = 0;
 };

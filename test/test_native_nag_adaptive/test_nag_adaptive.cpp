@@ -337,15 +337,20 @@ void test_second_failed_corrective_attempt_enters_fault_hold()
     uint32_t nowMs = completeCurrentBurst(controller, 40);
     TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_VERIFY,
                             controller.snapshot(nowMs).phase);
-    nowMs += 500;
+    const uint32_t firstVerifyEnd = nowMs + controller.snapshot(nowMs).phaseRemainingMs;
+    for (uint32_t tick = nowMs + 100; tick < firstVerifyEnd; tick += 100)
+        TEST_ASSERT_FALSE(epas(controller, tick).shouldSend);
+    nowMs = firstVerifyEnd;
     TEST_ASSERT_TRUE(epas(controller, nowMs).corrective);
     TEST_ASSERT_EQUAL_UINT8(2, controller.snapshot(nowMs).correctiveAttempt);
     nowMs = completeCurrentBurst(controller, nowMs + 10);
     TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_VERIFY,
                             controller.snapshot(nowMs).phase);
-    TEST_ASSERT_FALSE(epas(controller, nowMs + 999).shouldSend);
-    TEST_ASSERT_FALSE(epas(controller, nowMs + 1000).shouldSend);
-    const NagAdaptiveSnapshot fault = controller.snapshot(nowMs + 1000);
+    const uint32_t secondVerifyEnd = nowMs + controller.snapshot(nowMs).phaseRemainingMs;
+    for (uint32_t tick = nowMs + 100; tick < secondVerifyEnd; tick += 100)
+        TEST_ASSERT_FALSE(epas(controller, tick).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, secondVerifyEnd).shouldSend);
+    const NagAdaptiveSnapshot fault = controller.snapshot(secondVerifyEnd);
     TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_FAULT_HOLD, fault.phase);
     TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_ACK_TIMEOUT, fault.blockReason);
     TEST_ASSERT_EQUAL_UINT32(1, fault.acknowledgementTimeoutCount);
@@ -416,6 +421,173 @@ void test_every_decision_is_clamped_to_plus_minus_180_centi_nm()
     }
 }
 
+void test_release_targets_decay_monotonically_and_zero_enters_no_send_rest()
+{
+    NagAdaptiveController controller;
+    NagAdaptiveConfig config;
+    config.activityMinMs = config.activityMaxMs = 400;
+    config.releaseMinMs = config.releaseMaxMs = 100;
+    config.restMinMs = config.restMaxMs = 500;
+    config.dasFreshTimeoutMs = 2000;
+    controller.setConfig(config);
+    resetWithDas(controller);
+    arm(controller);
+    epas(controller, 200);
+    epas(controller, 400);
+
+    const NagAdaptiveDecision start = epas(controller, 420);
+    const NagAdaptiveDecision quarter = epas(controller, 445);
+    const NagAdaptiveDecision half = epas(controller, 470);
+    const NagAdaptiveDecision threeQuarter = epas(controller, 495);
+    TEST_ASSERT_TRUE(start.shouldSend);
+    TEST_ASSERT_TRUE(quarter.shouldSend);
+    TEST_ASSERT_TRUE(half.shouldSend);
+    TEST_ASSERT_TRUE(threeQuarter.shouldSend);
+    TEST_ASSERT_TRUE(-quarter.targetTorqueCentiNm < -start.targetTorqueCentiNm);
+    TEST_ASSERT_TRUE(-half.targetTorqueCentiNm < -quarter.targetTorqueCentiNm);
+    TEST_ASSERT_TRUE(-threeQuarter.targetTorqueCentiNm < -half.targetTorqueCentiNm);
+
+    const NagAdaptiveDecision zero = epas(controller, 520);
+    TEST_ASSERT_FALSE(zero.shouldSend);
+    TEST_ASSERT_EQUAL_INT16(0, zero.targetTorqueCentiNm);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_REST,
+                            controller.snapshot(520).phase);
+}
+
+void test_corrective_hos_requires_three_valid_oem_epas_frames_before_send()
+{
+    for (uint8_t hos = 2; hos <= 7; ++hos)
+    {
+        NagAdaptiveController controller;
+        controller.requestReset();
+        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), 0));
+        TEST_ASSERT_FALSE(epas(controller, 0).shouldSend);
+        TEST_ASSERT_FALSE(epas(controller, 10).shouldSend);
+        const NagAdaptiveDecision third = epas(controller, 20);
+        TEST_ASSERT_TRUE(third.shouldSend);
+        TEST_ASSERT_TRUE(third.corrective);
+    }
+}
+
+void test_epas_gap_over_200ms_rearms_during_corrective()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    arm(controller);
+    enterCorrective(controller, 30);
+
+    TEST_ASSERT_FALSE(epas(controller, 231).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 241).shouldSend);
+    const NagAdaptiveDecision third = epas(controller, 251);
+    TEST_ASSERT_TRUE(third.shouldSend);
+    TEST_ASSERT_TRUE(third.corrective);
+}
+
+void test_fault_hold_recovers_after_2000ms_continuously_fresh_normal_hos()
+{
+    NagAdaptiveController controller;
+    controller.requestReset();
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(8), 0));
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_FAULT_HOLD,
+                            controller.snapshot(0).phase);
+
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 100));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 600));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(2), 700));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 800));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 1300));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(8), 1400));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 1500));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 2000));
+    TEST_ASSERT_FALSE(epas(controller, 2501).shouldSend);
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 2600));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 3100));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 3600));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 4100));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 4599));
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_FAULT_HOLD,
+                            controller.snapshot(4599).phase);
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 4600));
+    const NagAdaptiveSnapshot recovered = controller.snapshot(4600);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_REST, recovered.phase);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_REST, recovered.blockReason);
+    TEST_ASSERT_FALSE(epas(controller, 4600).shouldSend);
+}
+
+void test_request_reset_recovers_fault_hold_immediately()
+{
+    NagAdaptiveController controller;
+    controller.requestReset();
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(15), 0) == false);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_FAULT_HOLD,
+                            controller.snapshot(0).phase);
+    controller.requestReset();
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 10));
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_ARMING,
+                            controller.snapshot(10).phase);
+}
+
+void test_epas_gap_clears_direction_reversal_candidate_timer()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    arm(controller, 20);
+    TEST_ASSERT_EQUAL_INT8(-1, epas(controller, 30, -20).injectionSign);
+
+    TEST_ASSERT_FALSE(epas(controller, 231, -20).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 241, -20).shouldSend);
+    const NagAdaptiveDecision third = epas(controller, 251, -20);
+    TEST_ASSERT_TRUE(third.shouldSend);
+    TEST_ASSERT_EQUAL_INT8(-1, third.injectionSign);
+    TEST_ASSERT_EQUAL_INT8(-1, epas(controller, 330, -20).injectionSign);
+    TEST_ASSERT_EQUAL_INT8(1, epas(controller, 331, -20).injectionSign);
+}
+
+void test_normalize_config_swaps_and_clamps_every_range()
+{
+    NagAdaptiveConfig requested;
+    requested.preventiveNegativeMinCentiNm = 60;
+    requested.preventiveNegativeMaxCentiNm = 5;
+    requested.preventivePositiveMinCentiNm = 49;
+    requested.preventivePositiveMaxCentiNm = 11;
+    requested.correctiveNegativeMinCentiNm = 200;
+    requested.correctiveNegativeMaxCentiNm = 40;
+    requested.correctivePositiveMinCentiNm = 179;
+    requested.correctivePositiveMaxCentiNm = 51;
+    requested.torqueDeadbandCentiNm = -1;
+    requested.activityMinMs = 4000;
+    requested.activityMaxMs = 100;
+    requested.releaseMinMs = 2000;
+    requested.releaseMaxMs = 50;
+    requested.restMinMs = 6000;
+    requested.restMaxMs = 100;
+    requested.dasFreshTimeoutMs = 99;
+
+    const NagAdaptiveConfig normalized = NagAdaptiveController::normalizeConfig(requested);
+    TEST_ASSERT_EQUAL_INT16(10, normalized.preventiveNegativeMinCentiNm);
+    TEST_ASSERT_EQUAL_INT16(50, normalized.preventiveNegativeMaxCentiNm);
+    TEST_ASSERT_EQUAL_INT16(11, normalized.preventivePositiveMinCentiNm);
+    TEST_ASSERT_EQUAL_INT16(49, normalized.preventivePositiveMaxCentiNm);
+    TEST_ASSERT_EQUAL_INT16(50, normalized.correctiveNegativeMinCentiNm);
+    TEST_ASSERT_EQUAL_INT16(180, normalized.correctiveNegativeMaxCentiNm);
+    TEST_ASSERT_EQUAL_INT16(51, normalized.correctivePositiveMinCentiNm);
+    TEST_ASSERT_EQUAL_INT16(179, normalized.correctivePositiveMaxCentiNm);
+    TEST_ASSERT_EQUAL_INT16(0, normalized.torqueDeadbandCentiNm);
+    TEST_ASSERT_EQUAL_UINT32(400, normalized.activityMinMs);
+    TEST_ASSERT_EQUAL_UINT32(3000, normalized.activityMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(100, normalized.releaseMinMs);
+    TEST_ASSERT_EQUAL_UINT32(1000, normalized.releaseMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(500, normalized.restMinMs);
+    TEST_ASSERT_EQUAL_UINT32(5000, normalized.restMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(100, normalized.dasFreshTimeoutMs);
+
+    requested.torqueDeadbandCentiNm = 51;
+    requested.dasFreshTimeoutMs = 2001;
+    const NagAdaptiveConfig upper = NagAdaptiveController::normalizeConfig(requested);
+    TEST_ASSERT_EQUAL_INT16(50, upper.torqueDeadbandCentiNm);
+    TEST_ASSERT_EQUAL_UINT32(2000, upper.dasFreshTimeoutMs);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -439,5 +611,12 @@ int main()
     RUN_TEST(test_das_stale_during_send_returns_wait_das);
     RUN_TEST(test_epas_gap_over_200ms_rearms_three_frame_guard);
     RUN_TEST(test_every_decision_is_clamped_to_plus_minus_180_centi_nm);
+    RUN_TEST(test_release_targets_decay_monotonically_and_zero_enters_no_send_rest);
+    RUN_TEST(test_corrective_hos_requires_three_valid_oem_epas_frames_before_send);
+    RUN_TEST(test_epas_gap_over_200ms_rearms_during_corrective);
+    RUN_TEST(test_fault_hold_recovers_after_2000ms_continuously_fresh_normal_hos);
+    RUN_TEST(test_request_reset_recovers_fault_hold_immediately);
+    RUN_TEST(test_epas_gap_clears_direction_reversal_candidate_timer);
+    RUN_TEST(test_normalize_config_swaps_and_clamps_every_range);
     return UNITY_END();
 }
