@@ -457,6 +457,33 @@ void test_continuous_mode_legacy_hos_diagnostics_follow_oem_370_without_das()
     TEST_ASSERT_EQUAL_UINT8(2, handler.handsOnTier());
 }
 
+void test_continuous_mode_legacy_hos_tier_retains_last_valid_oem_value_without_das()
+{
+    struct HosExpectation
+    {
+        uint8_t raw;
+        uint8_t tier;
+    };
+    static constexpr HosExpectation sequence[] = {
+        {0, 1},
+        {3, 1},
+        {2, 2},
+        {3, 2},
+        {0, 2},
+        {1, 1},
+    };
+
+    nagKillerRuntime = true;
+    handler.setMode(NagHandler::MODE_A);
+    for (uint8_t index = 0; index < sizeof(sequence) / sizeof(sequence[0]); ++index)
+    {
+        CanFrame frame = makeEpasFrame(sequence[index].raw, 0.33, index);
+        handler.handleMessage(frame, mock);
+        TEST_ASSERT_EQUAL_UINT8(sequence[index].raw, handler.handsOnRaw());
+        TEST_ASSERT_EQUAL_UINT8(sequence[index].tier, handler.handsOnTier());
+    }
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -516,6 +543,7 @@ int main()
     RUN_TEST(test_echo_hands_on_bits_remain_forced_to_one);
     RUN_TEST(test_echo_checksum_and_plus_one_counter_remain_valid);
     RUN_TEST(test_continuous_mode_legacy_hos_diagnostics_follow_oem_370_without_das);
+    RUN_TEST(test_continuous_mode_legacy_hos_tier_retains_last_valid_oem_value_without_das);
 
     return UNITY_END();
 }
