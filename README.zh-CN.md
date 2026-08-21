@@ -71,14 +71,18 @@ CANL -> 车辆 CAN-L
 
 ### 模式 ADAPTIVE（V4.3-V13）
 
-- 从校验和有效的真实 `0x370` 帧读取方向盘扭矩和方向盘角度。
-- 真实扭矩为正时发送负扭矩，真实扭矩为负时发送正扭矩；死区内只监听。
-- 默认输出幅值为 `1.80 Nm`，默认扭矩死区为 `0.05 Nm`，均可在 WebUI 调整。
-- 角度安全门使用绝对值：方向盘角度 `>= +50.0°` 或 `<= -50.0°` 时停止发送。
-- 角度需连续 3 个有效帧回到 `-45.0° .. +45.0°` 才恢复，避免临界值附近反复开关。
-- 默认连续发送 `10 s`，随后随机只监听 `1 .. 3 s`，再开始下一轮。
-- 切换模式或修改配置后先监听 3 个有效帧再开始发送。
-- 自适应参数保存在 NVS，重启后继续生效。
+- 闭环同时观察校验有效的真实 EPAS `0x370` 和 DAS `0x39B`；`0x39B` 提供 HOS 状态，并受可配置 freshness 窗口约束。
+- 未见 DAS 或最后一帧超过 freshness 窗口时进入 `WAIT_DAS`，保持 no-send；即使总线之后完全静默，Web/API 也会按最后时间戳把诊断更新为 stale。
+- DAS 恢复后进入 `ARMING`，需要连续 3 个有效 OEM EPAS 帧才允许输出。
+- HOS 0 进入 `MAINTENANCE`，按测得扭矩的相反方向动态输出；默认预防幅值约为 `0.15 .. 0.18 Nm`。
+- HOS 2..7 进入 `CORRECTIVE`，执行 3..5 个成功发送帧的纠正 burst；动态幅值默认约为 `1.50 .. 1.80 Nm`。
+- `VERIFY` 等待 DAS 确认且不发送；首次确认失败可进行第二次纠正，连续失败进入 `FAULT_HOLD`。
+- HOS 回到 0/1 或维护窗口结束后进入 `RELEASE`，只从最后一次成功发送的 signed torque 单调衰减到 0；没有成功输出则直接进入 `REST`。
+- `REST` 为 no-send 的动态休息窗口，结束后重新进入维护闭环。
+- HOS 8/9/15、DAS stale 或确认超时会阻止发送；普通 fault recovery 需要 2000 ms 连续稳定，显式 reset 立即 off/on。
+- 所有动态扭矩均限制在 `±1.80 Nm`，counter、checksum、own-echo 跳过及 stale/fault no-send 约束保持不变。
+- 自适应参数保存在 NVS，重启后继续生效；详细状态机与参数见 [`docs/nag-adaptive-closed-loop.md`](docs/nag-adaptive-closed-loop.md)。
+- Gate B/C 实车验证仍为 **PENDING**，本文不声称已经完成实车验证。
 
 ## WiFi / DNS 网关
 
@@ -98,7 +102,7 @@ WebUI 提供：
 
 - CAN 状态、RX/TX/errors、FPS、运行时间
 - CAN Write 开关
-- Nag 模式、A_V2 范围和 ADAPTIVE 安全门/周期控制
+- Nag 模式、A_V2 范围和 ADAPTIVE HOS 闭环参数
 - AP 热点设置
 - WiFi 扫描/连接/删除
 - STA-AP 网关控制

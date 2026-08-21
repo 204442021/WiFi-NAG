@@ -40,9 +40,12 @@ struct NagAdaptiveSnapshot
     uint8_t blockReason = 0;
     uint8_t directionSource = 0;
     bool dasSeen = false;
+    bool dasValid = false;
     bool dasFresh = false;
     uint8_t dasHos = 15;
     uint32_t dasAgeMs = 0xFFFFFFFFu;
+    uint32_t lastDasFrameMs = 0;
+    uint32_t dasFreshnessLimitMs = 0;
     int16_t observedTorqueCentiNm = 0;
     int16_t targetTorqueCentiNm = 0;
     int8_t injectionSign = 0;
@@ -59,6 +62,27 @@ struct NagAdaptiveSnapshot
     uint32_t lastAcknowledgementLatencyMs = 0;
     uint32_t maxAcknowledgementLatencyMs = 0;
 };
+
+struct NagAdaptiveDasFreshness
+{
+    bool seen = false;
+    bool fresh = false;
+    uint32_t ageMs = 0xFFFFFFFFu;
+};
+
+inline NagAdaptiveDasFreshness nagAdaptiveDasFreshnessAt(
+    const NagAdaptiveSnapshot &snapshot, uint32_t nowMs)
+{
+    NagAdaptiveDasFreshness result;
+    result.seen = snapshot.dasSeen;
+    if (!snapshot.dasSeen)
+        return result;
+
+    result.ageMs = static_cast<uint32_t>(nowMs - snapshot.lastDasFrameMs);
+    result.fresh = snapshot.dasValid &&
+                   result.ageMs <= snapshot.dasFreshnessLimitMs;
+    return result;
+}
 
 class NagAdaptiveController
 {
@@ -375,9 +399,14 @@ public:
         value.blockReason = blockReason_;
         value.directionSource = directionSource_;
         value.dasSeen = das_.seen();
+        value.dasValid = das_.valid();
         value.dasFresh = das_.fresh(nowMs, config_.dasFreshTimeoutMs);
         value.dasHos = das_.raw();
         value.dasAgeMs = das_.ageMs(nowMs);
+        value.lastDasFrameMs = value.dasSeen
+                                   ? static_cast<uint32_t>(nowMs - value.dasAgeMs)
+                                   : 0U;
+        value.dasFreshnessLimitMs = config_.dasFreshTimeoutMs;
         value.observedTorqueCentiNm = observedTorqueCentiNm_;
         value.targetTorqueCentiNm = targetTorqueCentiNm_;
         value.injectionSign = outputActive_ && lastSuccessfullyTransmittedTorqueCentiNm_ != 0

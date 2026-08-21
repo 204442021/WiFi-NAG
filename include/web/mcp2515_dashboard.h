@@ -510,7 +510,8 @@ struct DashNagConfigRequest
     uint8_t mode = NagHandler::MODE_A;
 };
 
-static bool dashApplyNagConfigArgs(DashNagConfigError &error);
+static NagAdaptiveConfigInput::ApplyResult dashApplyNagConfigArgs(
+    DashNagConfigError &error);
 
 static void dashAppendNagAdaptiveConfigJson(String &j, const NagAdaptiveConfig &config)
 {
@@ -552,16 +553,18 @@ static void dashAppendNagClosedLoopTelemetry(String &j, NagHandler *nag)
 {
     const uint32_t now = millis();
     const NagAdaptiveSnapshot snapshot = nag->adaptiveSnapshot();
+    const NagAdaptiveDasFreshness dasStatus =
+        nagAdaptiveDasFreshnessAt(snapshot, now);
     const uint32_t oemEpasFrames = static_cast<uint32_t>(nag->nagOemEpasFrameCount);
     const uint32_t oemEpasAgeMs = oemEpasFrames == 0
                                       ? 0xFFFFFFFFu
                                       : now - static_cast<uint32_t>(nag->nagLastOemEpasAtMs);
     j += ",\"nagDasSeen\":";
-    j += snapshot.dasSeen ? "true" : "false";
+    j += dasStatus.seen ? "true" : "false";
     j += ",\"nagDasFresh\":";
-    j += snapshot.dasFresh ? "true" : "false";
+    j += dasStatus.fresh ? "true" : "false";
     j += ",\"nagDasAgeMs\":";
-    j += String(snapshot.dasAgeMs);
+    j += String(dasStatus.ageMs);
     j += ",\"nagDasHos\":";
     j += String((unsigned int)snapshot.dasHos);
     j += ",\"nagDasFrames\":";
@@ -1120,28 +1123,31 @@ static bool dashParseNagConfigRequest(DashNagConfigRequest &request,
     return true;
 }
 
-static bool dashApplyNagConfigArgs(DashNagConfigError &error)
+static NagAdaptiveConfigInput::ApplyResult dashApplyNagConfigArgs(
+    DashNagConfigError &error)
 {
     NagHandler *nag = dashNagActiveHandler();
     if (!nag)
-        return false;
+        return NagAdaptiveConfigInput::ApplyResult::INVALID;
 
     const NagAdaptivePendingCommand previous = nag->desiredAdaptiveCommand();
     DashNagConfigRequest request{previous.config, previous.mode};
     if (!dashParseNagConfigRequest(request, error))
-        return false;
+        return NagAdaptiveConfigInput::ApplyResult::INVALID;
 
-    const bool changed = previous.mode != request.mode ||
-                         !dashNagAdaptiveConfigEqual(previous.config, request.config);
-    if (changed)
+    const NagAdaptiveConfigInput::ApplyResult result =
+        NagAdaptiveConfigInput::decideApply(
+            true, previous.mode, request.mode,
+            dashNagAdaptiveConfigEqual(previous.config, request.config));
+    if (NagAdaptiveConfigInput::shouldPublishCommand(result))
         nag->publishAdaptiveCommand(request.config, request.mode, true);
 
-    if (changed)
+    if (NagAdaptiveConfigInput::shouldPublishCommand(result))
     {
         dashLog("[CFG] Nag mode=" + String(dashNagModeName(request.mode)) +
                 " closed-loop config updated");
     }
-    return changed;
+    return result;
 }
 #endif
 
@@ -1267,7 +1273,9 @@ static void handleConfig()
 {
 #if defined(NAG_KILLER)
     DashNagConfigError error;
-    if (!dashApplyNagConfigArgs(error))
+    const NagAdaptiveConfigInput::ApplyResult adaptiveResult =
+        dashApplyNagConfigArgs(error);
+    if (NagAdaptiveConfigInput::shouldRejectRequest(adaptiveResult))
     {
         server.send(400, "application/json", dashNagConfigErrorJson(error));
         return;
@@ -1303,7 +1311,9 @@ static void handleNagApiStats()
 static void handleNagApiMode()
 {
     DashNagConfigError error;
-    if (!dashApplyNagConfigArgs(error))
+    const NagAdaptiveConfigInput::ApplyResult adaptiveResult =
+        dashApplyNagConfigArgs(error);
+    if (NagAdaptiveConfigInput::shouldRejectRequest(adaptiveResult))
     {
         server.send(400, "application/json", dashNagConfigErrorJson(error));
         return;
@@ -1316,7 +1326,9 @@ static void handleNagApiMode()
 static void handleNagApiUpdate()
 {
     DashNagConfigError error;
-    if (!dashApplyNagConfigArgs(error))
+    const NagAdaptiveConfigInput::ApplyResult adaptiveResult =
+        dashApplyNagConfigArgs(error);
+    if (NagAdaptiveConfigInput::shouldRejectRequest(adaptiveResult))
     {
         server.send(400, "application/json", dashNagConfigErrorJson(error));
         return;
@@ -1334,7 +1346,9 @@ static void handleNagAdaptiveApiGet()
 static void handleNagAdaptiveApiPost()
 {
     DashNagConfigError error;
-    if (!dashApplyNagConfigArgs(error))
+    const NagAdaptiveConfigInput::ApplyResult adaptiveResult =
+        dashApplyNagConfigArgs(error);
+    if (NagAdaptiveConfigInput::shouldRejectRequest(adaptiveResult))
     {
         server.send(400, "application/json", dashNagConfigErrorJson(error));
         return;

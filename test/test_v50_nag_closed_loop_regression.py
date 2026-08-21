@@ -443,12 +443,15 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             start = self.dashboard.index(f"static void {handler}()")
             end = self.dashboard.index("\n}", start)
             body = self.dashboard[start:end]
-            reject = body.index("if (!dashApplyNagConfigArgs(error))")
+            reject = body.index(
+                "if (NagAdaptiveConfigInput::shouldRejectRequest(adaptiveResult))"
+            )
             save = body.index("dashSavePrefs()")
             self.assertLess(reject, save)
             self.assertIn("return;", body[reject:save])
         apply_start = self.dashboard.index(
-            "static bool dashApplyNagConfigArgs(DashNagConfigError &error)\n{"
+            "static NagAdaptiveConfigInput::ApplyResult dashApplyNagConfigArgs(\n"
+            "    DashNagConfigError &error)\n{"
         )
         apply_end = self.dashboard.index("\n}\n#endif", apply_start)
         apply_body = self.dashboard[apply_start:apply_end]
@@ -484,7 +487,10 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
 
     def test_config_equality_covers_every_closed_loop_member(self):
         equality_start = self.dashboard.index("dashNagAdaptiveConfigEqual")
-        equality_end = self.dashboard.index("static bool dashApplyNagConfigArgs", equality_start)
+        equality_end = self.dashboard.index(
+            "static NagAdaptiveConfigInput::ApplyResult dashApplyNagConfigArgs",
+            equality_start,
+        )
         equality = self.dashboard[equality_start:equality_end]
         for member in (
             "preventiveNegativeMinCentiNm", "preventiveNegativeMaxCentiNm",

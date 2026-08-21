@@ -1292,6 +1292,86 @@ void test_adaptive_angle_tracks_only_accepted_non_own_oem_epas()
     TEST_ASSERT_EQUAL_UINT32(1, handler.nagOwnEchoSkipCount);
 }
 
+void test_config_apply_decision_keeps_valid_noop_requests_alive()
+{
+    using NagAdaptiveConfigInput::ApplyResult;
+
+    const ApplyResult unchanged =
+        NagAdaptiveConfigInput::decideApply(true, 5U, 5U, true);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ApplyResult::VALID_UNCHANGED),
+                            static_cast<uint8_t>(unchanged));
+    TEST_ASSERT_FALSE(NagAdaptiveConfigInput::shouldRejectRequest(unchanged));
+    TEST_ASSERT_FALSE(NagAdaptiveConfigInput::shouldPublishCommand(unchanged));
+
+    for (bool requestedCanWrite : {false, true})
+    {
+        bool canWrite = !requestedCanWrite;
+        if (!NagAdaptiveConfigInput::shouldRejectRequest(unchanged))
+            canWrite = requestedCanWrite;
+        TEST_ASSERT_EQUAL(requestedCanWrite, canWrite);
+    }
+
+    const ApplyResult changed =
+        NagAdaptiveConfigInput::decideApply(true, 5U, 5U, false);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ApplyResult::VALID_CHANGED),
+                            static_cast<uint8_t>(changed));
+    TEST_ASSERT_FALSE(NagAdaptiveConfigInput::shouldRejectRequest(changed));
+    TEST_ASSERT_TRUE(NagAdaptiveConfigInput::shouldPublishCommand(changed));
+
+    const ApplyResult modeChanged =
+        NagAdaptiveConfigInput::decideApply(true, 5U, 0U, true);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ApplyResult::VALID_CHANGED),
+                            static_cast<uint8_t>(modeChanged));
+
+    const ApplyResult invalid =
+        NagAdaptiveConfigInput::decideApply(false, 5U, 5U, true);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ApplyResult::INVALID),
+                            static_cast<uint8_t>(invalid));
+    TEST_ASSERT_TRUE(NagAdaptiveConfigInput::shouldRejectRequest(invalid));
+    TEST_ASSERT_FALSE(NagAdaptiveConfigInput::shouldPublishCommand(invalid));
+}
+
+void test_published_das_freshness_expires_without_another_can_frame()
+{
+    NagAdaptiveSnapshot snapshot;
+    snapshot.dasSeen = true;
+    snapshot.dasValid = true;
+    snapshot.lastDasFrameMs = 1000U;
+    snapshot.dasFreshnessLimitMs = 500U;
+
+    NagAdaptiveDasFreshness status = nagAdaptiveDasFreshnessAt(snapshot, 1499U);
+    TEST_ASSERT_TRUE(status.seen);
+    TEST_ASSERT_TRUE(status.fresh);
+    TEST_ASSERT_EQUAL_UINT32(499U, status.ageMs);
+
+    status = nagAdaptiveDasFreshnessAt(snapshot, 1500U);
+    TEST_ASSERT_TRUE(status.fresh);
+    TEST_ASSERT_EQUAL_UINT32(500U, status.ageMs);
+
+    status = nagAdaptiveDasFreshnessAt(snapshot, 1501U);
+    TEST_ASSERT_FALSE(status.fresh);
+    TEST_ASSERT_EQUAL_UINT32(501U, status.ageMs);
+}
+
+void test_published_das_freshness_handles_wrap_and_never_seen()
+{
+    NagAdaptiveSnapshot snapshot;
+    snapshot.dasSeen = true;
+    snapshot.dasValid = true;
+    snapshot.lastDasFrameMs = 0xFFFFFFF0U;
+    snapshot.dasFreshnessLimitMs = 50U;
+
+    NagAdaptiveDasFreshness wrapped = nagAdaptiveDasFreshnessAt(snapshot, 0x00000020U);
+    TEST_ASSERT_TRUE(wrapped.fresh);
+    TEST_ASSERT_EQUAL_UINT32(48U, wrapped.ageMs);
+
+    snapshot.dasSeen = false;
+    NagAdaptiveDasFreshness neverSeen = nagAdaptiveDasFreshnessAt(snapshot, 0x00000020U);
+    TEST_ASSERT_FALSE(neverSeen.seen);
+    TEST_ASSERT_FALSE(neverSeen.fresh);
+    TEST_ASSERT_EQUAL_UINT32(0xFFFFFFFFU, neverSeen.ageMs);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -1323,6 +1403,9 @@ int main()
     RUN_TEST(test_strict_config_parser_rejects_malformed_and_out_of_range_values);
     RUN_TEST(test_strict_config_parser_accepts_legal_boundaries_and_validates_ranges);
     RUN_TEST(test_pending_command_and_snapshot_cross_only_can_frame_boundaries);
+    RUN_TEST(test_config_apply_decision_keeps_valid_noop_requests_alive);
+    RUN_TEST(test_published_das_freshness_expires_without_another_can_frame);
+    RUN_TEST(test_published_das_freshness_handles_wrap_and_never_seen);
     RUN_TEST(test_corrective_hos_requires_three_valid_oem_epas_frames_before_send);
     RUN_TEST(test_epas_gap_over_200ms_rearms_during_corrective);
     RUN_TEST(test_fault_hold_recovers_after_2000ms_continuously_fresh_normal_hos);

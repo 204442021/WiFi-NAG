@@ -23,6 +23,32 @@ enum class Error : uint8_t
     NOT_INTEGER,
 };
 
+enum class ApplyResult : uint8_t
+{
+    INVALID = 0,
+    VALID_UNCHANGED,
+    VALID_CHANGED,
+};
+
+inline ApplyResult decideApply(bool valid, uint8_t currentMode,
+                               uint8_t requestedMode, bool configUnchanged)
+{
+    if (!valid)
+        return ApplyResult::INVALID;
+    const bool changed = currentMode != requestedMode || !configUnchanged;
+    return changed ? ApplyResult::VALID_CHANGED : ApplyResult::VALID_UNCHANGED;
+}
+
+inline bool shouldRejectRequest(ApplyResult result)
+{
+    return result == ApplyResult::INVALID;
+}
+
+inline bool shouldPublishCommand(ApplyResult result)
+{
+    return result == ApplyResult::VALID_CHANGED;
+}
+
 inline const char *message(Error error)
 {
     switch (error)
