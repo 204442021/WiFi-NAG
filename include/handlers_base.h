@@ -74,10 +74,11 @@ struct NagHandler : public CarManagerBase
     Shared<uint32_t> nagOwnEchoSkipCount{0};
     Shared<uint32_t> nagChecksumRejectCount{0};
     Shared<uint32_t> nagInvalidTorqueRejectCount{0};
-    // Retained as compatibility counters for older diagnostics clients.
+    // Compatibility names consumed by the existing dashboard API. In V4.4
+    // the count means OEM sequence anomaly and the gap means normal echo->OEM
+    // counter reuse timing; it is no longer a synthetic "collision" count.
     Shared<uint32_t> nagCounterCollisionCount{0};
     Shared<uint32_t> nagLastCounterCollisionGapUs{0};
-    // V4.4 diagnostics: only true OEM sequence discontinuities are anomalies.
     Shared<uint32_t> nagOemCounterAnomalyCount{0};
     Shared<uint32_t> nagEchoCounterReuseGapUs{0};
     Shared<uint32_t> nagDasFrameCount{0};
@@ -157,7 +158,7 @@ struct NagHandler : public CarManagerBase
     {
         float centi = nm * 100.0f;
         int16_t rounded = static_cast<int16_t>(centi >= 0.0f ? centi + 0.5f : centi - 0.5f);
-        return clampAdaptiveTorqueCentiNm(rounded);
+        return clampTorqueCentiNm(rounded);
     }
 
     static float centiNmToNm(int16_t centiNm)
@@ -321,6 +322,10 @@ struct NagHandler : public CarManagerBase
         {
             config.correctiveMinCentiNm = minCentiNm;
             config.correctiveMaxCentiNm = maxCentiNm;
+            config.correctiveNegativeMinCentiNm = minCentiNm;
+            config.correctiveNegativeMaxCentiNm = maxCentiNm;
+            config.correctivePositiveMinCentiNm = minCentiNm;
+            config.correctivePositiveMaxCentiNm = maxCentiNm;
         }
         else if (sign < 0)
         {
@@ -536,7 +541,10 @@ struct NagHandler : public CarManagerBase
         {
             const uint8_t expectedOemCounter = static_cast<uint8_t>((previousOemCounter + 1U) & 0x0F);
             if (oemCounter != expectedOemCounter)
+            {
                 nagOemCounterAnomalyCount++;
+                nagCounterCollisionCount = static_cast<uint32_t>(nagOemCounterAnomalyCount);
+            }
         }
         previousOemCounter = oemCounter;
         previousOemCounterValid = true;
