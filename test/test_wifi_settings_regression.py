@@ -134,17 +134,23 @@ class WifiNagRegressionTests(unittest.TestCase):
                 self.assertIn(domain, self.gateway)
 
     def test_nag_api_and_ui_controls_exist(self) -> None:
-        for route in ["/api/config", "/api/stats", "/api/mode", "/api/update"]:
+        for route in [
+            "/api/config",
+            "/api/stats",
+            "/api/mode",
+            "/api/update",
+            "/api/nag-adaptive",
+        ]:
             with self.subTest(route=route):
                 self.assertIn(route, self.dash)
 
         for element_id in [
             "can-write-tgl",
             "nag-mode-seg",
-            "nag-h1-neg-min",
-            "nag-h1-neg-max",
-            "nag-h2-pos-min",
-            "nag-h2-pos-max",
+            "nag-pv-neg-min",
+            "nag-pv-neg-max",
+            "nag-cr-pos-min",
+            "nag-cr-pos-max",
         ]:
             with self.subTest(element_id=element_id):
                 self.assertHasUiId(element_id)
