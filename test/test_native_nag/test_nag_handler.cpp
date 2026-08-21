@@ -63,13 +63,22 @@ void tearDown() {}
 
 void test_nag_filter_ids_count()
 {
-    TEST_ASSERT_EQUAL_UINT8(1, handler.filterIdCount());
+    TEST_ASSERT_EQUAL_UINT8(2, handler.filterIdCount());
 }
 
 void test_nag_filter_ids_value()
 {
     const uint32_t *ids = handler.filterIds();
     TEST_ASSERT_EQUAL_UINT32(880, ids[0]);
+    TEST_ASSERT_EQUAL_UINT32(0x39B, ids[1]);
+}
+
+void test_nag_das_feedback_is_receive_only()
+{
+    CanFrame frame = makeEpasFrame(0, 0.33, 0x0C);
+    frame.id = 0x39B;
+    handler.handleMessage(frame, mock);
+    TEST_ASSERT_EQUAL(0, mock.sent.size());
 }
 
 void test_adaptive_handson_ranges_default_to_1_50_to_1_80_nm()
@@ -419,6 +428,7 @@ int main()
     // Filter
     RUN_TEST(test_nag_filter_ids_count);
     RUN_TEST(test_nag_filter_ids_value);
+    RUN_TEST(test_nag_das_feedback_is_receive_only);
     RUN_TEST(test_adaptive_handson_ranges_default_to_1_50_to_1_80_nm);
 
     // Basic echo behavior

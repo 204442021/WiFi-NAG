@@ -3,6 +3,7 @@
 #include "can_helpers.h"
 #include "drivers/mock_driver.h"
 #include "handlers.h"
+#include "nag_das_feedback.h"
 
 static MockDriver mock;
 static NagHandler handler;
@@ -250,6 +251,40 @@ void test_successful_echo_is_skipped_as_own_echo()
     TEST_ASSERT_EQUAL_UINT32(1, handler.nagOwnEchoSkipCount);
 }
 
+static CanFrame makeDasFrame(uint32_t id, uint8_t hos)
+{
+    CanFrame frame = {.id = id, .dlc = 8};
+    frame.data[5] = static_cast<uint8_t>((hos & 0x0F) << 2);
+    return frame;
+}
+
+void test_das_hos_uses_byte5_bits_5_through_2()
+{
+    NagDasFeedbackTracker tracker;
+    CanFrame frame = makeDasFrame(0x39B, 3);
+    TEST_ASSERT_TRUE(tracker.observe(frame, 100));
+    TEST_ASSERT_EQUAL_UINT8(3, tracker.raw());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(NagDasClass::CORRECTIVE),
+                            static_cast<uint8_t>(tracker.classification()));
+}
+
+void test_das_feedback_expires_at_501ms()
+{
+    NagDasFeedbackTracker tracker;
+    TEST_ASSERT_TRUE(tracker.observe(makeDasFrame(0x39B, 0), 100));
+    TEST_ASSERT_TRUE(tracker.fresh(600, 500));
+    TEST_ASSERT_FALSE(tracker.fresh(601, 500));
+}
+
+void test_unknown_and_sna_hos_fail_closed()
+{
+    NagDasFeedbackTracker tracker;
+    TEST_ASSERT_FALSE(tracker.observe(makeDasFrame(0x39B, 9), 100));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(NagDasClass::BLOCKED),
+                            static_cast<uint8_t>(tracker.classification()));
+    TEST_ASSERT_FALSE(tracker.observe(makeDasFrame(0x39B, 15), 110));
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -270,5 +305,8 @@ int main()
     RUN_TEST(test_successful_send_snapshot_expires_after_200ms);
     RUN_TEST(test_reserved_torque_is_rejected);
     RUN_TEST(test_successful_echo_is_skipped_as_own_echo);
+    RUN_TEST(test_das_hos_uses_byte5_bits_5_through_2);
+    RUN_TEST(test_das_feedback_expires_at_501ms);
+    RUN_TEST(test_unknown_and_sna_hos_fail_closed);
     return UNITY_END();
 }

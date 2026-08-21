@@ -5,19 +5,21 @@
 void setUp() {}
 void tearDown() {}
 
-void test_wifi_nag_single_id_accepts_0x370()
+void test_wifi_nag_dual_id_hardware_filter_accepts_0x370_and_0x39b()
 {
-    uint32_t ids[] = {880};
-    auto f = computeTwaiFilter(ids, 1);
-    TEST_ASSERT_TRUE(twaiHardwareFilterAccepts(f, 880));
+    uint32_t ids[] = {0x370, 0x39B};
+    auto f = computeTwaiFilter(ids, 2);
+    TEST_ASSERT_TRUE(twaiHardwareFilterAccepts(f, 0x370));
+    TEST_ASSERT_TRUE(twaiHardwareFilterAccepts(f, 0x39B));
 }
 
-void test_wifi_nag_single_id_rejects_neighbor_ids()
+void test_wifi_nag_dual_id_exact_filter_rejects_neighbor_ids()
 {
-    uint32_t ids[] = {880};
-    auto f = computeTwaiFilter(ids, 1);
-    TEST_ASSERT_FALSE(twaiHardwareFilterAccepts(f, 879));
-    TEST_ASSERT_FALSE(twaiHardwareFilterAccepts(f, 881));
+    uint32_t ids[] = {0x370, 0x39B};
+    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 2, 0x371));
+    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 2, 0x39A));
+    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 2, 0x399));
+    TEST_ASSERT_FALSE(exactCanIdMatches(ids, 2, 0x3FD));
 }
 
 void test_ble_filter_contains_three_required_ids_and_excludes_0x118()
@@ -35,14 +37,6 @@ void test_ble_filter_contains_three_required_ids_and_excludes_0x118()
     TEST_ASSERT_FALSE(exactCanIdMatches(ids, 3, 0x371));
 }
 
-void test_wifi_nag_single_id_mask_is_exact()
-{
-    uint32_t ids[] = {880};
-    auto f = computeTwaiFilter(ids, 1);
-    TEST_ASSERT_EQUAL_HEX32(880u << 21, f.acceptance_code);
-    TEST_ASSERT_EQUAL_HEX32(0x001FFFFF, f.acceptance_mask);
-}
-
 void test_empty_count_returns_zero()
 {
     auto f = computeTwaiFilter(nullptr, 0);
@@ -53,9 +47,8 @@ void test_empty_count_returns_zero()
 int main()
 {
     UNITY_BEGIN();
-    RUN_TEST(test_wifi_nag_single_id_accepts_0x370);
-    RUN_TEST(test_wifi_nag_single_id_rejects_neighbor_ids);
-    RUN_TEST(test_wifi_nag_single_id_mask_is_exact);
+    RUN_TEST(test_wifi_nag_dual_id_hardware_filter_accepts_0x370_and_0x39b);
+    RUN_TEST(test_wifi_nag_dual_id_exact_filter_rejects_neighbor_ids);
     RUN_TEST(test_empty_count_returns_zero);
     RUN_TEST(test_ble_filter_contains_three_required_ids_and_excludes_0x118);
     return UNITY_END();

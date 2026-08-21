@@ -117,11 +117,11 @@ struct NagHandler : public CarManagerBase
 
     const uint32_t *filterIds() const override
     {
-        static constexpr uint32_t ids[] = {880};
+        static constexpr uint32_t ids[] = {0x370, 0x39B};
         return ids;
     }
 
-    uint8_t filterIdCount() const override { return 1; }
+    uint8_t filterIdCount() const override { return 2; }
 
     static int16_t clampTorqueCentiNm(int16_t v)
     {
