@@ -856,7 +856,13 @@ static void dashLoadPrefs()
         adaptive.restMinMs = dashNagParseSecondsMs(prefs.getString("nag_rst_min", "1.5"), 1500);
         adaptive.restMaxMs = dashNagParseSecondsMs(prefs.getString("nag_rst_max", "2.5"), 2500);
         adaptive.torqueDeadbandCentiNm = dashNagParseNmCenti(prefs.getString("nag_dir_db", "0.05"), 5);
-        adaptive.dasFreshTimeoutMs = dashNagParseMilliseconds(prefs.getString("nag_das_ms", "500"), 500);
+        adaptive.dasFreshTimeoutMs = dashNagParseMilliseconds(prefs.getString("nag_das_ms", "750"), 750);
+        if (adaptive.dasFreshTimeoutMs == 500)
+        {
+            adaptive.dasFreshTimeoutMs = 750;
+            prefs.putString("nag_das_ms", "750");
+            dashLog("[BOOT] Migrated DAS freshness timeout from 500 ms to 750 ms");
+        }
         adaptive = NagAdaptiveController::normalizeConfig(adaptive);
         uint8_t storedMode = prefs.getUChar("nag_mode", NagHandler::MODE_A);
         if (!NagHandler::isSupportedMode(storedMode))

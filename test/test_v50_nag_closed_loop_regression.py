@@ -65,7 +65,7 @@ EXPECTED_NVS_DEFAULTS = {
     "nag_rst_min": "1.5",
     "nag_rst_max": "2.5",
     "nag_dir_db": "0.05",
-    "nag_das_ms": "500",
+    "nag_das_ms": "750",
 }
 
 EXPECTED_CONFIG_FIELDS = (
@@ -140,7 +140,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "preventivePositive:[0.15,0.18],correctiveNegative:[1.50,1.80],"
             "correctivePositive:[1.50,1.80],activity:[0.8,1.4],"
             "release:[0.2,0.4],rest:[1.5,2.5],directionDeadband:0.05,"
-            "dasFreshTimeoutMs:500};",
+            "dasFreshTimeoutMs:750};",
             compact,
         )
         self.assertIn("letnagCustomDraft=cloneNagCustomDefaults();", compact)
@@ -158,12 +158,12 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
     def test_custom_strategy_readiness_mapping_is_fail_closed(self):
         compact = re.sub(r"\s+", "", self.source)
         self.assertIn("state.nagMode!==5", compact)
-        self.assertIn("'DISABLED'", self.source)
+        self.assertIn("'已关闭'", self.source)
         self.assertIn("!d.nagDasFresh", compact)
-        self.assertIn("'WAIT_DAS'", self.source)
+        self.assertIn("'等待 DAS'", self.source)
         self.assertIn("phase==='fault-hold'", compact)
-        self.assertIn("'FAIL_CLOSED'", self.source)
-        self.assertIn("'READY'", self.source)
+        self.assertIn("'故障停发'", self.source)
+        self.assertIn("'就绪'", self.source)
         self.assertIn("反馈失效，已停止自适应注入", self.source)
 
     def test_custom_strategy_blocks_unhydrated_defaults_and_exposes_retry(self):
@@ -351,9 +351,26 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
 
     def test_das_freshness_is_visible_text_not_color_only(self):
         compact = re.sub(r"\s+", "", self.source)
-        self.assertIn('id="nag-diag-das">未见 · -- frames / --</strong>', self.source)
+        self.assertIn('id="nag-diag-das">未见 · -- 帧 / --</strong>', self.source)
         self.assertIn("constfreshness=dasFresh?'新鲜':(dasSeen?'已超时':'未见')", compact)
         self.assertIn("freshness+' · '+dasFrameText+' / '+nagDiagnosticAge(d.nagDasAgeMs)", self.source)
+        self.assertIn("固件过滤器已放行，请确认当前 CAN 总线是否存在该报文", self.source)
+
+    def test_closed_loop_diagnostic_labels_are_chinese(self):
+        start = self.source.index('class="nag-diag-panel"')
+        end = self.source.index('id="advanced-diagnostics"', start)
+        panel = self.source[start:end]
+        for label in (
+            "NAG 自适应闭环", "原车 EPAS 0x370", "原车扭矩", "原车计数器",
+            "手握状态", "控制阶段", "目标扭矩", "方向来源", "阶段剩余时间",
+            "纠偏尝试 / 连发进度", "尝试 / 成功 / 失败", "DAS 确认次数",
+        ):
+            self.assertIn(label, panel)
+        for english in (
+            "NAG CLOSED LOOP", "OEM torque", "OEM counter", "Hands-On state",
+            "Target torque", "Direction source", "Phase remaining", "Acknowledgements",
+        ):
+            self.assertNotIn(english, panel)
 
     def test_diagnostic_last_tx_preserves_status_age_and_derives_send_success(self):
         compact = re.sub(r"\s+", "", self.source)

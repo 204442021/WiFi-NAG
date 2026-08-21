@@ -120,8 +120,8 @@ void test_adaptive_never_sends_without_fresh_das()
     TEST_ASSERT_FALSE(epas(controller, 100).shouldSend);
     TEST_ASSERT_FALSE(epas(controller, 110).shouldSend);
     TEST_ASSERT_TRUE(epas(controller, 120).shouldSend);
-    TEST_ASSERT_FALSE(epas(controller, 601).shouldSend);
-    const NagAdaptiveSnapshot stale = controller.snapshot(601);
+    TEST_ASSERT_FALSE(epas(controller, 851).shouldSend);
+    const NagAdaptiveSnapshot stale = controller.snapshot(851);
     TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_WAIT_DAS, stale.phase);
     TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_DAS_STALE, stale.blockReason);
 }
@@ -429,8 +429,8 @@ void test_das_stale_during_send_returns_wait_das()
     TEST_ASSERT_FALSE(epas(controller, 100).shouldSend);
     TEST_ASSERT_FALSE(epas(controller, 110).shouldSend);
     TEST_ASSERT_TRUE(epas(controller, 120).shouldSend);
-    TEST_ASSERT_FALSE(epas(controller, 601).shouldSend);
-    const NagAdaptiveSnapshot snapshot = controller.snapshot(601);
+    TEST_ASSERT_FALSE(epas(controller, 851).shouldSend);
+    const NagAdaptiveSnapshot snapshot = controller.snapshot(851);
     TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_WAIT_DAS, snapshot.phase);
     TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_DAS_STALE, snapshot.blockReason);
 }
@@ -552,7 +552,7 @@ void test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix()
         const bool legalHos = hos == 0 || (hos >= 2 && hos <= 7);
         const bool hasDirection = directionCase < 2;
         const bool shouldAttempt = dasFresh && legalHos && hasDirection;
-        const uint32_t epasStartMs = dasFresh ? 0U : 501U;
+        const uint32_t epasStartMs = dasFresh ? 0U : 751U;
 
         coverage[counter0][hos][directionCase][freshnessCase][localSendCase]++;
         sawCounterWrap = sawCounterWrap || counter1 < counter0 || counter2 < counter1 ||
@@ -958,19 +958,19 @@ void test_fault_hold_recovers_after_2000ms_continuously_fresh_normal_hos()
     TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(8), 1400));
     TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 1500));
     TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 2000));
-    TEST_ASSERT_FALSE(epas(controller, 2501).shouldSend);
-    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 2600));
-    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 3100));
-    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 3600));
-    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 4100));
-    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 4599));
+    TEST_ASSERT_FALSE(epas(controller, 2751).shouldSend);
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 2800));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 3300));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 3800));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 4300));
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 4799));
     TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_FAULT_HOLD,
-                            controller.snapshot(4599).phase);
-    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 4600));
-    const NagAdaptiveSnapshot recovered = controller.snapshot(4600);
+                            controller.snapshot(4799).phase);
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 4800));
+    const NagAdaptiveSnapshot recovered = controller.snapshot(4800);
     TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_REST, recovered.phase);
     TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_REST, recovered.blockReason);
-    TEST_ASSERT_FALSE(epas(controller, 4600).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 4800).shouldSend);
 }
 
 void test_request_reset_recovers_fault_hold_immediately()

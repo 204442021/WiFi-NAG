@@ -21,7 +21,7 @@ struct NagAdaptiveConfig
     uint32_t releaseMaxMs = 400;
     uint32_t restMinMs = 1500;
     uint32_t restMaxMs = 2500;
-    uint32_t dasFreshTimeoutMs = 500;
+    uint32_t dasFreshTimeoutMs = 750;
 };
 
 struct NagAdaptiveDecision

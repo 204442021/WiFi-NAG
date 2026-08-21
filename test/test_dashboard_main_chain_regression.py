@@ -213,7 +213,7 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             self.assertLess(health_index, advanced_index)
             for heading in ("原车输入", "控制器决策", "本地发送", "DAS 响应"):
                 self.assertIn(heading, html[health_index:advanced_index])
-            self.assertIn("未见 · -- frames / --", html[health_index:advanced_index])
+            self.assertIn("未见 · -- 帧 / --", html[health_index:advanced_index])
             compact = re.sub(r"\s+", "", html)
             for contract in (
                 "letnagDiagnosticsEpoch=0",

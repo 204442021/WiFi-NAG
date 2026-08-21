@@ -626,7 +626,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
                 <div class="nag-field-group"><div class="nag-field-label">方向死区 / Nm</div><label class="nag-adaptive-field"><span>0–0.50 Nm</span><input class="sniff-input" id="nag-direction-deadband" type="number" min="0" max="0.50" step="0.01" value="0.05"></label></div>
               </div></section>
             </div>
-            <aside class="nag-safety-panel"><div class="nag-safety-title">安全边界</div><div class="nag-safety-grid"><div class="nag-safety-item"><span>硬限幅</span><b id="nag-custom-hard-cap">±1.80 Nm</b></div><div class="nag-safety-item"><span>DAS timeout</span><b id="nag-custom-das-timeout">500 ms</b></div><div class="nag-safety-item"><span>休息语义</span><b>休息期不额外发送 0x370</b></div></div><div class="nag-strategy-copy">本地发送成功不等于 DAS 接受；反馈失效时闭环立即停止注入。</div></aside>
+            <aside class="nag-safety-panel"><div class="nag-safety-title">安全边界</div><div class="nag-safety-grid"><div class="nag-safety-item"><span>硬限幅</span><b id="nag-custom-hard-cap">±1.80 Nm</b></div><div class="nag-safety-item"><span>DAS 超时阈值</span><b id="nag-custom-das-timeout">750 ms</b></div><div class="nag-safety-item"><span>休息语义</span><b>休息期不额外发送 0x370</b></div></div><div class="nag-strategy-copy">本地发送成功不等于 DAS 接受；反馈失效时闭环立即停止注入。</div></aside>
             <div class="nag-adaptive-live"><span class="nag-status-pill" id="nag-adaptive-phase">阶段：--</span><span class="nag-status-pill" id="nag-adaptive-torque-live">真实扭矩：--</span><span class="nag-status-pill" id="nag-adaptive-handson-live">Hands-On：--</span><span class="nag-status-pill" id="nag-adaptive-source-live">方向依据：--</span></div>
             <div class="nag-custom-actionbar"><div><div class="nag-action-state" id="nag-custom-dirty" role="status" aria-live="polite" aria-atomic="true">正在读取设备策略</div><div class="setting-desc" id="nag-adaptive-msg" role="status" aria-live="polite" aria-atomic="true"></div></div><div class="nag-action-buttons"><button class="sniff-btn" id="nag-custom-defaults" type="button" onclick="restoreNagCustomDefaults()">恢复建议值</button><button class="sniff-btn primary" id="nag-custom-save" type="button" onclick="saveNagAdaptive()">读取中...</button></div></div>
           </div>
@@ -842,33 +842,33 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
       <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V4.3 V13</div></div>
     </div>
     <section class="nag-diag-panel" aria-labelledby="nag-diag-panel-title">
-      <header class="nag-diag-header"><div><div class="nag-diag-kicker">NAG CLOSED LOOP</div><h2 class="nag-diag-title" id="nag-diag-panel-title">闭环健康</h2></div><div class="nag-diag-health nag-tone-muted" id="nag-diag-health" role="status" aria-live="polite" aria-atomic="true">DISABLED</div></header>
+      <header class="nag-diag-header"><div><div class="nag-diag-kicker">NAG 自适应闭环</div><h2 class="nag-diag-title" id="nag-diag-panel-title">闭环健康</h2></div><div class="nag-diag-health nag-tone-muted" id="nag-diag-health" role="status" aria-live="polite" aria-atomic="true">已关闭</div></header>
       <div class="nag-diag-reason" id="nag-diag-reason">等待诊断监控</div>
       <div class="nag-diag-groups">
         <article class="nag-diag-group"><h3>原车输入</h3><div class="nag-diag-metrics">
-          <div class="nag-diag-metric"><span>OEM EPAS 0x370</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-epas">未见数据</strong><small id="nag-echo-meta">echo: --</small></div>
-          <div class="nag-diag-metric"><span>OEM torque</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-oem-torque">--</strong><small id="nag-live-meta">实时: --</small></div>
-          <div class="nag-diag-metric"><span>OEM counter</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-counter">--</strong></div>
-          <div class="nag-diag-metric"><span>DAS 0x39B</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-das">未见 · -- frames / --</strong></div>
-          <div class="nag-diag-metric"><span>Hands-On state</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-hos">--</strong></div>
+          <div class="nag-diag-metric"><span>原车 EPAS 0x370</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-epas">未见数据</strong><small id="nag-echo-meta">回显：--</small></div>
+          <div class="nag-diag-metric"><span>原车扭矩</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-oem-torque">--</strong><small id="nag-live-meta">实时：--</small></div>
+          <div class="nag-diag-metric"><span>原车计数器</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-counter">--</strong></div>
+          <div class="nag-diag-metric"><span>DAS 0x39B</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-das">未见 · -- 帧 / --</strong></div>
+          <div class="nag-diag-metric"><span>手握状态</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-hos">--</strong></div>
         </div></article>
         <article class="nag-diag-group"><h3>控制器决策</h3><div class="nag-diag-metrics">
-          <div class="nag-diag-metric"><span>Phase</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-phase">关闭</strong></div>
-          <div class="nag-diag-metric"><span>Target torque</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-target">--</strong></div>
-          <div class="nag-diag-metric"><span>Direction source</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-direction">--</strong><small id="nag-direction-meta">--</small></div>
-          <div class="nag-diag-metric"><span>Phase remaining</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-timer">--</strong></div>
-          <div class="nag-diag-metric"><span>Corrective / burst</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-burst">--</strong></div>
+          <div class="nag-diag-metric"><span>控制阶段</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-phase">关闭</strong></div>
+          <div class="nag-diag-metric"><span>目标扭矩</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-target">--</strong></div>
+          <div class="nag-diag-metric"><span>方向来源</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-direction">--</strong><small id="nag-direction-meta">--</small></div>
+          <div class="nag-diag-metric"><span>阶段剩余时间</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-timer">--</strong></div>
+          <div class="nag-diag-metric"><span>纠偏尝试 / 连发进度</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-burst">--</strong></div>
         </div></article>
         <article class="nag-diag-group"><h3>本地发送</h3><div class="nag-diag-metrics">
-          <div class="nag-diag-metric"><span>Attempt / success / failure</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-tx">0 / 0 / 0</strong></div>
-          <div class="nag-diag-metric"><span>Last injected torque / age</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-last-tx">--</strong><small id="nag-injected-meta">--（未注入）</small></div>
-          <div class="nag-diag-metric"><span>Counter collision / gap</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-collision">0 / --</strong></div>
+          <div class="nag-diag-metric"><span>尝试 / 成功 / 失败</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-tx">0 / 0 / 0</strong></div>
+          <div class="nag-diag-metric"><span>最近注入扭矩 / 距今</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-last-tx">--</strong><small id="nag-injected-meta">--（未注入）</small></div>
+          <div class="nag-diag-metric"><span>计数器冲突 / 间隔</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-collision">0 / --</strong></div>
         </div></article>
         <article class="nag-diag-group"><h3>DAS 响应</h3><div class="nag-diag-metrics">
-          <div class="nag-diag-metric"><span>Acknowledgements</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-ack">0</strong></div>
-          <div class="nag-diag-metric"><span>Last / max latency</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-latency">-- / --</strong></div>
-          <div class="nag-diag-metric"><span>Timeouts</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-timeout">0</strong></div>
-          <div class="nag-diag-metric"><span>HOS escalations</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-escalations">0</strong></div>
+          <div class="nag-diag-metric"><span>DAS 确认次数</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-ack">0</strong></div>
+          <div class="nag-diag-metric"><span>最近 / 最大延迟</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-latency">-- / --</strong></div>
+          <div class="nag-diag-metric"><span>确认超时次数</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-timeout">0</strong></div>
+          <div class="nag-diag-metric"><span>HOS 升级次数</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-escalations">0</strong></div>
         </div></article>
       </div>
       <div class="nag-diag-timeline"><div class="nag-diag-timeline-head"><h3>最近闭环事件</h3><button class="nag-diag-clear" id="nag-diag-clear-events" type="button" onclick="clearNagDiagnosticEvents()">清空事件</button></div><ol class="nag-diag-events" id="nag-diag-events" role="log" aria-live="polite"><li class="nag-diag-empty">等待状态变化</li></ol></div>
@@ -878,12 +878,12 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
       <div class="diag-group">
         <h3>CAN 运行数据</h3>
         <div class="stat-grid">
-          <div class="stat"><div class="stat-lbl">CAN Frames</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
-          <div class="stat"><div class="stat-lbl">RX</div><div class="stat-val v-acc" id="s-rx">0</div></div>
-          <div class="stat"><div class="stat-lbl">TX</div><div class="stat-val v-acc" id="s-tx">0</div></div>
-          <div class="stat"><div class="stat-lbl">TX Errors</div><div class="stat-val v-dim" id="s-txerr">0</div></div>
-          <div class="stat"><div class="stat-lbl">Uptime</div><div class="stat-val v-dim" id="s-up">0s</div></div>
-          <button class="btn" id="btn-can-toggle" onclick="toggleCanWriteTopButton()">CAN Write On</button>
+          <div class="stat"><div class="stat-lbl">CAN 帧</div><div class="stat-val v-dim" id="s-fps">0.0 Hz</div></div>
+          <div class="stat"><div class="stat-lbl">接收</div><div class="stat-val v-acc" id="s-rx">0</div></div>
+          <div class="stat"><div class="stat-lbl">发送</div><div class="stat-val v-acc" id="s-tx">0</div></div>
+          <div class="stat"><div class="stat-lbl">发送错误</div><div class="stat-val v-dim" id="s-txerr">0</div></div>
+          <div class="stat"><div class="stat-lbl">运行时间</div><div class="stat-val v-dim" id="s-up">0s</div></div>
+          <button class="btn" id="btn-can-toggle" onclick="toggleCanWriteTopButton()">开启 CAN 写入</button>
         </div>
       </div>
       <div class="diag-group">
@@ -1142,7 +1142,7 @@ const nagCustomDefaults={
   preventiveNegative:[0.15,0.18], preventivePositive:[0.15,0.18],
   correctiveNegative:[1.50,1.80], correctivePositive:[1.50,1.80],
   activity:[0.8,1.4], release:[0.2,0.4], rest:[1.5,2.5],
-  directionDeadband:0.05, dasFreshTimeoutMs:500
+  directionDeadband:0.05, dasFreshTimeoutMs:750
 };
 const cloneNagCustomDefaults=()=>JSON.parse(JSON.stringify(nagCustomDefaults));
 let nagCustomDraft=cloneNagCustomDefaults();
@@ -1161,9 +1161,9 @@ const phaseNames={
 const nagDiagnosticSemanticTones={release: 'caution', rest: 'caution', verify: 'caution', collision: 'caution', sendFailure: 'error'};
 const nagDiagnosticPhaseTones={disabled: 'muted', 'wait-das': 'muted', arming: 'active', maintenance: 'active', release: 'caution', rest: 'caution', corrective: 'active', verify: 'caution', 'fault-hold': 'error'};
 const nagDiagnosticEventFields=[
-  ['nagDasFresh','DAS freshness'],['nagDasHos','DAS HOS'],
-  ['nagAdaptivePhase','Controller phase'],['nagAcknowledgementCount','Acknowledgements'],
-  ['nagAcknowledgementTimeouts','Ack timeouts'],['nagCounterCollisions','Counter collisions']
+  ['nagDasFresh','DAS 新鲜度'],['nagDasHos','DAS 手握状态'],
+  ['nagAdaptivePhase','控制阶段'],['nagAcknowledgementCount','确认次数'],
+  ['nagAcknowledgementTimeouts','确认超时'],['nagCounterCollisions','计数器冲突']
 ];
 let nagDiagnosticPrevious=null;
 let nagDiagnosticEvents=[];
@@ -1854,11 +1854,11 @@ function updateNagControl(d){
   const tier=Math.trunc(num('nagHandsOnTier','handsOnTier',1));
   const source=String(d.nagDirectionSource===undefined?(d.directionSource||'default'):d.nagDirectionSource);
   const sourceNames={torque:dashLang==='zh'?'实测扭矩':'measured torque',angle:dashLang==='zh'?'方向盘角度兜底':'steering-angle fallback',hold:dashLang==='zh'?'保持上一方向':'holding direction',default:dashLang==='zh'?'固定启动方向':'deterministic default'};
-  const directionMeta=$('nag-direction-meta');if(directionMeta)directionMeta.textContent='raw '+handsOn+' / H'+tier+' / '+(sourceNames[source]||source);
+  const directionMeta=$('nag-direction-meta');if(directionMeta)directionMeta.textContent=(dashLang==='zh'?'原始 ':'raw ')+handsOn+' / H'+tier+' / '+(sourceNames[source]||source);
   const phase=String(d.nagAdaptivePhase===undefined?(d.adaptivePhase||'disabled'):d.nagAdaptivePhase);
   if($('nag-adaptive-phase'))$('nag-adaptive-phase').textContent=(dashLang==='zh'?'阶段：':'phase: ')+(phaseNames[phase]||phase);
   if($('nag-adaptive-torque-live'))$('nag-adaptive-torque-live').textContent=(dashLang==='zh'?'真实扭矩：':'real torque: ')+live.toFixed(2)+' Nm';
-  if($('nag-adaptive-handson-live'))$('nag-adaptive-handson-live').textContent='Hands-On：raw '+handsOn+' / H'+tier;
+  if($('nag-adaptive-handson-live'))$('nag-adaptive-handson-live').textContent=(dashLang==='zh'?'手握状态：原始 ':'Hands-On: raw ')+handsOn+' / H'+tier;
   if($('nag-adaptive-source-live'))$('nag-adaptive-source-live').textContent=(dashLang==='zh'?'方向依据：':'source: ')+(sourceNames[source]||source);
   updateNagCustomReadiness(d);
 }
@@ -1886,10 +1886,16 @@ function renderNagDiagnosticEvents(){
   if(!nagDiagnosticEvents.length){list.innerHTML='<li class="nag-diag-empty">等待状态变化</li>';return;}
   list.innerHTML=nagDiagnosticEvents.map(event=>'<li class="nag-diag-event"><time>'+escapeHtml(event.time)+'</time><b>'+escapeHtml(event.type)+'</b><span>'+escapeHtml(event.change)+'</span></li>').join('');
 }
+function nagDiagnosticEventValue(field,value){
+  if(value===undefined)return '--';
+  if(field==='nagDasFresh')return value?'新鲜':'失效';
+  if(field==='nagAdaptivePhase')return phaseNames[String(value)]||String(value);
+  return String(value);
+}
 function recordNagDiagnosticEvents(data){
   const snapshot={};nagDiagnosticEventFields.forEach(def=>{snapshot[def[0]]=data[def[0]];});
   if(nagDiagnosticPrevious===null){nagDiagnosticPrevious=snapshot;return;}
-  nagDiagnosticEventFields.forEach(def=>{const field=def[0],previous=nagDiagnosticPrevious[field],next=snapshot[field];if(previous===next)return;const oldValue=previous===undefined?'--':String(previous),newValue=next===undefined?'--':String(next);nagDiagnosticEvents.unshift({time:new Date().toLocaleTimeString(),type:def[1],change:oldValue+' → '+newValue});});
+  nagDiagnosticEventFields.forEach(def=>{const field=def[0],previous=nagDiagnosticPrevious[field],next=snapshot[field];if(previous===next)return;const oldValue=nagDiagnosticEventValue(field,previous),newValue=nagDiagnosticEventValue(field,next);nagDiagnosticEvents.unshift({time:new Date().toLocaleTimeString(),type:def[1],change:oldValue+' → '+newValue});});
   if(nagDiagnosticEvents.length>20)nagDiagnosticEvents.length=20;nagDiagnosticPrevious=snapshot;renderNagDiagnosticEvents();
 }
 function clearNagDiagnosticEvents(){
@@ -1901,20 +1907,20 @@ function updateNagDiagnostics(d){
   const phase=String(d.nagAdaptivePhase===undefined?'disabled':d.nagAdaptivePhase);
   const dasSeen=!!d.nagDasSeen,dasFresh=!!d.nagDasFresh,hos=nagDiagnosticFinite(d.nagDasHos);
   const block=String(d.nagAdaptiveBlockReason===undefined?'none':d.nagAdaptiveBlockReason);
-  const blockNames={none:'无阻塞',disabled:'自适应模式未启用','das-missing':'尚未收到 DAS 0x39B','das-stale':'DAS 反馈已过期','no-direction':'没有可靠方向依据','das-state':'DAS 状态禁止发送','ack-timeout':'DAS 确认超时'};
-  let health='READY',healthTone='ready';
-  if(mode!==5||phase==='disabled'){health='DISABLED';healthTone='muted';}
-  else if(phase==='fault-hold'){health='FAIL_CLOSED';healthTone='error';}
-  else if(!dasFresh||phase==='wait-das'){health='WAIT_DAS';healthTone=dasSeen?'error':'muted';}
-  else if(phase==='maintenance'||phase==='corrective'){health='ACTIVE';healthTone='active';}
-  else if(nagDiagnosticSemanticTones[phase]){health=phase==='rest'?'READY':'ACTIVE';healthTone=nagDiagnosticSemanticTones[phase];}
+  const blockNames={none:'无阻塞',disabled:'自适应模式未启用','das-missing':'未收到 DAS 0x39B；固件过滤器已放行，请确认当前 CAN 总线是否存在该报文','das-stale':'DAS 反馈已过期','no-direction':'没有可靠方向依据','das-state':'DAS 状态禁止发送','ack-timeout':'DAS 确认超时'};
+  let health='就绪',healthTone='ready';
+  if(mode!==5||phase==='disabled'){health='已关闭';healthTone='muted';}
+  else if(phase==='fault-hold'){health='故障停发';healthTone='error';}
+  else if(!dasFresh||phase==='wait-das'){health='等待 DAS';healthTone=dasSeen?'error':'muted';}
+  else if(phase==='maintenance'||phase==='corrective'){health='运行中';healthTone='active';}
+  else if(nagDiagnosticSemanticTones[phase]){health=phase==='rest'?'就绪':'运行中';healthTone=nagDiagnosticSemanticTones[phase];}
   const healthEl=$('nag-diag-health');if(healthEl){healthEl.textContent=health;healthEl.className='nag-diag-health nag-tone-'+healthTone;}
   setText('nag-diag-reason',blockNames[block]||block);
-  const epasFrames=nagDiagnosticFinite(d.nagOemEpasFrames),epasSeen=epasFrames!==null&&epasFrames>0,epasAge=nagDiagnosticAge(d.nagLastOemEpasAgeMs),epasFrameText=epasFrames===null?'--':nagDiagnosticInteger(epasFrames)+' frames';
+  const epasFrames=nagDiagnosticFinite(d.nagOemEpasFrames),epasSeen=epasFrames!==null&&epasFrames>0,epasAge=nagDiagnosticAge(d.nagLastOemEpasAgeMs),epasFrameText=epasFrames===null?'--':nagDiagnosticInteger(epasFrames)+(dashLang==='zh'?' 帧':' frames');
   setNagDiagnosticValue('nag-diag-epas',epasFrameText+' / '+epasAge,epasSeen?'active':'muted');
   setNagDiagnosticValue('nag-diag-oem-torque',nagDiagnosticFixed(d.nagObservedTorqueNm,2,' Nm'),epasSeen?'active':'muted');
   setNagDiagnosticValue('nag-diag-counter',epasSeen?nagDiagnosticInteger(d.nagLastOemEpasCounter):'--',epasSeen?'active':'muted');
-  const dasFrames=nagDiagnosticFinite(d.nagDasFrames),dasTone=dasFresh?'fresh':(dasSeen?'error':'muted'),dasFrameText=dasFrames===null?'--':nagDiagnosticInteger(dasFrames)+' frames';
+  const dasFrames=nagDiagnosticFinite(d.nagDasFrames),dasTone=dasFresh?'fresh':(dasSeen?'error':'muted'),dasFrameText=dasFrames===null?'--':nagDiagnosticInteger(dasFrames)+(dashLang==='zh'?' 帧':' frames');
   const freshness=dasFresh?'新鲜':(dasSeen?'已超时':'未见');setNagDiagnosticValue('nag-diag-das',freshness+' · '+dasFrameText+' / '+nagDiagnosticAge(d.nagDasAgeMs),dasTone);
   setNagDiagnosticValue('nag-diag-hos',dasSeen&&hos!==null?'H'+Math.trunc(hos):'--',!dasSeen||hos===null?'muted':(hos>=8?'error':(hos>=2?'caution':'active')));
   const phaseTone=phase==='wait-das'?(dasSeen?'error':'muted'):(nagDiagnosticPhaseTones[phase]||'active');
@@ -1924,7 +1930,7 @@ function updateNagDiagnostics(d){
   setNagDiagnosticValue('nag-diag-direction',sourceNames[source]||source,source==='--'?'muted':'active');
   setNagDiagnosticValue('nag-diag-timer',nagDiagnosticAge(d.nagAdaptivePhaseRemainingMs),phaseTone);
   const attempt=nagDiagnosticInteger(d.nagCorrectiveAttempt),burst=nagDiagnosticInteger(d.nagCorrectiveBurstFrame),burstTarget=nagDiagnosticInteger(d.nagCorrectiveBurstFrameTarget);
-  setNagDiagnosticValue('nag-diag-burst','try '+attempt+' · '+burst+'/'+burstTarget,phase==='corrective'?'active':'muted');
+  setNagDiagnosticValue('nag-diag-burst',(dashLang==='zh'?'尝试 ':'try ')+attempt+' · '+burst+'/'+burstTarget,phase==='corrective'?'active':'muted');
   const sends=nagDiagnosticFinite(d.nagSendAttempts),failures=nagDiagnosticFinite(d.nagSendFailures),success=sends===null||failures===null?null:Math.max(0,Math.trunc(sends)-Math.trunc(failures));
   setNagDiagnosticValue('nag-diag-tx',nagDiagnosticInteger(sends)+' / '+nagDiagnosticInteger(success)+' / '+nagDiagnosticInteger(failures),failures!==null&&failures>0?nagDiagnosticSemanticTones.sendFailure:(sends!==null&&sends>0?'active':'muted'));
   if(d.nagInjectedTorqueValid!==undefined||d.nagInjectedTorqueNm!==undefined){const injectedValid=!!d.nagInjectedTorqueValid,injected=nagDiagnosticFinite(d.nagInjectedTorqueNm),injectedAge=d.nagInjectedAgeMs;setNagDiagnosticValue('nag-diag-last-tx',injectedValid&&injected!==null?((injected>=0?'+':'')+injected.toFixed(2)+' Nm / '+nagDiagnosticAge(injectedAge)):'--',injectedValid&&injected!==null?'active':'muted');}
@@ -1967,7 +1973,7 @@ function normalizeNagCustomDraft(source){
   const next=JSON.parse(JSON.stringify(source));const clamp=(value,min,max,fallback)=>{const n=Number(value);return Math.max(min,Math.min(max,Number.isFinite(n)?n:fallback));};
   nagCustomFieldDefs.forEach(def=>{const fallback=def[1]===null?nagCustomDefaults[def[0]]:nagCustomDefaults[def[0]][def[1]];const value=def[1]===null?next[def[0]]:next[def[0]][def[1]];if(def[1]===null)next[def[0]]=clamp(value,def[4],def[5],fallback);else next[def[0]][def[1]]=clamp(value,def[4],def[5],fallback);});
   ['preventiveNegative','preventivePositive','correctiveNegative','correctivePositive','activity','release','rest'].forEach(key=>{if(next[key][0]>next[key][1]){const swap=next[key][0];next[key][0]=next[key][1];next[key][1]=swap;}});
-  next.dasFreshTimeoutMs=500;return next;
+  next.dasFreshTimeoutMs=750;return next;
 }
 function renderNagCustomDraft(){
   nagCustomFieldDefs.forEach(def=>{const input=$(def[2]);if(!input||document.activeElement===input)return;const value=def[1]===null?nagCustomDraft[def[0]]:nagCustomDraft[def[0]][def[1]];input.value=Number(value).toFixed(def[6]);});
@@ -1983,13 +1989,13 @@ function initNagCustomUi(){nagCustomFieldDefs.forEach(def=>{const input=$(def[2]
 function restoreNagCustomDefaults(){if(!nagCustomHydrated||nagCustomSaving)return;nagCustomRevision++;nagCustomDraft=cloneNagCustomDefaults();renderNagCustomDraft();setNagCustomDirty(true);const message=$('nag-adaptive-msg');if(message){message.textContent='建议值已载入，保存后才会同步到设备';message.style.color='var(--warn)';}}
 function applyNagCustomResponse(data){
   const next=cloneNagCustomDefaults();nagCustomFieldDefs.forEach(def=>{const value=Number(data[def[3]]);if(!Number.isFinite(value))return;if(def[1]===null)next[def[0]]=value;else next[def[0]][def[1]]=value;});
-  const timeout=Number(data.dasFreshTimeoutMs);next.dasFreshTimeoutMs=Number.isFinite(timeout)?timeout:500;nagCustomDraft=normalizeNagCustomDraft(next);renderNagCustomDraft();
+  const timeout=Number(data.dasFreshTimeoutMs);next.dasFreshTimeoutMs=Number.isFinite(timeout)?timeout:750;nagCustomDraft=normalizeNagCustomDraft(next);renderNagCustomDraft();
 }
 function updateNagCustomReadiness(d){
-  const phase=String(d.nagAdaptivePhase===undefined?(d.adaptivePhase||'disabled'):d.nagAdaptivePhase);let label='READY',reason='反馈新鲜，自适应策略可以运行',tone='ready';
-  if(state.nagMode!==5){label='DISABLED';reason='当前使用持续注入，自适应策略未启用';tone='disabled';}
-  else if(!d.nagDasFresh){label='WAIT_DAS';reason='反馈失效，已停止自适应注入';tone='wait';}
-  else if(phase==='fault-hold'){label='FAIL_CLOSED';reason='闭环故障保持，等待有效反馈恢复';tone='fail';}
+  const phase=String(d.nagAdaptivePhase===undefined?(d.adaptivePhase||'disabled'):d.nagAdaptivePhase);let label='就绪',reason='反馈新鲜，自适应策略可以运行',tone='ready';
+  if(state.nagMode!==5){label='已关闭';reason='当前使用持续注入，自适应策略未启用';tone='disabled';}
+  else if(!d.nagDasFresh){label='等待 DAS';reason='反馈失效，已停止自适应注入';tone='wait';}
+  else if(phase==='fault-hold'){label='故障停发';reason='闭环故障保持，等待有效反馈恢复';tone='fail';}
   const status=$('nag-custom-readiness'),copy=$('nag-custom-readiness-reason');if(status){status.textContent=label;status.className='nag-readiness-state '+tone;}if(copy){copy.textContent=reason;copy.style.color=tone==='wait'||tone==='fail'?'var(--err)':'';}
 }
 async function loadNagAdaptive(){

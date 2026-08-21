@@ -404,14 +404,17 @@ static void bleBridgeAfterDashboardSetup()
         dashHandler->onFrame = bleBridgeFrameObserver;
     if (dashDriver)
     {
-        static constexpr uint32_t observedIds[] = {0x370, 0x255, 0x12B};
+        // Preserve the adaptive NAG DAS feedback path when BLE adds its
+        // obstacle-observer IDs. Replacing the driver filter without 0x39B
+        // leaves the controller permanently in WAIT_DAS.
+        static constexpr uint32_t observedIds[] = {0x370, 0x39B, 0x255, 0x12B};
         dashDriver->setFilters(observedIds,
                                static_cast<uint8_t>(sizeof(observedIds) /
                                                     sizeof(observedIds[0])));
     }
 
     bleBridgeClient.begin();
-    dashLog("[BOOT] BLE bridge ready: 0x255/0x12B observer + authoritative NAG sync");
+    dashLog("[BOOT] BLE bridge ready: 0x370/0x39B NAG + 0x255/0x12B observer");
 }
 
 #endif // ESP_PLATFORM && BLE_BRIDGE

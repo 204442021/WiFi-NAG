@@ -72,8 +72,8 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
 
     def test_ble_filter_excludes_118_without_changing_closed_loop_nag_filter(self):
         handler = (ROOT / "include/handlers_base.h").read_text(encoding="utf-8")
-        self.assertIn("{0x370, 0x255, 0x12B}", self.bridge)
-        self.assertNotIn("{0x370, 0x255, 0x12B, 0x118}", self.bridge)
+        self.assertIn("{0x370, 0x39B, 0x255, 0x12B}", self.bridge)
+        self.assertNotIn("{0x370, 0x39B, 0x255, 0x12B, 0x118}", self.bridge)
         self.assertIn("static constexpr uint32_t ids[] = {0x370, 0x39B};", handler)
 
     def test_can_loop_owns_condition_tick_and_frame_observation(self):

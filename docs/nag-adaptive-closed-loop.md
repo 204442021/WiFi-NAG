@@ -61,7 +61,7 @@ HOS `2..7` starts a corrective burst of 3 to 5 successful echoes. Failed local s
 | Preventive activity window | `0.8..1.4 s` | `0.4..3.0 s` | Triangular duration sample. |
 | Smooth release | `0.2..0.4 s` | `0.1..1.0 s` | Smoothstep decay to zero. |
 | No-send rest | `1.5..2.5 s` | `0.5..5.0 s` | Triangular duration centered on `2.0 s`. |
-| DAS freshness timeout | `500 ms` | `100..2000 ms` | Stale feedback immediately returns to `WAIT_DAS`. |
+| DAS freshness timeout | `750 ms` | `100..2000 ms` | Allows margin for the observed ~500 ms DAS broadcast interval; stale feedback immediately returns to `WAIT_DAS`. |
 | EPAS gap rearm | `200 ms` | Fixed | A longer gap requires three valid OEM frames again. |
 | Corrective burst | `3..5` successful echoes | Fixed | Selected deterministically from controller entropy. |
 | Corrective attempts | Maximum `2` | Fixed | First verify `500 ms`; final verify `1000 ms`. |
@@ -99,7 +99,7 @@ The custom-policy page has a readiness banner followed by four policy sections:
 1. Preventive layer: independent negative/positive min/max magnitude.
 2. Corrective layer: independent negative/positive min/max magnitude.
 3. Timing and rest: activity, release, no-send rest, and direction deadband.
-4. Safety boundary: read-only `+/-1.80 Nm` hard cap, `500 ms` recommended DAS timeout, and the no-extra-frame rest rule.
+4. Safety boundary: read-only `+/-1.80 Nm` hard cap, `750 ms` recommended DAS timeout, and the no-extra-frame rest rule.
 
 Editing an input changes only the browser draft and shows an unsaved indicator. Restore recommended values loads the documented defaults into that draft and also remains unsaved. Only Save custom policy POSTs the normalized draft and persists it; success reloads the normalized response and clears dirty state, while failure preserves the unsaved draft.
 
