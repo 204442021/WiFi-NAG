@@ -5,7 +5,7 @@
 WIFI-NAG is firmware for the Waveshare ESP32-S3 RS485/CAN board. This repository now maintains only one target:
 
 - ESP32-S3 native TWAI CAN
-- Nag echo on CAN ID `880 / 0x370`
+- Nag echo on CAN ID `880 / 0x370`, with read-only DAS feedback on `923 / 0x39B`
 - WiFi AP + STA
 - AP-to-STA NAPT gateway
 - DNS proxy / filter / cache
@@ -18,7 +18,9 @@ It is not a Legacy/HW3/HW4 FSD activation firmware. MCP2515, SAME51, plugin runt
 
 This firmware is for open-source learning, research, and testing only. Selling, reselling, or commercial distribution is prohibited.
 
-CAN write behavior can affect vehicle behavior. Use `CAN Write OFF` first, confirm that RX/status data is normal, and enable writes only when you fully understand the effect and accept all risk. Always stay alert, look at the road, and keep both hands ready to take over steering.
+CAN write behavior can affect vehicle behavior. Start with `CAN Write OFF`. Before enabling adaptive TX, verify in listen-only mode that the same Party CAN tap receives both `0x370` and `0x39B`; if either ID is absent, do not enable adaptive TX. Always stay alert, look at the road, and keep both hands ready to take over steering.
+
+See [Adaptive NAG closed-loop operation and validation](docs/nag-adaptive-closed-loop.md) for the complete safety, diagnostics, rollback, and validation contract.
 
 ## Hardware
 
@@ -43,11 +45,12 @@ Do not wire vehicle CAN directly to ESP32 GPIO pins.
 
 ## Current CAN Behavior
 
-The only active CAN business logic is Nag echo on `0x370 / 880`.
+The only active CAN write behavior is Nag echo on `0x370 / 880`. DAS `0x39B / 923` is feedback-only and is never copied, modified, or transmitted.
 
 ### Common Rules
 
-- Listens only to CAN ID `880 / 0x370`.
+- Receives exact CAN IDs `880 / 0x370` and `923 / 0x39B`.
+- Treats `0x39B` as read-only feedback; only validated, non-own-echo OEM `0x370` frames can trigger an echo.
 - Ignores frames with DLC less than 8.
 - `CAN Write OFF`: read-only monitoring; no Nag echo is sent.
 - `CAN Write ON`: allows the selected Nag mode to send echoes under its own gates.
@@ -69,16 +72,16 @@ The only active CAN business logic is Nag echo on `0x370 / 880`.
 - Range is clamped to `-1.80 .. +1.80 Nm`.
 - If min is greater than max, values are automatically swapped.
 
-### Mode ADAPTIVE (V4.0 V13)
+### Mode ADAPTIVE (V5.0 closed loop)
 
-- Reads steering torque and steering angle from checksum-valid real `0x370` frames.
-- Sends negative torque for positive measured torque and positive torque for negative measured torque; only listens inside the deadband.
-- Defaults to `1.80 Nm` output magnitude and a `0.05 Nm` torque deadband, both configurable in the WebUI.
-- The angle safety gate uses absolute angle: sending stops at `>= +50.0°` or `<= -50.0°`.
-- Resumes only after 3 consecutive valid frames return to `-45.0° .. +45.0°`, providing 5-degree hysteresis.
-- Sends for `10 s`, then listens only for a random `1 .. 3 s`, and repeats by default.
-- Listens for 3 valid frames before sending after mode or configuration changes.
-- Adaptive settings are persisted in NVS.
+- Requires fresh DAS HOS feedback from read-only `0x39B` and three valid OEM `0x370` frames before sending.
+- Uses low-amplitude preventive sweeps for HOS `0/1`, corrective bursts for HOS `2..7`, and no-send rest/release verification phases.
+- Fails closed on stale DAS feedback, HOS `8..15`, or two corrective attempts without a DAS acknowledgement.
+- Selects injection direction opposite trusted measured steering torque, with a direction deadband and angle fallback.
+- Defaults to `0.15..0.18 Nm` preventive and `1.50..1.80 Nm` corrective magnitudes; every outgoing target is hard-clamped to `-1.80..+1.80 Nm`.
+- A rest target of zero means no additional `0x370` is transmitted, not a fabricated zero-torque echo.
+- Local send attempts/successes are reported separately from DAS acknowledgement/timeout/latency evidence.
+- Adaptive policy settings are bounded in the WebUI and persisted in NVS only after explicit save.
 
 ## WiFi / DNS Gateway
 
@@ -98,7 +101,8 @@ The WebUI provides:
 
 - CAN status, RX/TX/errors, FPS, uptime
 - CAN Write toggle
-- Nag mode, A_V2 range, and ADAPTIVE safety/timing controls
+- Nag mode, A_V2 range, and V5.0 ADAPTIVE closed-loop policy controls
+- Four-layer NAG diagnostics for OEM input, controller decisions, local TX, and DAS response
 - AP hotspot settings
 - WiFi scan/connect/delete
 - STA-AP gateway controls
@@ -150,11 +154,16 @@ The full image writes the entire flash and will overwrite NVS/SPIFFS settings.
 ## Test
 
 ```powershell
+py -3 -m unittest discover -s test -p "test_*.py" -v
+py -3 scripts/minify_dashboard.py --check
 pio test -e native_nag
+pio test -e native_nag_sweep
 pio test -e native_nag_adaptive
 pio test -e native_twai
 pio test -e native_log_buffer
-py -3 -m unittest test/test_wifi_settings_regression.py
+pio test -e native_ble
+pio test -e native_obstacle_shift
+pio run -e wifi_nag_ESP32_S3_CAN
 ```
 
 ## WebUI Generation
