@@ -20,8 +20,8 @@ class V109DefaultsAndUiRegressionTests(unittest.TestCase):
         cls.ui_source = UI_SOURCE_FILE.read_text(encoding="utf-8")
         cls.ble_client = BLE_CLIENT_FILE.read_text(encoding="utf-8")
 
-    def test_internal_version_is_v4_1_v13(self) -> None:
-        self.assertEqual(self.version, "V4.2 V13")
+    def test_internal_version_is_v4_3_v13(self) -> None:
+        self.assertEqual(self.version, "V4.3 V13")
 
     def test_nag_defaults_on_without_overriding_saved_choice(self) -> None:
         self.assertRegex(

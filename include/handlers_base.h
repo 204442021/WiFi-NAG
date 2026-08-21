@@ -8,6 +8,7 @@
 #include "can_helpers.h"
 #include "log_buffer.h"
 #include "nag_adaptive_controller.h"
+#include "nag_adaptive_exchange.h"
 #include "shared_types.h"
 
 #ifndef NATIVE_BUILD
@@ -85,6 +86,8 @@ struct NagHandler : public CarManagerBase
     Shared<bool> lastInjectedValid{false};
     Shared<uint32_t> lastInjectedAtMs{0};
     NagAdaptiveController adaptiveController;
+    NagAdaptiveExchange adaptiveExchange;
+    uint32_t lastAppliedAdaptiveCommandGeneration = 0;
 
     static constexpr uint32_t kInjectedFreshMs = 200;
     static constexpr int16_t kTorqueMinCentiNm = -180;
@@ -104,9 +107,9 @@ struct NagHandler : public CarManagerBase
     uint8_t lastSuccessfulEchoCounter = 0;
     uint64_t lastSuccessfulEchoAtUs = 0;
     bool lastSuccessfulEchoCounterValid = false;
-    uint8_t lastOemHandsOnRaw = 0;
-    uint8_t lastOemHandsOnTier = 1;
-    int16_t lastOemSteeringAngleDeciDeg = 0;
+    Shared<uint8_t> lastOemHandsOnRaw{0};
+    Shared<uint8_t> lastOemHandsOnTier{1};
+    Shared<int16_t> lastOemSteeringAngleDeciDeg{0};
     bool lastEffectiveRuntimeEnabled = true;
 #ifdef NATIVE_BUILD
     bool testClockEnabled = false;
@@ -266,11 +269,9 @@ struct NagHandler : public CarManagerBase
     {
         if (!isSupportedMode(mode))
             mode = MODE_A;
-        if ((uint8_t)nagMode != mode)
-        {
-            nagMode = mode;
-            adaptiveController.requestReset();
-        }
+        const NagAdaptivePendingCommand desired = adaptiveExchange.desiredCommand();
+        if (desired.mode != mode)
+            publishAdaptiveCommand(desired.config, mode, true);
     }
 
     static int16_t clampMagnitudeCentiNm(int16_t value)
@@ -292,7 +293,7 @@ struct NagHandler : public CarManagerBase
         maxCentiNm = clampMagnitudeCentiNm(maxCentiNm);
         if (minCentiNm > maxCentiNm)
             std::swap(minCentiNm, maxCentiNm);
-        NagAdaptiveConfig config = adaptiveController.config();
+        NagAdaptiveConfig config = adaptiveConfig();
         if (tier == 2)
         {
             if (sign < 0)
@@ -316,12 +317,12 @@ struct NagHandler : public CarManagerBase
             config.preventivePositiveMinCentiNm = minCentiNm;
             config.preventivePositiveMaxCentiNm = maxCentiNm;
         }
-        adaptiveController.setConfig(config);
+        setAdaptiveConfig(config);
     }
 
     int16_t handsOnRangeMinCenti(uint8_t tier, int8_t sign) const
     {
-        const NagAdaptiveConfig config = adaptiveController.config();
+        const NagAdaptiveConfig config = adaptiveConfig();
         if (tier == 2)
             return sign < 0 ? config.correctiveNegativeMinCentiNm
                             : config.correctivePositiveMinCentiNm;
@@ -331,7 +332,7 @@ struct NagHandler : public CarManagerBase
 
     int16_t handsOnRangeMaxCenti(uint8_t tier, int8_t sign) const
     {
-        const NagAdaptiveConfig config = adaptiveController.config();
+        const NagAdaptiveConfig config = adaptiveConfig();
         if (tier == 2)
             return sign < 0 ? config.correctiveNegativeMaxCentiNm
                             : config.correctivePositiveMaxCentiNm;
@@ -355,20 +356,84 @@ struct NagHandler : public CarManagerBase
                static_cast<bool>(nagKillerActive) && nagKillerRuntime &&
                lastInjectedAgeMs() <= kInjectedFreshMs;
     }
-    uint8_t handsOnRaw() const { return lastOemHandsOnRaw; }
-    uint8_t handsOnTier() const { return lastOemHandsOnTier; }
+    uint8_t handsOnRaw() const { return static_cast<uint8_t>(lastOemHandsOnRaw); }
+    uint8_t handsOnTier() const { return static_cast<uint8_t>(lastOemHandsOnTier); }
+
+    static bool adaptiveConfigEqual(const NagAdaptiveConfig &left,
+                                    const NagAdaptiveConfig &right)
+    {
+        return left.preventiveNegativeMinCentiNm == right.preventiveNegativeMinCentiNm &&
+               left.preventiveNegativeMaxCentiNm == right.preventiveNegativeMaxCentiNm &&
+               left.preventivePositiveMinCentiNm == right.preventivePositiveMinCentiNm &&
+               left.preventivePositiveMaxCentiNm == right.preventivePositiveMaxCentiNm &&
+               left.correctiveNegativeMinCentiNm == right.correctiveNegativeMinCentiNm &&
+               left.correctiveNegativeMaxCentiNm == right.correctiveNegativeMaxCentiNm &&
+               left.correctivePositiveMinCentiNm == right.correctivePositiveMinCentiNm &&
+               left.correctivePositiveMaxCentiNm == right.correctivePositiveMaxCentiNm &&
+               left.torqueDeadbandCentiNm == right.torqueDeadbandCentiNm &&
+               left.activityMinMs == right.activityMinMs &&
+               left.activityMaxMs == right.activityMaxMs &&
+               left.releaseMinMs == right.releaseMinMs &&
+               left.releaseMaxMs == right.releaseMaxMs &&
+               left.restMinMs == right.restMinMs &&
+               left.restMaxMs == right.restMaxMs &&
+               left.dasFreshTimeoutMs == right.dasFreshTimeoutMs;
+    }
+
+    void publishAdaptiveCommand(const NagAdaptiveConfig &config, uint8_t mode,
+                                bool resetRequested)
+    {
+        if (!isSupportedMode(mode))
+            mode = MODE_A;
+        adaptiveExchange.publishCommand(NagAdaptiveController::normalizeConfig(config),
+                                        mode, resetRequested);
+    }
+
+    uint8_t requestedMode() const
+    {
+        return adaptiveExchange.desiredCommand().mode;
+    }
+
+    NagAdaptivePendingCommand desiredAdaptiveCommand() const
+    {
+        return adaptiveExchange.desiredCommand();
+    }
+
+    void consumePendingAdaptiveCommandAtFrameBoundary()
+    {
+        NagAdaptivePendingCommand command;
+        if (!adaptiveExchange.consumeCommand(lastAppliedAdaptiveCommandGeneration, command))
+            return;
+        const bool configChanged = !adaptiveConfigEqual(adaptiveController.config(), command.config);
+        const bool modeChanged = static_cast<uint8_t>(nagMode) != command.mode;
+        if (configChanged)
+            adaptiveController.setConfig(command.config);
+        if (modeChanged)
+            nagMode = command.mode;
+        if (command.resetRequested && !configChanged)
+            adaptiveController.requestReset();
+        else if (modeChanged)
+            adaptiveController.requestReset();
+    }
+
+    void publishAdaptiveSnapshot(uint32_t now)
+    {
+        adaptiveExchange.publishSnapshot(adaptiveController.snapshot(now));
+    }
 
     void setAdaptiveConfig(const NagAdaptiveConfig &config)
     {
-        adaptiveController.setConfig(config);
+        const NagAdaptivePendingCommand desired = adaptiveExchange.desiredCommand();
+        publishAdaptiveCommand(config, desired.mode, true);
     }
 
-    NagAdaptiveConfig adaptiveConfig() const { return adaptiveController.config(); }
-    int16_t adaptiveAngleDeciDeg() const { return lastOemSteeringAngleDeciDeg; }
+    NagAdaptiveConfig adaptiveConfig() const { return adaptiveExchange.desiredCommand().config; }
+    NagAdaptiveSnapshot adaptiveSnapshot() const { return adaptiveExchange.readSnapshot(); }
+    int16_t adaptiveAngleDeciDeg() const { return static_cast<int16_t>(lastOemSteeringAngleDeciDeg); }
     float adaptiveAngleDeg() const { return static_cast<float>(adaptiveAngleDeciDeg()) / 10.0f; }
-    int16_t adaptiveTargetCentiNm() const { return adaptiveController.snapshot(nowMs()).targetTorqueCentiNm; }
+    int16_t adaptiveTargetCentiNm() const { return adaptiveSnapshot().targetTorqueCentiNm; }
     float adaptiveTargetNm() const { return centiNmToNm(adaptiveTargetCentiNm()); }
-    uint32_t adaptivePhaseRemainingMs() const { return adaptiveController.snapshot(nowMs()).phaseRemainingMs; }
+    uint32_t adaptivePhaseRemainingMs() const { return adaptiveSnapshot().phaseRemainingMs; }
 
     int16_t targetTorqueCentiNm() const
     {
@@ -402,10 +467,17 @@ struct NagHandler : public CarManagerBase
 
     void handleMessage(CanFrame &frame, CanDriver &driver) override
     {
+        const uint32_t now = nowMs();
+        consumePendingAdaptiveCommandAtFrameBoundary();
+        struct SnapshotPublishGuard
+        {
+            NagHandler &handler;
+            uint32_t now;
+            ~SnapshotPublishGuard() { handler.publishAdaptiveSnapshot(now); }
+        } snapshotPublishGuard{*this, now};
+
         if (onFrame)
             onFrame(frame);
-
-        const uint32_t now = nowMs();
         const bool effectiveRuntimeEnabled = static_cast<bool>(nagKillerActive) &&
                                              nagKillerRuntime;
         if (effectiveRuntimeEnabled && !lastEffectiveRuntimeEnabled &&

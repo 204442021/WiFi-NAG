@@ -72,7 +72,7 @@ The only active CAN write behavior is Nag echo on `0x370 / 880`. DAS `0x39B / 92
 - Range is clamped to `-1.80 .. +1.80 Nm`.
 - If min is greater than max, values are automatically swapped.
 
-### Mode ADAPTIVE (V5.0 closed loop)
+### Mode ADAPTIVE (V4.3-V13 closed loop)
 
 - Requires fresh DAS HOS feedback from read-only `0x39B` and three valid OEM `0x370` frames before sending.
 - Uses HOS `0` for preventive `MAINTENANCE`; HOS `1` requests smooth `RELEASE`, which may send decaying echoes until the target reaches zero.
@@ -102,7 +102,7 @@ The WebUI provides:
 
 - CAN status, RX/TX/errors, FPS, uptime
 - CAN Write toggle
-- Nag mode, A_V2 range, and V5.0 ADAPTIVE closed-loop policy controls
+- Nag mode, A_V2 range, and V4.3-V13 ADAPTIVE closed-loop policy controls
 - Four-layer NAG diagnostics for OEM input, controller decisions, local TX, and DAS response
 - AP hotspot settings
 - WiFi scan/connect/delete

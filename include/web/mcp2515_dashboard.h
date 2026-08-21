@@ -45,6 +45,7 @@
 #endif
 #include "handlers.h"
 #include "can_helpers.h"
+#include "nag_adaptive_config_input.h"
 #include <ArduinoJson.h>
 #include "web/mcp2515_dashboard_ui.h"
 
@@ -356,13 +357,6 @@ static bool dashInjectionActive()
 }
 
 #if defined(NAG_KILLER)
-static uint32_t dashNagEchoCount()
-{
-    if (dashHandler)
-        return (uint32_t)static_cast<NagHandler *>(dashHandler)->nagEchoCount;
-    return 0;
-}
-
 static NagHandler *dashNagActiveHandler()
 {
     return dashHandler ? static_cast<NagHandler *>(dashHandler) : nullptr;
@@ -504,7 +498,19 @@ static bool dashNagAdaptiveConfigEqual(const NagAdaptiveConfig &left,
            left.dasFreshTimeoutMs == right.dasFreshTimeoutMs;
 }
 
-static bool dashApplyNagConfigArgs();
+struct DashNagConfigError
+{
+    const char *field = "request";
+    NagAdaptiveConfigInput::Error reason = NagAdaptiveConfigInput::Error::INVALID;
+};
+
+struct DashNagConfigRequest
+{
+    NagAdaptiveConfig config;
+    uint8_t mode = NagHandler::MODE_A;
+};
+
+static bool dashApplyNagConfigArgs(DashNagConfigError &error);
 
 static void dashAppendNagAdaptiveConfigJson(String &j, const NagAdaptiveConfig &config)
 {
@@ -545,7 +551,7 @@ static void dashAppendNagAdaptiveConfigJson(String &j, const NagAdaptiveConfig &
 static void dashAppendNagClosedLoopTelemetry(String &j, NagHandler *nag)
 {
     const uint32_t now = millis();
-    const NagAdaptiveSnapshot snapshot = nag->adaptiveController.snapshot(now);
+    const NagAdaptiveSnapshot snapshot = nag->adaptiveSnapshot();
     const uint32_t oemEpasFrames = static_cast<uint32_t>(nag->nagOemEpasFrameCount);
     const uint32_t oemEpasAgeMs = oemEpasFrames == 0
                                       ? 0xFFFFFFFFu
@@ -591,9 +597,9 @@ static void dashAppendNagClosedLoopTelemetry(String &j, NagHandler *nag)
     j += ",\"nagAcknowledgementTimeouts\":";
     j += String(snapshot.acknowledgementTimeoutCount);
     j += ",\"nagLastAcknowledgementLatencyMs\":";
-    j += String(snapshot.lastAcknowledgementLatencyMs);
+    j += snapshot.acknowledgementCount == 0 ? "null" : String(snapshot.lastAcknowledgementLatencyMs);
     j += ",\"nagMaxAcknowledgementLatencyMs\":";
-    j += String(snapshot.maxAcknowledgementLatencyMs);
+    j += snapshot.acknowledgementCount == 0 ? "null" : String(snapshot.maxAcknowledgementLatencyMs);
     j += ",\"nagSendAttempts\":";
     j += String((uint32_t)nag->nagSendAttemptCount);
     j += ",\"nagSendFailures\":";
@@ -623,9 +629,9 @@ static String dashNagStatusJson(bool includeOk)
     j += ",\"canWrite\":";
     j += canActive ? "true" : "false";
     j += ",\"mode\":";
-    j += String((unsigned int)(uint8_t)nag->nagMode);
+    j += String((unsigned int)nag->requestedMode());
     j += ",\"modeName\":\"";
-    j += dashNagModeName((uint8_t)nag->nagMode);
+    j += dashNagModeName(nag->requestedMode());
     j += "\"";
     dashAppendNagAdaptiveConfigJson(j, nag->adaptiveConfig());
     dashAppendNagClosedLoopTelemetry(j, nag);
@@ -675,7 +681,7 @@ static void dashSavePrefs()
     prefs.putBool("nag_en", true);
     if (NagHandler *nag = dashNagActiveHandler())
     {
-        prefs.putUChar("nag_mode", (uint8_t)nag->nagMode);
+        prefs.putUChar("nag_mode", nag->requestedMode());
         const NagAdaptiveConfig adaptive = nag->adaptiveConfig();
         prefs.putString("nag_pv_n_min", dashNagNmString(adaptive.preventiveNegativeMinCentiNm));
         prefs.putString("nag_pv_n_max", dashNagNmString(adaptive.preventiveNegativeMaxCentiNm));
@@ -849,7 +855,6 @@ static void dashLoadPrefs()
         adaptive.torqueDeadbandCentiNm = dashNagParseNmCenti(prefs.getString("nag_dir_db", "0.05"), 5);
         adaptive.dasFreshTimeoutMs = dashNagParseMilliseconds(prefs.getString("nag_das_ms", "500"), 500);
         adaptive = NagAdaptiveController::normalizeConfig(adaptive);
-        nag->setAdaptiveConfig(adaptive);
         uint8_t storedMode = prefs.getUChar("nag_mode", NagHandler::MODE_A);
         if (!NagHandler::isSupportedMode(storedMode))
         {
@@ -857,7 +862,7 @@ static void dashLoadPrefs()
             prefs.putUChar("nag_mode", storedMode);
             dashLog("[BOOT] Migrated unsupported NAG mode to CONTINUOUS");
         }
-        nag->setMode(storedMode);
+        nag->publishAdaptiveCommand(adaptive, storedMode, true);
     }
 #endif
     if (prefs.getBool("auto_sleep", false))
@@ -1030,81 +1035,110 @@ static WebServer server(80);
 #include "web/dash_gateway.h"
 
 #if defined(NAG_KILLER)
-static bool dashApplyNagConfigArgs()
+static String dashNagConfigErrorJson(const DashNagConfigError &error)
+{
+    String json = R"({"ok":false,"error":"invalid field","field":")";
+    json += error.field;
+    json += R"(","errors":{")";
+    json += error.field;
+    json += R"(":")";
+    json += NagAdaptiveConfigInput::message(error.reason);
+    json += R"("}})";
+    return json;
+}
+
+static bool dashParseNagConfigRequest(DashNagConfigRequest &request,
+                                      DashNagConfigError &error)
+{
+    NagAdaptiveConfigInput::Error parseError = NagAdaptiveConfigInput::Error::NONE;
+    if (server.hasArg("nagMode") || server.hasArg("m"))
+    {
+        const char *field = server.hasArg("nagMode") ? "nagMode" : "m";
+        if (!NagAdaptiveConfigInput::parseMode(server.arg(field).c_str(),
+                                               request.mode, parseError))
+        {
+            error = {field, parseError};
+            return false;
+        }
+    }
+
+#define DASH_NAG_PARSE_NM_ARG(name, member, minimum, maximum)                    \
+    if (server.hasArg(name))                                                      \
+    {                                                                             \
+        if (!NagAdaptiveConfigInput::parseNmCenti(                                \
+                server.arg(name).c_str(), minimum, maximum,                       \
+                request.config.member, parseError))                               \
+        {                                                                         \
+            error = {name, parseError};                                            \
+            return false;                                                         \
+        }                                                                         \
+    }
+#define DASH_NAG_PARSE_SEC_ARG(name, member, minimum, maximum)                    \
+    if (server.hasArg(name))                                                       \
+    {                                                                              \
+        if (!NagAdaptiveConfigInput::parseSecondsMs(                               \
+                server.arg(name).c_str(), minimum, maximum,                        \
+                request.config.member, parseError))                                \
+        {                                                                          \
+            error = {name, parseError};                                             \
+            return false;                                                          \
+        }                                                                          \
+    }
+    DASH_NAG_PARSE_NM_ARG("preventiveNegativeMinNm", preventiveNegativeMinCentiNm, 0.10, 0.50)
+    DASH_NAG_PARSE_NM_ARG("preventiveNegativeMaxNm", preventiveNegativeMaxCentiNm, 0.10, 0.50)
+    DASH_NAG_PARSE_NM_ARG("preventivePositiveMinNm", preventivePositiveMinCentiNm, 0.10, 0.50)
+    DASH_NAG_PARSE_NM_ARG("preventivePositiveMaxNm", preventivePositiveMaxCentiNm, 0.10, 0.50)
+    DASH_NAG_PARSE_NM_ARG("correctiveNegativeMinNm", correctiveNegativeMinCentiNm, 0.50, 1.80)
+    DASH_NAG_PARSE_NM_ARG("correctiveNegativeMaxNm", correctiveNegativeMaxCentiNm, 0.50, 1.80)
+    DASH_NAG_PARSE_NM_ARG("correctivePositiveMinNm", correctivePositiveMinCentiNm, 0.50, 1.80)
+    DASH_NAG_PARSE_NM_ARG("correctivePositiveMaxNm", correctivePositiveMaxCentiNm, 0.50, 1.80)
+    DASH_NAG_PARSE_SEC_ARG("activityMinSec", activityMinMs, 0.4, 3.0)
+    DASH_NAG_PARSE_SEC_ARG("activityMaxSec", activityMaxMs, 0.4, 3.0)
+    DASH_NAG_PARSE_SEC_ARG("releaseMinSec", releaseMinMs, 0.1, 1.0)
+    DASH_NAG_PARSE_SEC_ARG("releaseMaxSec", releaseMaxMs, 0.1, 1.0)
+    DASH_NAG_PARSE_SEC_ARG("restMinSec", restMinMs, 0.5, 5.0)
+    DASH_NAG_PARSE_SEC_ARG("restMaxSec", restMaxMs, 0.5, 5.0)
+    DASH_NAG_PARSE_NM_ARG("directionDeadbandNm", torqueDeadbandCentiNm, 0.0, 0.50)
+#undef DASH_NAG_PARSE_SEC_ARG
+#undef DASH_NAG_PARSE_NM_ARG
+    if (server.hasArg("dasFreshTimeoutMs"))
+    {
+        if (!NagAdaptiveConfigInput::parseMilliseconds(
+                server.arg("dasFreshTimeoutMs").c_str(), 100, 2000,
+                request.config.dasFreshTimeoutMs, parseError))
+        {
+            error = {"dasFreshTimeoutMs", parseError};
+            return false;
+        }
+    }
+
+    if (const char *invalidField = NagAdaptiveConfigInput::validate(request.config))
+    {
+        error = {invalidField, NagAdaptiveConfigInput::Error::OUT_OF_RANGE};
+        return false;
+    }
+    return true;
+}
+
+static bool dashApplyNagConfigArgs(DashNagConfigError &error)
 {
     NagHandler *nag = dashNagActiveHandler();
     if (!nag)
         return false;
 
-    bool changed = false;
-    if (server.hasArg("nagMode") || server.hasArg("m"))
-    {
-        uint8_t requested = static_cast<uint8_t>((server.hasArg("nagMode") ? server.arg("nagMode") : server.arg("m")).toInt());
-        if (!NagHandler::isSupportedMode(requested))
-            requested = NagHandler::MODE_A;
-        if ((uint8_t)nag->nagMode != requested)
-        {
-            nag->setMode(requested);
-            changed = true;
-        }
-    }
+    const NagAdaptivePendingCommand previous = nag->desiredAdaptiveCommand();
+    DashNagConfigRequest request{previous.config, previous.mode};
+    if (!dashParseNagConfigRequest(request, error))
+        return false;
 
-    NagAdaptiveConfig adaptive = nag->adaptiveConfig();
-    bool hasAdaptiveArg = false;
-    if (server.hasArg("preventiveNegativeMinNm"))
-    {
-        adaptive.preventiveNegativeMinCentiNm = dashNagParseNmCenti(
-            server.arg("preventiveNegativeMinNm"), adaptive.preventiveNegativeMinCentiNm);
-        hasAdaptiveArg = true;
-    }
-#define DASH_NAG_PARSE_NM_ARG(name, member)                                      \
-    if (server.hasArg(name))                                                      \
-    {                                                                             \
-        adaptive.member = dashNagParseNmCenti(server.arg(name), adaptive.member); \
-        hasAdaptiveArg = true;                                                     \
-    }
-#define DASH_NAG_PARSE_SEC_ARG(name, member)                                        \
-    if (server.hasArg(name))                                                         \
-    {                                                                                \
-        adaptive.member = dashNagParseSecondsMs(server.arg(name), adaptive.member);  \
-        hasAdaptiveArg = true;                                                        \
-    }
-    DASH_NAG_PARSE_NM_ARG("preventiveNegativeMaxNm", preventiveNegativeMaxCentiNm)
-    DASH_NAG_PARSE_NM_ARG("preventivePositiveMinNm", preventivePositiveMinCentiNm)
-    DASH_NAG_PARSE_NM_ARG("preventivePositiveMaxNm", preventivePositiveMaxCentiNm)
-    DASH_NAG_PARSE_NM_ARG("correctiveNegativeMinNm", correctiveNegativeMinCentiNm)
-    DASH_NAG_PARSE_NM_ARG("correctiveNegativeMaxNm", correctiveNegativeMaxCentiNm)
-    DASH_NAG_PARSE_NM_ARG("correctivePositiveMinNm", correctivePositiveMinCentiNm)
-    DASH_NAG_PARSE_NM_ARG("correctivePositiveMaxNm", correctivePositiveMaxCentiNm)
-    DASH_NAG_PARSE_SEC_ARG("activityMinSec", activityMinMs)
-    DASH_NAG_PARSE_SEC_ARG("activityMaxSec", activityMaxMs)
-    DASH_NAG_PARSE_SEC_ARG("releaseMinSec", releaseMinMs)
-    DASH_NAG_PARSE_SEC_ARG("releaseMaxSec", releaseMaxMs)
-    DASH_NAG_PARSE_SEC_ARG("restMinSec", restMinMs)
-    DASH_NAG_PARSE_SEC_ARG("restMaxSec", restMaxMs)
-    DASH_NAG_PARSE_NM_ARG("directionDeadbandNm", torqueDeadbandCentiNm)
-#undef DASH_NAG_PARSE_SEC_ARG
-#undef DASH_NAG_PARSE_NM_ARG
-    if (server.hasArg("dasFreshTimeoutMs"))
-    {
-        adaptive.dasFreshTimeoutMs = dashNagParseMilliseconds(
-            server.arg("dasFreshTimeoutMs"), adaptive.dasFreshTimeoutMs);
-        hasAdaptiveArg = true;
-    }
-    if (hasAdaptiveArg)
-    {
-        adaptive = NagAdaptiveController::normalizeConfig(adaptive);
-        const NagAdaptiveConfig previous = nag->adaptiveConfig();
-        if (!dashNagAdaptiveConfigEqual(previous, adaptive))
-        {
-            nag->setAdaptiveConfig(adaptive);
-            changed = true;
-        }
-    }
+    const bool changed = previous.mode != request.mode ||
+                         !dashNagAdaptiveConfigEqual(previous.config, request.config);
+    if (changed)
+        nag->publishAdaptiveCommand(request.config, request.mode, true);
 
     if (changed)
     {
-        dashLog("[CFG] Nag mode=" + String(dashNagModeName((uint8_t)nag->nagMode)) +
+        dashLog("[CFG] Nag mode=" + String(dashNagModeName(request.mode)) +
                 " closed-loop config updated");
     }
     return changed;
@@ -1158,9 +1192,9 @@ static void handleStatus()
     if (NagHandler *nag = dashNagActiveHandler())
     {
         j += ",\"nagMode\":";
-        j += String((unsigned int)(uint8_t)nag->nagMode);
+        j += String((unsigned int)nag->requestedMode());
         j += ",\"nagModeName\":\"";
-        j += dashNagModeName((uint8_t)nag->nagMode);
+        j += dashNagModeName(nag->requestedMode());
         j += "\",\"nagHandsOn1NegativeMinNm\":";
         j += dashNagNmString(nag->handsOnRangeMinCenti(1, -1));
         j += ",\"nagHandsOn1NegativeMaxNm\":";
@@ -1231,6 +1265,14 @@ static void handleStatus()
 
 static void handleConfig()
 {
+#if defined(NAG_KILLER)
+    DashNagConfigError error;
+    if (!dashApplyNagConfigArgs(error))
+    {
+        server.send(400, "application/json", dashNagConfigErrorJson(error));
+        return;
+    }
+#endif
     if (server.hasArg("can") || server.hasArg("force"))
     {
         bool requestedTx = server.hasArg("can") ? (server.arg("can") == "1") : (server.arg("force") == "1");
@@ -1242,7 +1284,6 @@ static void handleConfig()
     }
 #if defined(NAG_KILLER)
     nagKillerEnabled = true;
-    dashApplyNagConfigArgs();
 #endif
     dashApplyRuntimeState();
     dashSavePrefs();
@@ -1261,7 +1302,12 @@ static void handleNagApiStats()
 
 static void handleNagApiMode()
 {
-    dashApplyNagConfigArgs();
+    DashNagConfigError error;
+    if (!dashApplyNagConfigArgs(error))
+    {
+        server.send(400, "application/json", dashNagConfigErrorJson(error));
+        return;
+    }
     dashApplyRuntimeState();
     dashSavePrefs();
     server.send(200, "application/json", dashNagStatusJson(true));
@@ -1269,7 +1315,12 @@ static void handleNagApiMode()
 
 static void handleNagApiUpdate()
 {
-    dashApplyNagConfigArgs();
+    DashNagConfigError error;
+    if (!dashApplyNagConfigArgs(error))
+    {
+        server.send(400, "application/json", dashNagConfigErrorJson(error));
+        return;
+    }
     dashApplyRuntimeState();
     dashSavePrefs();
     server.send(200, "application/json", dashNagStatusJson(true));
@@ -1282,7 +1333,12 @@ static void handleNagAdaptiveApiGet()
 
 static void handleNagAdaptiveApiPost()
 {
-    dashApplyNagConfigArgs();
+    DashNagConfigError error;
+    if (!dashApplyNagConfigArgs(error))
+    {
+        server.send(400, "application/json", dashNagConfigErrorJson(error));
+        return;
+    }
     dashApplyRuntimeState();
     dashSavePrefs();
     server.send(200, "application/json", dashNagStatusJson(true));

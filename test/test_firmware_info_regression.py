@@ -11,6 +11,8 @@ DASH_FILE = ROOT / "include" / "web" / "mcp2515_dashboard.h"
 UI_SOURCE_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.src.h"
 UI_BASE_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.base.h"
 UI_WRAPPER_FILE = ROOT / "include" / "web" / "mcp2515_dashboard_ui.h"
+README_FILE = ROOT / "README.md"
+NAG_OPERATIONS_FILE = ROOT / "docs" / "nag-adaptive-closed-loop.md"
 
 
 class FirmwareInfoRegressionTests(unittest.TestCase):
@@ -27,10 +29,21 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
         cls.ui_source = UI_SOURCE_FILE.read_text(encoding="utf-8-sig")
         cls.ui_base = UI_BASE_FILE.read_text(encoding="utf-8-sig")
         cls.ui_wrapper = UI_WRAPPER_FILE.read_text(encoding="utf-8-sig")
+        cls.readme = README_FILE.read_text(encoding="utf-8")
+        cls.nag_operations = NAG_OPERATIONS_FILE.read_text(encoding="utf-8")
 
-    def test_version_file_is_single_v4_1_v13_source(self) -> None:
-        self.assertEqual(self.version, "V4.2 V13")
+    def test_version_file_is_single_v4_3_v13_source(self) -> None:
+        self.assertEqual(self.version, "V4.3 V13")
         self.assertNotIn("3.0.0-beta.5", self.version)
+
+    def test_release_facing_adaptive_version_is_v4_3_v13(self) -> None:
+        for text in (self.readme, self.nag_operations, self.ui_source, self.ui_base):
+            self.assertNotIn("V5.0", text)
+            self.assertNotIn("V4.2 V13", text)
+        self.assertIn("V4.3-V13", self.readme)
+        self.assertIn("V4.3-V13", self.nag_operations)
+        self.assertIn("V4.3 V13", self.ui_source)
+        self.assertIn("V4.3 V13", self.ui_base)
 
     def test_v1_0_7_release_notes_match_internal_version(self) -> None:
         self.assertIn("# WIFI-NAG V1.0.7", self.release_notes)

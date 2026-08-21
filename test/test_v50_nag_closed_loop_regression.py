@@ -100,6 +100,12 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             encoding="utf-8"
         )
         cls.handler = (ROOT / "include/handlers_base.h").read_text(encoding="utf-8")
+        cls.exchange = (ROOT / "include/nag_adaptive_exchange.h").read_text(
+            encoding="utf-8"
+        )
+        cls.config_input = (ROOT / "include/nag_adaptive_config_input.h").read_text(
+            encoding="utf-8"
+        )
         cls.source = SOURCE_FILE.read_text(encoding="utf-8-sig")
 
     def test_custom_strategy_ui_has_exact_controls_and_safety_copy(self):
@@ -392,23 +398,28 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         ):
             self.assertNotIn(retired, self.dashboard)
 
-    def test_post_normalizes_before_comparing_and_resetting_controller(self):
-        parse_index = self.dashboard.find('server.hasArg("preventiveNegativeMinNm")')
+    def test_post_validates_temporary_request_before_atomic_publish(self):
+        parse_index = self.dashboard.find(
+            "static bool dashParseNagConfigRequest(DashNagConfigRequest &request,"
+        )
         self.assertGreaterEqual(parse_index, 0, "V5 POST parsing is missing")
-        normalize_index = self.dashboard.index(
-            "NagAdaptiveController::normalizeConfig(adaptive)", parse_index
+        validate_index = self.dashboard.index(
+            "NagAdaptiveConfigInput::validate(request.config)", parse_index
         )
         compare_index = self.dashboard.index(
-            "dashNagAdaptiveConfigEqual(previous, adaptive)", normalize_index
+            "dashNagAdaptiveConfigEqual(previous.config, request.config)", validate_index
         )
-        set_index = self.dashboard.index("nag->setAdaptiveConfig(adaptive)", compare_index)
-        self.assertLess(parse_index, normalize_index)
-        self.assertLess(normalize_index, compare_index)
-        self.assertLess(compare_index, set_index)
+        publish_index = self.dashboard.index(
+            "nag->publishAdaptiveCommand(request.config, request.mode, true)", compare_index
+        )
+        self.assertLess(parse_index, validate_index)
+        self.assertLess(validate_index, compare_index)
+        self.assertLess(compare_index, publish_index)
+        self.assertNotIn("normalizeConfig(request.config)", self.dashboard[parse_index:publish_index])
 
     def test_numeric_parsing_rejects_nonfinite_partial_and_out_of_range_values(self):
         for header in ("<cerrno>", "<cctype>", "<cmath>", "<cstdlib>", "<limits>"):
-            self.assertIn(f"#include {header}", self.dashboard)
+            self.assertIn(f"#include {header}", self.config_input)
         for guard in (
             "std::strtod",
             "errno = 0",
@@ -420,29 +431,56 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "std::numeric_limits<int16_t>::max()",
             "std::numeric_limits<uint32_t>::max()",
         ):
-            self.assertIn(guard, self.dashboard)
-        self.assertNotIn("strtof(", self.dashboard)
-        self.assertNotIn("strtol(", self.dashboard)
+            self.assertIn(guard, self.config_input)
+        self.assertNotIn("strtof(", self.config_input)
+        self.assertNotIn("strtol(", self.config_input)
 
-    def test_invalid_post_values_fall_back_without_resetting_controller(self):
-        for parser in (
-            "dashNagParseNmCenti",
-            "dashNagParseSecondsMs",
-            "dashNagParseMilliseconds",
-        ):
-            parser_start = self.dashboard.index(f"static ", self.dashboard.index(parser) - 20)
-            parser_end = self.dashboard.index("\n}", parser_start)
-            self.assertIn("return fallback;", self.dashboard[parser_start:parser_end])
-        self.assertIn(
-            "dashNagParseNmCenti(server.arg(name), adaptive.member)", self.dashboard
+    def test_invalid_post_returns_field_error_without_publish_or_persist(self):
+        self.assertIn('server.send(400, "application/json", dashNagConfigErrorJson(error))', self.dashboard)
+        self.assertIn('\"field\":\"', self.dashboard)
+        self.assertIn('\"errors\":{\"', self.dashboard)
+        for handler in ("handleNagApiUpdate", "handleNagAdaptiveApiPost"):
+            start = self.dashboard.index(f"static void {handler}()")
+            end = self.dashboard.index("\n}", start)
+            body = self.dashboard[start:end]
+            reject = body.index("if (!dashApplyNagConfigArgs(error))")
+            save = body.index("dashSavePrefs()")
+            self.assertLess(reject, save)
+            self.assertIn("return;", body[reject:save])
+        apply_start = self.dashboard.index(
+            "static bool dashApplyNagConfigArgs(DashNagConfigError &error)\n{"
         )
+        apply_end = self.dashboard.index("\n}\n#endif", apply_start)
+        apply_body = self.dashboard[apply_start:apply_end]
+        self.assertNotIn("fallback", apply_body)
+        self.assertNotIn("normalizeConfig", apply_body)
+
+    def test_web_uses_pending_command_and_published_snapshot_only(self):
+        self.assertNotIn("adaptiveController.", self.dashboard)
+        self.assertIn("nag->adaptiveSnapshot()", self.dashboard)
+        self.assertIn("nag->publishAdaptiveCommand", self.dashboard)
+        self.assertIn("nag->requestedMode()", self.dashboard)
+        self.assertIn("consumePendingAdaptiveCommandAtFrameBoundary", self.handler)
+        self.assertIn("publishAdaptiveSnapshot", self.handler)
+        self.assertIn("NagAdaptivePendingCommand", self.exchange)
+        self.assertIn("std::mutex", self.exchange)
+        self.assertIn("portMUX_TYPE", self.exchange)
+        self.assertNotIn("driver.send", self.exchange)
+
+    def test_zero_ack_latency_is_serialized_and_rendered_as_unknown(self):
         self.assertIn(
-            "dashNagParseSecondsMs(server.arg(name), adaptive.member)", self.dashboard
+            'snapshot.acknowledgementCount == 0 ? "null"', self.dashboard
         )
+        compact = re.sub(r"\s+", "", self.source)
         self.assertIn(
-            'server.arg("dasFreshTimeoutMs"), adaptive.dasFreshTimeoutMs',
-            self.dashboard,
+            "constlatency=acknowledgements===null||acknowledgements===0?"
+            "'--/--':nagDiagnosticAge(d.nagLastAcknowledgementLatencyMs)+"
+            "'/'+nagDiagnosticAge(d.nagMaxAcknowledgementLatencyMs)",
+            compact,
         )
+
+    def test_unused_dash_nag_echo_helper_is_removed(self):
+        self.assertNotIn("dashNagEchoCount", self.dashboard)
 
     def test_config_equality_covers_every_closed_loop_member(self):
         equality_start = self.dashboard.index("dashNagAdaptiveConfigEqual")

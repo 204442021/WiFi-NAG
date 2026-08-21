@@ -46,6 +46,9 @@ struct NagAdaptiveSnapshot
     int16_t observedTorqueCentiNm = 0;
     int16_t targetTorqueCentiNm = 0;
     int8_t injectionSign = 0;
+    bool outputActive = false;
+    int16_t lastSuccessfullyTransmittedTorqueCentiNm = 0;
+    int8_t candidateInjectionSign = 0;
     uint8_t correctiveAttempt = 0;
     uint8_t correctiveBurstFrame = 0;
     uint8_t correctiveBurstFrameTarget = 0;
@@ -139,6 +142,7 @@ public:
         directionSource_ = DIRECTION_NONE;
         targetTorqueCentiNm_ = 0;
         injectionSign_ = 0;
+        outputActive_ = false;
         candidateSign_ = 0;
         armingFrames_ = 0;
         correctiveActive_ = false;
@@ -337,7 +341,13 @@ public:
                           const NagAdaptiveDecision &decision,
                           bool success)
     {
-        if (!success || phase_ != PHASE_CORRECTIVE || !decision.shouldSend ||
+        if (!success || !decision.shouldSend)
+            return;
+
+        lastSuccessfullyTransmittedTorqueCentiNm_ = decision.targetTorqueCentiNm;
+        outputActive_ = decision.targetTorqueCentiNm != 0;
+
+        if (phase_ != PHASE_CORRECTIVE ||
             !decision.corrective || decision.attempt != correctiveAttempt_ ||
             decision.burstFrame != correctiveBurstFrame_)
             return;
@@ -370,7 +380,13 @@ public:
         value.dasAgeMs = das_.ageMs(nowMs);
         value.observedTorqueCentiNm = observedTorqueCentiNm_;
         value.targetTorqueCentiNm = targetTorqueCentiNm_;
-        value.injectionSign = injectionSign_;
+        value.injectionSign = outputActive_ && lastSuccessfullyTransmittedTorqueCentiNm_ != 0
+                                  ? (lastSuccessfullyTransmittedTorqueCentiNm_ < 0 ? -1 : 1)
+                                  : injectionSign_;
+        value.outputActive = outputActive_;
+        value.lastSuccessfullyTransmittedTorqueCentiNm =
+            lastSuccessfullyTransmittedTorqueCentiNm_;
+        value.candidateInjectionSign = injectionSign_;
         value.correctiveAttempt = correctiveAttempt_;
         value.correctiveBurstFrame = correctiveBurstFrame_;
         value.correctiveBurstFrameTarget = correctiveBurstFrameTarget_;
@@ -449,6 +465,8 @@ private:
         phaseStartedAtMs_ = nowMs;
         phaseDurationMs_ = 0;
         releaseStartTorqueCentiNm_ = 0;
+        lastSuccessfullyTransmittedTorqueCentiNm_ = 0;
+        outputActive_ = false;
         currentMagnitudeCentiNm_ = 0;
         correctiveActive_ = false;
         correctiveAttempt_ = 0;
@@ -473,6 +491,7 @@ private:
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
         faultRecoveryActive_ = false;
+        outputActive_ = false;
     }
 
     void beginArming()
@@ -497,11 +516,16 @@ private:
 
     void beginRelease(uint32_t nowMs)
     {
+        if (!outputActive_ || lastSuccessfullyTransmittedTorqueCentiNm_ == 0)
+        {
+            beginRest(nowMs, rngState_);
+            return;
+        }
         phase_ = PHASE_RELEASE;
         blockReason_ = BLOCK_NONE;
         phaseStartedAtMs_ = nowMs;
         phaseDurationMs_ = 0;
-        releaseStartTorqueCentiNm_ = targetTorqueCentiNm_;
+        releaseStartTorqueCentiNm_ = lastSuccessfullyTransmittedTorqueCentiNm_;
     }
 
     void beginRest(uint32_t nowMs, uint32_t entropy)
@@ -512,6 +536,7 @@ private:
         phaseDurationMs_ = triangularDuration(config_.restMinMs, config_.restMaxMs, entropy);
         targetTorqueCentiNm_ = 0;
         currentMagnitudeCentiNm_ = 0;
+        outputActive_ = false;
     }
 
     void beginCorrective(uint32_t nowMs, uint8_t attempt)
@@ -535,6 +560,7 @@ private:
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
         faultRecoveryActive_ = false;
+        outputActive_ = false;
     }
 
     void updateDirection(uint32_t nowMs, int16_t angleDeciDeg, int16_t torqueCentiNm)
@@ -621,7 +647,7 @@ private:
         NagAdaptiveDecision decision;
         decision.shouldSend = true;
         decision.targetTorqueCentiNm = targetTorqueCentiNm_;
-        decision.injectionSign = injectionSign_;
+        decision.injectionSign = targetTorqueCentiNm_ < 0 ? -1 : 1;
         blockReason_ = BLOCK_NONE;
         return decision;
     }
@@ -774,7 +800,9 @@ private:
     int16_t observedTorqueCentiNm_ = 0;
     int16_t targetTorqueCentiNm_ = 0;
     int16_t releaseStartTorqueCentiNm_ = 0;
+    int16_t lastSuccessfullyTransmittedTorqueCentiNm_ = 0;
     int16_t currentMagnitudeCentiNm_ = 0;
+    bool outputActive_ = false;
     int8_t injectionSign_ = 0;
     int8_t candidateSign_ = 0;
     uint8_t armingFrames_ = 0;

@@ -568,7 +568,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
   <div class="brand">
     <div class="brand-copy">
       <div class="brand-title" id="brand-title">Albert FSD辅助系统</div>
-      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V4.2 V13</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
+      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V4.3 V13</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
     </div>
   </div>
   <div class="shell-actions">
@@ -839,7 +839,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
       <div class="stat"><div class="stat-lbl">蓝牙</div><div class="stat-val v-dim" id="diag-ble-state">未连接</div></div>
       <div class="stat"><div class="stat-lbl">Wi-Fi</div><div class="stat-val v-dim" id="diag-wifi-state">未配置</div></div>
       <div class="stat"><div class="stat-lbl">温度</div><div class="stat-val v-dim" id="sys-temp">--</div></div>
-      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V4.2 V13</div></div>
+      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V4.3 V13</div></div>
     </div>
     <section class="nag-diag-panel" aria-labelledby="nag-diag-panel-title">
       <header class="nag-diag-header"><div><div class="nag-diag-kicker">NAG CLOSED LOOP</div><h2 class="nag-diag-title" id="nag-diag-panel-title">闭环健康</h2></div><div class="nag-diag-health nag-tone-muted" id="nag-diag-health" role="status" aria-live="polite" aria-atomic="true">DISABLED</div></header>
@@ -1518,7 +1518,7 @@ function syncDashboardSummary(){
   mirrorDashboardText('wifi-status','top-wifi-state',trText('Not configured'));
   mirrorDashboardText('ble-main-card-meta','diag-ble-state',trText('Offline'));
   mirrorDashboardText('wifi-status','diag-wifi-state',trText('Not configured'));
-  mirrorDashboardText('fw-version','diag-version','V4.2 V13');
+  mirrorDashboardText('fw-version','diag-version','V4.3 V13');
   if(nagCustomHydrated){if(!nagCustomDirty)mirrorDashboardText('s-inj','nag-card-meta',trText('Enabled'));}
   const note=$('top-nag-note');if(note)note.textContent=state.nagMode===5?'自适应':'持续注入';
 }
@@ -1931,8 +1931,9 @@ function updateNagDiagnostics(d){
   const collisions=nagDiagnosticFinite(d.nagCounterCollisions),collisionGap=nagDiagnosticCollisionGap(d.nagLastCounterCollisionGapUs,collisions);
   setNagDiagnosticValue('nag-diag-collision',nagDiagnosticInteger(collisions)+' / '+collisionGap,collisions!==null&&collisions>0?nagDiagnosticSemanticTones.collision:'muted');
   const acknowledgements=nagDiagnosticFinite(d.nagAcknowledgementCount),timeouts=nagDiagnosticFinite(d.nagAcknowledgementTimeouts);
+  const latency=acknowledgements===null||acknowledgements===0?'-- / --':nagDiagnosticAge(d.nagLastAcknowledgementLatencyMs)+' / '+nagDiagnosticAge(d.nagMaxAcknowledgementLatencyMs);
   setNagDiagnosticValue('nag-diag-ack',nagDiagnosticInteger(acknowledgements),acknowledgements!==null&&acknowledgements>0?'ack':'muted');
-  setNagDiagnosticValue('nag-diag-latency',nagDiagnosticAge(d.nagLastAcknowledgementLatencyMs)+' / '+nagDiagnosticAge(d.nagMaxAcknowledgementLatencyMs),acknowledgements!==null&&acknowledgements>0?'ack':'muted');
+  setNagDiagnosticValue('nag-diag-latency',latency,acknowledgements!==null&&acknowledgements>0?'ack':'muted');
   setNagDiagnosticValue('nag-diag-timeout',nagDiagnosticInteger(timeouts),timeouts!==null&&timeouts>0?'error':'muted');
   const escalations=nagDiagnosticFinite(d.nagHosEscalations);setNagDiagnosticValue('nag-diag-escalations',nagDiagnosticInteger(escalations),escalations!==null&&escalations>0?'caution':'muted');
 }

@@ -1,6 +1,6 @@
 # Adaptive NAG closed-loop operation and validation
 
-This document defines the V5.0 adaptive NAG operating boundary for the Waveshare ESP32-S3 WiFi-NAG target. The vehicle baseline is Model Y HW4 on vehicle software `2026.2.11`, using the Party CAN tap pins 2/3 at `500 kbit/s`. Results from that baseline must not be generalized into a cross-vehicle or cross-version guarantee.
+This document defines the V4.3-V13 adaptive NAG operating boundary for the Waveshare ESP32-S3 WiFi-NAG target. The vehicle baseline is Model Y HW4 on vehicle software `2026.2.11`, using the Party CAN tap pins 2/3 at `500 kbit/s`. Results from that baseline must not be generalized into a cross-vehicle or cross-version guarantee.
 
 ## Safety boundary and CAN roles
 
@@ -68,7 +68,7 @@ HOS `2..7` starts a corrective burst of 3 to 5 successful echoes. Failed local s
 | Fault recovery | HOS `0/1` for `2000 ms` | Fixed | Toggling NAG off and on also resets the controller. |
 | Final torque clamp | `+/-1.80 Nm` | Cannot be raised | Applied immediately before encoding every echo. |
 
-Preventive magnitude changes by at most `1 cNm` per OEM frame and corrective magnitude by at most `5 cNm`; the controller uses a correlated xorshift32 walk rather than per-frame white noise. Min/max pairs are swapped when necessary and every posted value is normalized to the limits above.
+Preventive magnitude changes by at most `1 cNm` per OEM frame and corrective magnitude by at most `5 cNm`; the controller uses a correlated xorshift32 walk rather than per-frame white noise. For API requests, only omitted fields retain their previous values. Every provided field must be finite, fully parsed, inside its business boundary, and preserve min/max ordering; otherwise the entire request returns HTTP 400 without publishing a command or changing NVS.
 
 ## Fail-closed behavior
 
@@ -113,7 +113,7 @@ The dedicated `/api/nag-adaptive` diagnostic poll runs only while the diagnostic
 
 Switching to `MODE_A` is allowed only as a short diagnostic check that the legacy fixed `+1.80 Nm` behavior still exists. `MODE_A` sends on every valid OEM frame and is not a safety downgrade or fail-safe mode.
 
-To stop CAN writes, disable NAG and turn `CAN Write OFF`. Do not use a mode change as a substitute for disabling writes. Older NVS keys are retained for old-firmware rollback, but V5.0 does not read them as adaptive policy.
+To stop CAN writes, disable NAG and turn `CAN Write OFF`. Do not use a mode change as a substitute for disabling writes. Older NVS keys are retained for old-firmware rollback, but V4.3-V13 does not read them as adaptive policy.
 
 ## Late Echo decision gate
 
