@@ -1,0 +1,84 @@
+name: WIFI-NAG V4.4-V13 Build
+
+on:
+  push:
+    branches: ["V4.4-V13"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wifi-nag-v4.4-v13-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip platformio -r scripts/requirements-dashboard.txt
+
+      - name: Run Python regressions
+        run: python -m unittest discover -s test -p "test_*.py" -v
+
+      - name: Verify dashboard payload
+        run: python scripts/minify_dashboard.py --check
+
+      - name: Run native Nag tests
+        run: |
+          pio test -e native_nag
+          pio test -e native_nag_sweep
+          pio test -e native_nag_adaptive
+
+      - name: Run other native safety tests
+        run: |
+          pio test -e native_twai
+          pio test -e native_log_buffer
+          pio test -e native_ble
+          pio test -e native_obstacle_shift
+
+      - name: Verify firmware version
+        run: test "$(tr -d '\r\n' < VERSION)" = "V4.4 V13"
+
+      - name: Build ESP32-S3 firmware
+        run: pio run -e wifi_nag_ESP32_S3_CAN
+
+      - name: Prepare firmware bundle
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p dist
+          cp .pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin "dist/WIFI-NAG-V4.4-V13-${SOURCE_SHA:0:7}-OTA.bin"
+          python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" \
+            --chip esp32s3 merge_bin \
+            -o "dist/WIFI-NAG-V4.4-V13-${SOURCE_SHA:0:7}-FACTORY-16MB.bin" \
+            --flash_mode dio \
+            --flash_freq 80m \
+            --flash_size 16MB \
+            --fill-flash-size 16MB \
+            0x0 .pio/build/wifi_nag_ESP32_S3_CAN/bootloader.bin \
+            0x8000 .pio/build/wifi_nag_ESP32_S3_CAN/partitions.bin \
+            0x19000 .pio/build/wifi_nag_ESP32_S3_CAN/ota_data_initial.bin \
+            0x20000 .pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin
+          test "$(stat -c%s "dist/WIFI-NAG-V4.4-V13-${SOURCE_SHA:0:7}-FACTORY-16MB.bin")" -eq 16777216
+          (cd dist && sha256sum *.bin > SHA256SUMS.txt)
+
+      - name: Upload firmware bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: WIFI-NAG-V4.4-V13-${{ github.sha }}
+          path: |
+            dist/*.bin
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
