@@ -50,7 +50,7 @@ The only active CAN write behavior is Nag echo on `0x370 / 880`. DAS `0x39B / 92
 ### Common Rules
 
 - Receives exact CAN IDs `880 / 0x370` and `923 / 0x39B`.
-- Treats `0x39B` as read-only feedback; only validated, non-own-echo OEM `0x370` frames can trigger an echo.
+- Treats `0x39B` as read-only feedback. In `MODE_ADAPTIVE`, only checksum-valid, non-own-echo OEM `0x370` frames with non-reserved torque update closed-loop state or trigger an adaptive echo. These adaptive validation gates do not change `MODE_A` or `MODE_A_V2` behavior.
 - Ignores frames with DLC less than 8.
 - `CAN Write OFF`: read-only monitoring; no Nag echo is sent.
 - `CAN Write ON`: allows the selected Nag mode to send echoes under its own gates.
@@ -75,7 +75,8 @@ The only active CAN write behavior is Nag echo on `0x370 / 880`. DAS `0x39B / 92
 ### Mode ADAPTIVE (V5.0 closed loop)
 
 - Requires fresh DAS HOS feedback from read-only `0x39B` and three valid OEM `0x370` frames before sending.
-- Uses low-amplitude preventive sweeps for HOS `0/1`, corrective bursts for HOS `2..7`, and no-send rest/release verification phases.
+- Uses HOS `0` for preventive `MAINTENANCE`; HOS `1` requests smooth `RELEASE`, which may send decaying echoes until the target reaches zero.
+- Uses HOS `2..7` for corrective bursts. `REST` and `VERIFY` are no-send phases.
 - Fails closed on stale DAS feedback, HOS `8..15`, or two corrective attempts without a DAS acknowledgement.
 - Selects injection direction opposite trusted measured steering torque, with a direction deadband and angle fallback.
 - Defaults to `0.15..0.18 Nm` preventive and `1.50..1.80 Nm` corrective magnitudes; every outgoing target is hard-clamped to `-1.80..+1.80 Nm`.
