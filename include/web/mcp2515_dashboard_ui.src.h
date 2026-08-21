@@ -116,6 +116,7 @@ hr{border:none;border-top:1px solid var(--bd);margin:16px}
 .card.collapsed .card-hdr{margin-bottom:0}
 .card.collapsed>:not(.card-hdr){display:none !important}
 body.ui-shell .card.ui-main-card{margin:0 14px 14px;padding:0;border:1px solid var(--bd);border-radius:17px;background:var(--card);box-shadow:0 10px 28px rgba(0,0,0,.12);overflow:hidden}
+body.ui-shell #config-card{overflow:visible}
 body.ui-shell .ui-main-card>.card-hdr{min-height:72px;margin:0;padding:14px 17px;display:grid;grid-template-columns:minmax(0,1fr) auto 28px;gap:10px;align-items:center;cursor:pointer;border-bottom:1px solid transparent;background:var(--card)}
 body.ui-shell .ui-main-card:not(.collapsed)>.card-hdr{border-bottom-color:var(--bd)}
 body.ui-shell .ui-main-card>.card-hdr .card-title{display:flex;align-items:center;gap:11px;min-width:0;font-size:17px;font-weight:800;letter-spacing:0;text-transform:none;color:var(--tx)}
@@ -576,7 +577,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
         <div class="setting-info">
           <div class="setting-name">自定义策略</div><div class="setting-desc">参数先保存在本页，确认后再统一同步到设备。</div>
           <div class="nag-custom-shell">
-            <section class="nag-strategy-card nag-readiness-card"><div><div class="nag-strategy-kicker">策略就绪状态</div><div class="nag-strategy-title" id="nag-custom-readiness-reason">自适应策略未启用</div><div class="nag-strategy-copy">状态由模式、DAS 新鲜度和闭环阶段共同决定。</div></div><div class="nag-readiness-state disabled" id="nag-custom-readiness">DISABLED</div></section>
+            <section class="nag-strategy-card nag-readiness-card"><div><div class="nag-strategy-kicker">策略就绪状态</div><div class="nag-strategy-title" id="nag-custom-readiness-reason" role="status" aria-live="polite" aria-atomic="true">自适应策略未启用</div><div class="nag-strategy-copy">状态由模式、DAS 新鲜度和闭环阶段共同决定。</div></div><div class="nag-readiness-state disabled" id="nag-custom-readiness" role="status" aria-live="polite" aria-atomic="true">DISABLED</div></section>
             <div class="nag-custom-grid">
               <section class="nag-strategy-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">低风险维持</div><div class="nag-strategy-title">预防层</div><div class="nag-strategy-copy">用于维持 Hands-On 0/1 的低幅值区间。</div></div></div><div class="nag-field-grid">
                 <div class="nag-field-group"><div class="nag-field-label">负方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-pv-neg-min" type="number" min="0.10" max="0.50" step="0.01" value="0.15"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-pv-neg-max" type="number" min="0.10" max="0.50" step="0.01" value="0.18"></label></div></div>
@@ -595,7 +596,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
             </div>
             <aside class="nag-safety-panel"><div class="nag-safety-title">安全边界</div><div class="nag-safety-grid"><div class="nag-safety-item"><span>硬限幅</span><b id="nag-custom-hard-cap">±1.80 Nm</b></div><div class="nag-safety-item"><span>DAS timeout</span><b id="nag-custom-das-timeout">500 ms</b></div><div class="nag-safety-item"><span>休息语义</span><b>休息期不额外发送 0x370</b></div></div><div class="nag-strategy-copy">本地发送成功不等于 DAS 接受；反馈失效时闭环立即停止注入。</div></aside>
             <div class="nag-adaptive-live"><span class="nag-status-pill" id="nag-adaptive-phase">阶段：--</span><span class="nag-status-pill" id="nag-adaptive-torque-live">真实扭矩：--</span><span class="nag-status-pill" id="nag-adaptive-handson-live">Hands-On：--</span><span class="nag-status-pill" id="nag-adaptive-source-live">方向依据：--</span></div>
-            <div class="nag-custom-actionbar"><div><div class="nag-action-state" id="nag-custom-dirty">已与设备同步</div><div class="setting-desc" id="nag-adaptive-msg"></div></div><div class="nag-action-buttons"><button class="sniff-btn" id="nag-custom-defaults" type="button" onclick="restoreNagCustomDefaults()">恢复建议值</button><button class="sniff-btn primary" id="nag-custom-save" type="button" onclick="saveNagAdaptive()">保存自定义策略</button></div></div>
+            <div class="nag-custom-actionbar"><div><div class="nag-action-state" id="nag-custom-dirty" role="status" aria-live="polite" aria-atomic="true">正在读取设备策略</div><div class="setting-desc" id="nag-adaptive-msg" role="status" aria-live="polite" aria-atomic="true"></div></div><div class="nag-action-buttons"><button class="sniff-btn" id="nag-custom-defaults" type="button" onclick="restoreNagCustomDefaults()">恢复建议值</button><button class="sniff-btn primary" id="nag-custom-save" type="button" onclick="saveNagAdaptive()">读取中...</button></div></div>
           </div>
         </div>
       </div>
@@ -1091,6 +1092,11 @@ const nagCustomDefaults={
 const cloneNagCustomDefaults=()=>JSON.parse(JSON.stringify(nagCustomDefaults));
 let nagCustomDraft=cloneNagCustomDefaults();
 let nagCustomDirty=false;
+let nagCustomHydrated=false;
+let nagCustomLoading=false;
+let nagCustomSaving=false;
+let nagCustomLoadError='';
+let nagCustomRevision=0;
 const nagCustomFieldDefs=[
   ['preventiveNegative',0,'nag-pv-neg-min','preventiveNegativeMinNm',0.10,0.50,2],['preventiveNegative',1,'nag-pv-neg-max','preventiveNegativeMaxNm',0.10,0.50,2],
   ['preventivePositive',0,'nag-pv-pos-min','preventivePositiveMinNm',0.10,0.50,2],['preventivePositive',1,'nag-pv-pos-max','preventivePositiveMaxNm',0.10,0.50,2],
@@ -1436,7 +1442,7 @@ function syncDashboardSummary(){
   mirrorDashboardText('ble-main-card-meta','diag-ble-state',trText('Offline'));
   mirrorDashboardText('wifi-status','diag-wifi-state',trText('Not configured'));
   mirrorDashboardText('fw-version','diag-version','V4.2 V13');
-  mirrorDashboardText('s-inj','nag-card-meta',trText('Enabled'));
+  if(nagCustomHydrated){if(!nagCustomDirty)mirrorDashboardText('s-inj','nag-card-meta',trText('Enabled'));}
   const note=$('top-nag-note');if(note)note.textContent=state.nagMode===5?'自适应':'持续注入';
 }
 
@@ -1781,8 +1787,14 @@ function updateNagControl(d){
 
 function setNagCustomDirty(dirty){
   nagCustomDirty=!!dirty;const indicator=$('nag-custom-dirty');
-  if(indicator){indicator.textContent=nagCustomDirty?'有未保存修改':'已与设备同步';indicator.classList.toggle('dirty',nagCustomDirty);}
-  const cardMeta=$('nag-card-meta');if(cardMeta&&nagCustomDirty)cardMeta.textContent='有未保存修改';
+  let text=nagCustomDirty?'有未保存修改':'已与设备同步';
+  if(!nagCustomHydrated)text=nagCustomLoading?'正在读取设备策略':(nagCustomLoadError||'尚未读取设备策略');
+  if(indicator){indicator.textContent=text;indicator.classList.toggle('dirty',nagCustomDirty||!nagCustomHydrated);}
+  const cardMeta=$('nag-card-meta');if(cardMeta)cardMeta.textContent=text;
+}
+function setNagCustomControlsDisabled(disabled){
+  nagCustomFieldDefs.forEach(def=>{const input=$(def[2]);if(input)input.disabled=disabled;});
+  const defaults=$('nag-custom-defaults'),save=$('nag-custom-save');if(defaults)defaults.disabled=disabled;if(save)save.disabled=disabled;
 }
 function normalizeNagCustomDraft(source){
   const next=JSON.parse(JSON.stringify(source));const clamp=(value,min,max,fallback)=>{const n=Number(value);return Math.max(min,Math.min(max,Number.isFinite(n)?n:fallback));};
@@ -1795,11 +1807,13 @@ function renderNagCustomDraft(){
   const timeout=$('nag-custom-das-timeout');if(timeout)timeout.textContent=nagCustomDraft.dasFreshTimeoutMs+' ms';
 }
 function updateNagCustomDraft(event){
-  const def=nagCustomFieldDefs.find(item=>item[2]===event.target.id);if(!def)return;const value=Number(event.target.value);if(Number.isFinite(value)){if(def[1]===null)nagCustomDraft[def[0]]=value;else nagCustomDraft[def[0]][def[1]]=value;}setNagCustomDirty(true);
+  const def=nagCustomFieldDefs.find(item=>item[2]===event.target.id);if(!def)return;nagCustomRevision++;setNagCustomDirty(true);
+  if(event.target.value.trim()==='')return;const value=event.target.valueAsNumber;if(!Number.isFinite(value))return;
+  if(def[1]===null)nagCustomDraft[def[0]]=value;else nagCustomDraft[def[0]][def[1]]=value;
   const message=$('nag-adaptive-msg');if(message){message.textContent='';message.style.color='';}
 }
-function initNagCustomUi(){nagCustomFieldDefs.forEach(def=>{const input=$(def[2]);if(input)input.addEventListener('input',updateNagCustomDraft);});renderNagCustomDraft();setNagCustomDirty(false);}
-function restoreNagCustomDefaults(){nagCustomDraft=cloneNagCustomDefaults();renderNagCustomDraft();setNagCustomDirty(true);const message=$('nag-adaptive-msg');if(message){message.textContent='建议值已载入，保存后才会同步到设备';message.style.color='var(--warn)';}}
+function initNagCustomUi(){nagCustomFieldDefs.forEach(def=>{const input=$(def[2]);if(input)input.addEventListener('input',updateNagCustomDraft);});renderNagCustomDraft();setNagCustomControlsDisabled(true);setNagCustomDirty(false);}
+function restoreNagCustomDefaults(){if(!nagCustomHydrated||nagCustomSaving)return;nagCustomRevision++;nagCustomDraft=cloneNagCustomDefaults();renderNagCustomDraft();setNagCustomDirty(true);const message=$('nag-adaptive-msg');if(message){message.textContent='建议值已载入，保存后才会同步到设备';message.style.color='var(--warn)';}}
 function applyNagCustomResponse(data){
   const next=cloneNagCustomDefaults();nagCustomFieldDefs.forEach(def=>{const value=Number(data[def[3]]);if(!Number.isFinite(value))return;if(def[1]===null)next[def[0]]=value;else next[def[0]][def[1]]=value;});
   const timeout=Number(data.dasFreshTimeoutMs);next.dasFreshTimeoutMs=Number.isFinite(timeout)?timeout:500;nagCustomDraft=normalizeNagCustomDraft(next);renderNagCustomDraft();
@@ -1811,7 +1825,17 @@ function updateNagCustomReadiness(d){
   else if(phase==='fault-hold'){label='FAIL_CLOSED';reason='闭环故障保持，等待有效反馈恢复';tone='fail';}
   const status=$('nag-custom-readiness'),copy=$('nag-custom-readiness-reason');if(status){status.textContent=label;status.className='nag-readiness-state '+tone;}if(copy){copy.textContent=reason;copy.style.color=tone==='wait'||tone==='fail'?'var(--err)':'';}
 }
-async function loadNagAdaptive(){try{const response=await fetch('/api/nag-adaptive');if(!response.ok)throw new Error('HTTP '+response.status);const data=await response.json();if(!nagCustomDirty)applyNagCustomResponse(data);updateNagCustomReadiness(data);}catch(error){}}
+async function loadNagAdaptive(){
+  if(nagCustomLoading||nagCustomSaving)return;nagCustomLoading=true;nagCustomLoadError='';setNagCustomControlsDisabled(true);setNagCustomDirty(false);
+  const message=$('nag-adaptive-msg'),button=$('nag-custom-save');if(message){message.textContent='正在读取设备策略';message.style.color='var(--tx3)';}if(button)button.textContent='读取中...';
+  try{
+    const response=await fetch('/api/nag-adaptive');if(!response.ok)throw new Error('HTTP '+response.status);const data=await response.json();if(!data.ok)throw new Error(data.error||'invalid response');
+    applyNagCustomResponse(data);nagCustomHydrated=true;nagCustomLoadError='';setNagCustomDirty(false);updateNagCustomReadiness(data);if(message){message.textContent='设备策略已读取';message.style.color='var(--ok)';}
+  }catch(error){nagCustomHydrated=false;nagCustomLoadError='读取设备策略失败，点击重试';if(message){message.textContent=nagCustomLoadError;message.style.color='var(--err)';}}
+  finally{
+    nagCustomLoading=false;if(nagCustomHydrated){setNagCustomControlsDisabled(false);if(button)button.textContent='保存自定义策略';}else{setNagCustomControlsDisabled(true);if(button){button.disabled=false;button.textContent='重试读取设备策略';}}setNagCustomDirty(false);
+  }
+}
 
 async function setNagMode(mode){
   mode=mode===5?5:0;
@@ -1825,23 +1849,26 @@ async function setNagMode(mode){
 }
 
 async function saveNagAdaptive(){
+  if(!nagCustomHydrated){loadNagAdaptive();return;}
+  if(nagCustomSaving)return;nagCustomSaving=true;const saveRevision=nagCustomRevision;const requestDraft=normalizeNagCustomDraft(nagCustomDraft);nagCustomDraft=JSON.parse(JSON.stringify(requestDraft));renderNagCustomDraft();setNagCustomControlsDisabled(true);
   const button=$('nag-custom-save'),message=$('nag-adaptive-msg');
   if(button){button.disabled=true;button.textContent=trText('Saving...');}
   if(message){message.textContent='';message.style.color='';}
-  nagCustomDraft=normalizeNagCustomDraft(nagCustomDraft);renderNagCustomDraft();const params=new URLSearchParams();
-  params.set('preventiveNegativeMinNm',nagCustomDraft.preventiveNegative[0].toFixed(2));params.set('preventiveNegativeMaxNm',nagCustomDraft.preventiveNegative[1].toFixed(2));params.set('preventivePositiveMinNm',nagCustomDraft.preventivePositive[0].toFixed(2));params.set('preventivePositiveMaxNm',nagCustomDraft.preventivePositive[1].toFixed(2));
-  params.set('correctiveNegativeMinNm',nagCustomDraft.correctiveNegative[0].toFixed(2));params.set('correctiveNegativeMaxNm',nagCustomDraft.correctiveNegative[1].toFixed(2));params.set('correctivePositiveMinNm',nagCustomDraft.correctivePositive[0].toFixed(2));params.set('correctivePositiveMaxNm',nagCustomDraft.correctivePositive[1].toFixed(2));
-  params.set('activityMinSec',nagCustomDraft.activity[0].toFixed(1));params.set('activityMaxSec',nagCustomDraft.activity[1].toFixed(1));params.set('releaseMinSec',nagCustomDraft.release[0].toFixed(1));params.set('releaseMaxSec',nagCustomDraft.release[1].toFixed(1));params.set('restMinSec',nagCustomDraft.rest[0].toFixed(1));params.set('restMaxSec',nagCustomDraft.rest[1].toFixed(1));params.set('directionDeadbandNm',nagCustomDraft.directionDeadband.toFixed(2));params.set('dasFreshTimeoutMs',String(nagCustomDraft.dasFreshTimeoutMs));
+  const params=new URLSearchParams();
+  params.set('preventiveNegativeMinNm',requestDraft.preventiveNegative[0].toFixed(2));params.set('preventiveNegativeMaxNm',requestDraft.preventiveNegative[1].toFixed(2));params.set('preventivePositiveMinNm',requestDraft.preventivePositive[0].toFixed(2));params.set('preventivePositiveMaxNm',requestDraft.preventivePositive[1].toFixed(2));
+  params.set('correctiveNegativeMinNm',requestDraft.correctiveNegative[0].toFixed(2));params.set('correctiveNegativeMaxNm',requestDraft.correctiveNegative[1].toFixed(2));params.set('correctivePositiveMinNm',requestDraft.correctivePositive[0].toFixed(2));params.set('correctivePositiveMaxNm',requestDraft.correctivePositive[1].toFixed(2));
+  params.set('activityMinSec',requestDraft.activity[0].toFixed(1));params.set('activityMaxSec',requestDraft.activity[1].toFixed(1));params.set('releaseMinSec',requestDraft.release[0].toFixed(1));params.set('releaseMaxSec',requestDraft.release[1].toFixed(1));params.set('restMinSec',requestDraft.rest[0].toFixed(1));params.set('restMaxSec',requestDraft.rest[1].toFixed(1));params.set('directionDeadbandNm',requestDraft.directionDeadband.toFixed(2));params.set('dasFreshTimeoutMs',String(requestDraft.dasFreshTimeoutMs));
   try{
     const response=await fetch('/api/nag-adaptive',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:params.toString()});
     const data=await response.json();
     if(!response.ok||!data.ok)throw new Error(data.error||('HTTP '+response.status));
+    if(nagCustomRevision!==saveRevision){setNagCustomDirty(true);return;}
     applyNagCustomResponse(data);setNagCustomDirty(false);updateNagCustomReadiness(data);if(message){message.textContent='自定义策略已保存并与设备同步';message.style.color='var(--ok)';}
   }catch(error){
     if(message){message.textContent='保存失败，未保存修改仍保留';message.style.color='var(--err)';}
     addLog(trText('Adaptive settings save failed'),'le');
   }finally{
-    if(button){button.disabled=false;button.textContent='保存自定义策略';}
+    nagCustomSaving=false;setNagCustomControlsDisabled(false);if(button){button.disabled=false;button.textContent='保存自定义策略';}
   }
 }
 

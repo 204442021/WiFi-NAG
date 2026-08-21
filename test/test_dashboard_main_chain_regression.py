@@ -198,6 +198,32 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         self.assertIn("setWifiNagPage", self.source)
         self.assertIn(".bottom-nav", self.source)
 
+    def test_custom_strategy_sticky_and_accessible_status_contract(self) -> None:
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn("body.ui-shell#config-card{overflow:visible}", compact)
+        self.assertNotIn(".ui-main-card{overflow:visible}", compact)
+        for element_id in (
+            "nag-custom-readiness", "nag-custom-readiness-reason",
+            "nag-custom-dirty", "nag-adaptive-msg",
+        ):
+            element = re.search(
+                rf'<[^>]+\bid="{re.escape(element_id)}"[^>]*>', self.source
+            )
+            self.assertIsNotNone(element, element_id)
+            markup = element.group(0)
+            self.assertIn('role="status"', markup)
+            self.assertIn('aria-live="polite"', markup)
+            self.assertIn('aria-atomic="true"', markup)
+
+    def test_custom_strategy_loading_and_save_disable_all_controls(self) -> None:
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn("functionsetNagCustomControlsDisabled(disabled)", compact)
+        self.assertIn("input.disabled=disabled", compact)
+        self.assertIn("defaults.disabled=disabled", compact)
+        self.assertIn("save.disabled=disabled", compact)
+        self.assertIn("nagCustomSaving=true", compact)
+        self.assertIn("nagCustomSaving=false", compact)
+
         retired_shift_ids = (
             "shift-manual-btn",
             "shift-manual-ready",

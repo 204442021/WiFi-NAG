@@ -134,6 +134,46 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         self.assertIn("'READY'", self.source)
         self.assertIn("反馈失效，已停止自适应注入", self.source)
 
+    def test_custom_strategy_blocks_unhydrated_defaults_and_exposes_retry(self):
+        compact = re.sub(r"\s+", "", self.source)
+        for state in (
+            "nagCustomHydrated=false", "nagCustomLoading=false",
+            "nagCustomLoadError=''",
+        ):
+            self.assertIn(state, compact)
+        self.assertIn("setNagCustomControlsDisabled(true)", self.source)
+        self.assertIn("正在读取设备策略", self.source)
+        self.assertIn("读取设备策略失败，点击重试", self.source)
+        self.assertIn("nagCustomHydrated=true", compact)
+        self.assertIn("if(!nagCustomHydrated){loadNagAdaptive();return;}", compact)
+        self.assertNotIn(
+            '<div class="nag-action-state" id="nag-custom-dirty">已与设备同步</div>',
+            self.source,
+        )
+
+    def test_custom_strategy_save_uses_revision_snapshot_and_locks_every_control(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn("letnagCustomRevision=0", compact)
+        self.assertIn("nagCustomRevision++", compact)
+        self.assertIn("constsaveRevision=nagCustomRevision", compact)
+        self.assertIn("constrequestDraft=normalizeNagCustomDraft", compact)
+        self.assertIn("setNagCustomControlsDisabled(true)", self.source)
+        self.assertIn("if(nagCustomRevision!==saveRevision)", compact)
+        self.assertIn("setNagCustomControlsDisabled(false)", self.source)
+
+    def test_custom_strategy_empty_numeric_input_keeps_previous_draft_value(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn("event.target.value.trim()===''", compact)
+        self.assertIn("event.target.valueAsNumber", self.source)
+        self.assertIn("if(!Number.isFinite(value))return", compact)
+
+    def test_custom_strategy_dirty_metadata_wins_over_polling(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn(
+            "if(!nagCustomDirty)mirrorDashboardText('s-inj','nag-card-meta'",
+            compact,
+        )
+
     def test_closed_loop_nvs_contract_uses_exact_keys_and_defaults(self):
         for key in EXPECTED_NVS_KEYS:
             self.assertIn(f'prefs.putString("{key}"', self.dashboard)
