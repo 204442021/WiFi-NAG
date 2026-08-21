@@ -849,7 +849,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
           <div class="nag-diag-metric"><span>OEM EPAS 0x370</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-epas">未见数据</strong><small id="nag-echo-meta">echo: --</small></div>
           <div class="nag-diag-metric"><span>OEM torque</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-oem-torque">--</strong><small id="nag-live-meta">实时: --</small></div>
           <div class="nag-diag-metric"><span>OEM counter</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-counter">--</strong></div>
-          <div class="nag-diag-metric"><span>DAS 0x39B</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-das">未见数据</strong></div>
+          <div class="nag-diag-metric"><span>DAS 0x39B</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-das">未见 · -- frames / --</strong></div>
           <div class="nag-diag-metric"><span>Hands-On state</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-hos">--</strong></div>
         </div></article>
         <article class="nag-diag-group"><h3>控制器决策</h3><div class="nag-diag-metrics">
@@ -1159,6 +1159,7 @@ const phaseNames={
   'fault-hold':'故障停发'
 };
 const nagDiagnosticSemanticTones={release: 'caution', rest: 'caution', verify: 'caution', collision: 'caution', sendFailure: 'error'};
+const nagDiagnosticPhaseTones={disabled: 'muted', 'wait-das': 'muted', arming: 'active', maintenance: 'active', release: 'caution', rest: 'caution', corrective: 'active', verify: 'caution', 'fault-hold': 'error'};
 const nagDiagnosticEventFields=[
   ['nagDasFresh','DAS freshness'],['nagDasHos','DAS HOS'],
   ['nagAdaptivePhase','Controller phase'],['nagAcknowledgementCount','Acknowledgements'],
@@ -1167,7 +1168,8 @@ const nagDiagnosticEventFields=[
 let nagDiagnosticPrevious=null;
 let nagDiagnosticEvents=[];
 let nagDiagnosticsTimer=null;
-let nagDiagnosticsLoading=false;
+let nagDiagnosticsEpoch=0;
+let nagDiagnosticsLoadingEpoch=-1;
 const nagCustomFieldDefs=[
   ['preventiveNegative',0,'nag-pv-neg-min','preventiveNegativeMinNm',0.10,0.50,2],['preventiveNegative',1,'nag-pv-neg-max','preventiveNegativeMaxNm',0.10,0.50,2],
   ['preventivePositive',0,'nag-pv-pos-min','preventivePositiveMinNm',0.10,0.50,2],['preventivePositive',1,'nag-pv-pos-max','preventivePositiveMaxNm',0.10,0.50,2],
@@ -1864,11 +1866,20 @@ function updateNagControl(d){
 function setNagDiagnosticValue(id,text,tone){
   const el=$(id);if(!el)return;el.textContent=text;el.className='nag-diag-value'+(tone?' nag-tone-'+tone:'');
 }
-function nagDiagnosticNumber(data,key,fallback){
-  const value=Number(data[key]);return Number.isFinite(value)?value:fallback;
+function nagDiagnosticFinite(value){
+  if(value===undefined||value===null||value==='')return null;const number=Number(value);return Number.isFinite(number)?number:null;
+}
+function nagDiagnosticInteger(value){
+  const number=nagDiagnosticFinite(value);return number===null?'--':String(Math.trunc(number));
+}
+function nagDiagnosticFixed(value,digits,suffix){
+  const number=nagDiagnosticFinite(value);return number===null?'--':number.toFixed(digits)+(suffix||'');
 }
 function nagDiagnosticAge(value){
-  if(value===undefined||value===null||value==='')return '--';const age=Number(value);return Number.isFinite(age)?Math.max(0,Math.trunc(age))+' ms':'--';
+  const age=nagDiagnosticFinite(value);if(age===null||age<0||age>=0xFFFFFFFF)return '--';return Math.trunc(age)+' ms';
+}
+function nagDiagnosticCollisionGap(value,collisions){
+  const count=nagDiagnosticFinite(collisions),gap=nagDiagnosticFinite(value);if(count===null||count<=0||gap===null||gap<=0||gap>=0xFFFFFFFF)return '--';return Math.trunc(gap)+' μs';
 }
 function renderNagDiagnosticEvents(){
   const list=$('nag-diag-events');if(!list)return;
@@ -1888,7 +1899,7 @@ function updateNagDiagnostics(d){
   recordNagDiagnosticEvents(d);
   const mode=Number(d.nagMode===undefined?(d.mode===undefined?state.nagMode:d.mode):d.nagMode)||0;
   const phase=String(d.nagAdaptivePhase===undefined?'disabled':d.nagAdaptivePhase);
-  const dasSeen=!!d.nagDasSeen,dasFresh=!!d.nagDasFresh,hos=Math.trunc(nagDiagnosticNumber(d,'nagDasHos',0));
+  const dasSeen=!!d.nagDasSeen,dasFresh=!!d.nagDasFresh,hos=nagDiagnosticFinite(d.nagDasHos);
   const block=String(d.nagAdaptiveBlockReason===undefined?'none':d.nagAdaptiveBlockReason);
   const blockNames={none:'无阻塞',disabled:'自适应模式未启用','das-missing':'尚未收到 DAS 0x39B','das-stale':'DAS 反馈已过期','no-direction':'没有可靠方向依据','das-state':'DAS 状态禁止发送','ack-timeout':'DAS 确认超时'};
   let health='READY',healthTone='ready';
@@ -1899,45 +1910,45 @@ function updateNagDiagnostics(d){
   else if(nagDiagnosticSemanticTones[phase]){health=phase==='rest'?'READY':'ACTIVE';healthTone=nagDiagnosticSemanticTones[phase];}
   const healthEl=$('nag-diag-health');if(healthEl){healthEl.textContent=health;healthEl.className='nag-diag-health nag-tone-'+healthTone;}
   setText('nag-diag-reason',blockNames[block]||block);
-  const epasFrames=nagDiagnosticNumber(d,'nagOemEpasFrames',0),epasAge=nagDiagnosticAge(d.nagLastOemEpasAgeMs);
-  setNagDiagnosticValue('nag-diag-epas',epasFrames+' frames / '+epasAge,epasFrames?'active':'muted');
-  setNagDiagnosticValue('nag-diag-oem-torque',nagDiagnosticNumber(d,'nagObservedTorqueNm',0).toFixed(2)+' Nm',epasFrames?'active':'muted');
-  setNagDiagnosticValue('nag-diag-counter',epasFrames?String(Math.trunc(nagDiagnosticNumber(d,'nagLastOemEpasCounter',0))):'--',epasFrames?'active':'muted');
-  const dasFrames=nagDiagnosticNumber(d,'nagDasFrames',0),dasTone=dasFresh?'fresh':(dasSeen?'error':'muted');
-  setNagDiagnosticValue('nag-diag-das',(dasFrames?dasFrames+' frames':'未见数据')+' / '+nagDiagnosticAge(d.nagDasAgeMs),dasTone);
-  setNagDiagnosticValue('nag-diag-hos',dasSeen?'H'+hos:'--',!dasSeen?'muted':(hos>=8?'error':(hos>=2?'caution':'active')));
-  const phaseTone=phase==='fault-hold'?'error':(nagDiagnosticSemanticTones[phase]||(phase==='disabled'?'muted':(phase==='wait-das'?'error':(phase==='arming'?'ready':'active'))));
+  const epasFrames=nagDiagnosticFinite(d.nagOemEpasFrames),epasSeen=epasFrames!==null&&epasFrames>0,epasAge=nagDiagnosticAge(d.nagLastOemEpasAgeMs),epasFrameText=epasFrames===null?'--':nagDiagnosticInteger(epasFrames)+' frames';
+  setNagDiagnosticValue('nag-diag-epas',epasFrameText+' / '+epasAge,epasSeen?'active':'muted');
+  setNagDiagnosticValue('nag-diag-oem-torque',nagDiagnosticFixed(d.nagObservedTorqueNm,2,' Nm'),epasSeen?'active':'muted');
+  setNagDiagnosticValue('nag-diag-counter',epasSeen?nagDiagnosticInteger(d.nagLastOemEpasCounter):'--',epasSeen?'active':'muted');
+  const dasFrames=nagDiagnosticFinite(d.nagDasFrames),dasTone=dasFresh?'fresh':(dasSeen?'error':'muted'),dasFrameText=dasFrames===null?'--':nagDiagnosticInteger(dasFrames)+' frames';
+  const freshness=dasFresh?'新鲜':(dasSeen?'已超时':'未见');setNagDiagnosticValue('nag-diag-das',freshness+' · '+dasFrameText+' / '+nagDiagnosticAge(d.nagDasAgeMs),dasTone);
+  setNagDiagnosticValue('nag-diag-hos',dasSeen&&hos!==null?'H'+Math.trunc(hos):'--',!dasSeen||hos===null?'muted':(hos>=8?'error':(hos>=2?'caution':'active')));
+  const phaseTone=phase==='wait-das'?(dasSeen?'error':'muted'):(nagDiagnosticPhaseTones[phase]||'active');
   setNagDiagnosticValue('nag-diag-phase',phaseNames[phase]||phase,phaseTone);
-  setNagDiagnosticValue('nag-diag-target',nagDiagnosticNumber(d,'nagAdaptiveTargetTorqueNm',0).toFixed(2)+' Nm',phase==='disabled'?'muted':'active');
+  setNagDiagnosticValue('nag-diag-target',nagDiagnosticFixed(d.nagAdaptiveTargetTorqueNm,2,' Nm'),phase==='disabled'?'muted':'active');
   const source=String(d.nagDirectionSource===undefined?'--':d.nagDirectionSource),sourceNames={torque:'实测扭矩',angle:'方向盘角度',hold:'保持上一方向'};
   setNagDiagnosticValue('nag-diag-direction',sourceNames[source]||source,source==='--'?'muted':'active');
   setNagDiagnosticValue('nag-diag-timer',nagDiagnosticAge(d.nagAdaptivePhaseRemainingMs),phaseTone);
-  const attempt=Math.trunc(nagDiagnosticNumber(d,'nagCorrectiveAttempt',0)),burst=Math.trunc(nagDiagnosticNumber(d,'nagCorrectiveBurstFrame',0)),burstTarget=Math.trunc(nagDiagnosticNumber(d,'nagCorrectiveBurstFrameTarget',0));
+  const attempt=nagDiagnosticInteger(d.nagCorrectiveAttempt),burst=nagDiagnosticInteger(d.nagCorrectiveBurstFrame),burstTarget=nagDiagnosticInteger(d.nagCorrectiveBurstFrameTarget);
   setNagDiagnosticValue('nag-diag-burst','try '+attempt+' · '+burst+'/'+burstTarget,phase==='corrective'?'active':'muted');
-  const sends=Math.trunc(nagDiagnosticNumber(d,'nagSendAttempts',0)),failures=Math.trunc(nagDiagnosticNumber(d,'nagSendFailures',0));const success=Math.max(0,sends-failures);
-  setNagDiagnosticValue('nag-diag-tx',sends+' / '+success+' / '+failures,failures?'error':(sends?'active':'muted'));
-  if(d.nagInjectedTorqueValid!==undefined||d.nagInjectedTorqueNm!==undefined){const injectedValid=!!d.nagInjectedTorqueValid,injected=nagDiagnosticNumber(d,'nagInjectedTorqueNm',0),injectedAge=d.nagInjectedAgeMs;setNagDiagnosticValue('nag-diag-last-tx',injectedValid?((injected>=0?'+':'')+injected.toFixed(2)+' Nm / '+nagDiagnosticAge(injectedAge)):'--',injectedValid?'active':'muted');}
-  const collisions=Math.trunc(nagDiagnosticNumber(d,'nagCounterCollisions',0));
-  const collisionGap=d.nagLastCounterCollisionGapUs===undefined?'--':Math.max(0,Math.trunc(Number(d.nagLastCounterCollisionGapUs)||0))+' μs';setNagDiagnosticValue('nag-diag-collision',collisions+' / '+collisionGap,collisions?nagDiagnosticSemanticTones.collision:'muted');
-  const acknowledgements=Math.trunc(nagDiagnosticNumber(d,'nagAcknowledgementCount',0)),timeouts=Math.trunc(nagDiagnosticNumber(d,'nagAcknowledgementTimeouts',0));
-  setNagDiagnosticValue('nag-diag-ack',String(acknowledgements),acknowledgements?'ack':'muted');
-  setNagDiagnosticValue('nag-diag-latency',nagDiagnosticAge(d.nagLastAcknowledgementLatencyMs)+' / '+nagDiagnosticAge(d.nagMaxAcknowledgementLatencyMs),acknowledgements?'ack':'muted');
-  setNagDiagnosticValue('nag-diag-timeout',String(timeouts),timeouts?'error':'muted');
-  const escalations=Math.trunc(nagDiagnosticNumber(d,'nagHosEscalations',0));setNagDiagnosticValue('nag-diag-escalations',String(escalations),escalations?'caution':'muted');
+  const sends=nagDiagnosticFinite(d.nagSendAttempts),failures=nagDiagnosticFinite(d.nagSendFailures),success=sends===null||failures===null?null:Math.max(0,Math.trunc(sends)-Math.trunc(failures));
+  setNagDiagnosticValue('nag-diag-tx',nagDiagnosticInteger(sends)+' / '+nagDiagnosticInteger(success)+' / '+nagDiagnosticInteger(failures),failures!==null&&failures>0?nagDiagnosticSemanticTones.sendFailure:(sends!==null&&sends>0?'active':'muted'));
+  if(d.nagInjectedTorqueValid!==undefined||d.nagInjectedTorqueNm!==undefined){const injectedValid=!!d.nagInjectedTorqueValid,injected=nagDiagnosticFinite(d.nagInjectedTorqueNm),injectedAge=d.nagInjectedAgeMs;setNagDiagnosticValue('nag-diag-last-tx',injectedValid&&injected!==null?((injected>=0?'+':'')+injected.toFixed(2)+' Nm / '+nagDiagnosticAge(injectedAge)):'--',injectedValid&&injected!==null?'active':'muted');}
+  const collisions=nagDiagnosticFinite(d.nagCounterCollisions),collisionGap=nagDiagnosticCollisionGap(d.nagLastCounterCollisionGapUs,collisions);
+  setNagDiagnosticValue('nag-diag-collision',nagDiagnosticInteger(collisions)+' / '+collisionGap,collisions!==null&&collisions>0?nagDiagnosticSemanticTones.collision:'muted');
+  const acknowledgements=nagDiagnosticFinite(d.nagAcknowledgementCount),timeouts=nagDiagnosticFinite(d.nagAcknowledgementTimeouts);
+  setNagDiagnosticValue('nag-diag-ack',nagDiagnosticInteger(acknowledgements),acknowledgements!==null&&acknowledgements>0?'ack':'muted');
+  setNagDiagnosticValue('nag-diag-latency',nagDiagnosticAge(d.nagLastAcknowledgementLatencyMs)+' / '+nagDiagnosticAge(d.nagMaxAcknowledgementLatencyMs),acknowledgements!==null&&acknowledgements>0?'ack':'muted');
+  setNagDiagnosticValue('nag-diag-timeout',nagDiagnosticInteger(timeouts),timeouts!==null&&timeouts>0?'error':'muted');
+  const escalations=nagDiagnosticFinite(d.nagHosEscalations);setNagDiagnosticValue('nag-diag-escalations',nagDiagnosticInteger(escalations),escalations!==null&&escalations>0?'caution':'muted');
 }
 function nagDiagnosticsShouldPoll(){
   return !!document.querySelector('.ui-screen[data-page="diagnostics"].active')&&systemStatusEnabled&&!document.hidden&&!dashboardPollStopped;
 }
 function stopNagDiagnosticsPolling(){
-  if(nagDiagnosticsTimer!==null){clearInterval(nagDiagnosticsTimer);nagDiagnosticsTimer=null;}
+  nagDiagnosticsEpoch++;nagDiagnosticsLoadingEpoch=-1;if(nagDiagnosticsTimer!==null){clearInterval(nagDiagnosticsTimer);nagDiagnosticsTimer=null;}
 }
-async function pollNagDiagnostics(){
-  if(!nagDiagnosticsShouldPoll()||nagDiagnosticsLoading)return;nagDiagnosticsLoading=true;
-  try{const response=await fetch('/api/nag-adaptive');if(!response.ok)return;const data=await response.json();if(data.ok!==false&&nagDiagnosticsShouldPoll())updateNagDiagnostics(data);}catch(error){}
-  finally{nagDiagnosticsLoading=false;}
+async function pollNagDiagnostics(epoch){
+  if(epoch!==nagDiagnosticsEpoch||!nagDiagnosticsShouldPoll())return;if(nagDiagnosticsLoadingEpoch===epoch)return;nagDiagnosticsLoadingEpoch=epoch;
+  try{const response=await fetch('/api/nag-adaptive');if(!response.ok)return;const data=await response.json();if(epoch!==nagDiagnosticsEpoch||!nagDiagnosticsShouldPoll())return;if(data.ok!==false)updateNagDiagnostics(data);}catch(error){}
+  finally{if(nagDiagnosticsLoadingEpoch===epoch)nagDiagnosticsLoadingEpoch=-1;}
 }
 function syncNagDiagnosticsPolling(){
-  stopNagDiagnosticsPolling();if(!nagDiagnosticsShouldPoll())return;pollNagDiagnostics();const intervalMs=isCarUiActive()||networkPerformanceMode?1000:500;nagDiagnosticsTimer=setInterval(pollNagDiagnostics,intervalMs);
+  stopNagDiagnosticsPolling();if(!nagDiagnosticsShouldPoll())return;const epoch=nagDiagnosticsEpoch;pollNagDiagnostics(epoch);const intervalMs=isCarUiActive()||networkPerformanceMode?1000:500;nagDiagnosticsTimer=setInterval(()=>pollNagDiagnostics(epoch),intervalMs);
 }
 
 function setNagCustomDirty(dirty){

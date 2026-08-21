@@ -237,6 +237,15 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         self.assertIn("collision: 'caution'", self.source)
         self.assertIn("sendFailure: 'error'", self.source)
         self.assertNotIn("sendSuccess: 'ready'", self.source)
+        self.assertIn("const nagDiagnosticPhaseTones={", self.source)
+        for mapping in (
+            "disabled: 'muted'", "'wait-das': 'muted'", "arming: 'active'",
+            "maintenance: 'active'", "release: 'caution'", "rest: 'caution'",
+            "corrective: 'active'", "verify: 'caution'", "'fault-hold': 'error'",
+        ):
+            self.assertIn(mapping, self.source)
+        self.assertNotIn("arming: 'ready'", self.source)
+        self.assertIn("dasFresh?'fresh':(dasSeen?'error':'muted')", compact)
 
     def test_browser_event_timeline_is_deduplicated_capped_and_local_only(self):
         compact = re.sub(r"\s+", "", self.source)
@@ -286,6 +295,60 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             self.assertIn(lifecycle, self.source)
         self.assertGreaterEqual(self.source.count("syncNagDiagnosticsPolling()"), 7)
 
+    def test_diagnostic_polling_epochs_isolate_stale_fetches_and_loading_state(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn("letnagDiagnosticsEpoch=0", compact)
+        self.assertIn("letnagDiagnosticsLoadingEpoch=-1", compact)
+        self.assertNotIn("letnagDiagnosticsLoading=false", compact)
+        stop_start = self.source.index("function stopNagDiagnosticsPolling(")
+        stop_end = self.source.index("\n}", stop_start)
+        stop_body = re.sub(r"\s+", "", self.source[stop_start:stop_end])
+        self.assertIn("nagDiagnosticsEpoch++", stop_body)
+        self.assertIn("nagDiagnosticsLoadingEpoch=-1", stop_body)
+        poll_start = self.source.index("async function pollNagDiagnostics(epoch)")
+        poll_end = self.source.index("\n}", poll_start)
+        poll_body = re.sub(r"\s+", "", self.source[poll_start:poll_end])
+        self.assertGreaterEqual(poll_body.count("epoch!==nagDiagnosticsEpoch"), 2)
+        self.assertIn("nagDiagnosticsLoadingEpoch===epoch", poll_body)
+        self.assertIn("nagDiagnosticsLoadingEpoch=epoch", poll_body)
+        self.assertIn(
+            "if(nagDiagnosticsLoadingEpoch===epoch)nagDiagnosticsLoadingEpoch=-1",
+            poll_body,
+        )
+        self.assertIn(
+            "if(epoch!==nagDiagnosticsEpoch||!nagDiagnosticsShouldPoll())return",
+            poll_body,
+        )
+        self.assertIn("constepoch=nagDiagnosticsEpoch", compact)
+        self.assertIn("pollNagDiagnostics(epoch)", self.source)
+        self.assertIn("setInterval(()=>pollNagDiagnostics(epoch),intervalMs)", compact)
+
+    def test_diagnostic_format_helpers_reject_missing_invalid_and_sentinel_values(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn("functionnagDiagnosticFinite(value)", compact)
+        self.assertIn(
+            "if(value===undefined||value===null||value==='')returnnull",
+            compact,
+        )
+        self.assertIn("returnNumber.isFinite(number)?number:null", compact)
+        self.assertIn("functionnagDiagnosticInteger(value)", compact)
+        self.assertIn("functionnagDiagnosticFixed(value,digits,suffix)", compact)
+        self.assertIn("functionnagDiagnosticAge(value)", compact)
+        self.assertIn("if(age===null||age<0||age>=0xFFFFFFFF)return'--'", compact)
+        self.assertIn("functionnagDiagnosticCollisionGap(value,collisions)", compact)
+        self.assertIn(
+            "if(count===null||count<=0||gap===null||gap<=0||gap>=0xFFFFFFFF)return'--'",
+            compact,
+        )
+        self.assertNotIn("Math.max(0,Math.trunc(age))", self.source)
+        self.assertIn("nagDiagnosticCollisionGap(d.nagLastCounterCollisionGapUs,collisions)", self.source)
+
+    def test_das_freshness_is_visible_text_not_color_only(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn('id="nag-diag-das">未见 · -- frames / --</strong>', self.source)
+        self.assertIn("constfreshness=dasFresh?'新鲜':(dasSeen?'已超时':'未见')", compact)
+        self.assertIn("freshness+' · '+dasFrameText+' / '+nagDiagnosticAge(d.nagDasAgeMs)", self.source)
+
     def test_diagnostic_last_tx_preserves_status_age_and_derives_send_success(self):
         compact = re.sub(r"\s+", "", self.source)
         self.assertIn("d.nagInjectedAgeMs", self.source)
@@ -293,7 +356,10 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "if(d.nagInjectedTorqueValid!==undefined||d.nagInjectedTorqueNm!==undefined)",
             compact,
         )
-        self.assertIn("constsuccess=Math.max(0,sends-failures)", compact)
+        self.assertIn(
+            "Math.max(0,Math.trunc(sends)-Math.trunc(failures))",
+            compact,
+        )
         self.assertNotIn(
             "success=Math.trunc(nagDiagnosticNumber(d,'nagEcho',0))",
             compact,
