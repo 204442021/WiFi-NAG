@@ -611,7 +611,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
           <div class="nag-custom-shell">
             <section class="nag-strategy-card nag-readiness-card"><div><div class="nag-strategy-kicker">策略就绪状态</div><div class="nag-strategy-title" id="nag-custom-readiness-reason" role="status" aria-live="polite" aria-atomic="true">自适应策略未启用</div><div class="nag-strategy-copy">状态由模式、DAS 新鲜度和闭环阶段共同决定。</div></div><div class="nag-readiness-state disabled" id="nag-custom-readiness" role="status" aria-live="polite" aria-atomic="true">DISABLED</div></section>
             <div class="nag-custom-grid">
-              <section class="nag-strategy-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">低风险维持</div><div class="nag-strategy-title">预防层</div><div class="nag-strategy-copy">用于维持 Hands-On 0/1 的低幅值区间。</div></div></div><div class="nag-field-grid">
+              <section class="nag-strategy-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">低风险维持</div><div class="nag-strategy-title">预防层</div><div class="nag-strategy-copy">用于维持 H0～H2 正常区间，H2 为当前系统常态。</div></div></div><div class="nag-field-grid">
                 <div class="nag-field-group"><div class="nag-field-label">负方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-pv-neg-min" type="number" min="0.10" max="0.50" step="0.01" value="0.15"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-pv-neg-max" type="number" min="0.10" max="0.50" step="0.01" value="0.18"></label></div></div>
                 <div class="nag-field-group"><div class="nag-field-label">正方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-pv-pos-min" type="number" min="0.10" max="0.50" step="0.01" value="0.15"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-pv-pos-max" type="number" min="0.10" max="0.50" step="0.01" value="0.18"></label></div></div>
               </div></section>
@@ -1156,7 +1156,7 @@ const phaseNames={
   disabled:'关闭', 'wait-das':'等待 DAS', arming:'确认 OEM 帧',
   maintenance:'预防扫动', release:'平滑释放', rest:'无发送休息',
   corrective:'纠正脉冲', verify:'等待 DAS 确认',
-  'fault-hold':'故障停发'
+  'fault-hold':'保护停发'
 };
 const nagDiagnosticSemanticTones={release: 'caution', rest: 'caution', verify: 'caution', collision: 'caution', sendFailure: 'error'};
 const nagDiagnosticPhaseTones={disabled: 'muted', 'wait-das': 'muted', arming: 'active', maintenance: 'active', release: 'caution', rest: 'caution', corrective: 'active', verify: 'caution', 'fault-hold': 'error'};
@@ -1907,10 +1907,10 @@ function updateNagDiagnostics(d){
   const phase=String(d.nagAdaptivePhase===undefined?'disabled':d.nagAdaptivePhase);
   const dasSeen=!!d.nagDasSeen,dasFresh=!!d.nagDasFresh,hos=nagDiagnosticFinite(d.nagDasHos);
   const block=String(d.nagAdaptiveBlockReason===undefined?'none':d.nagAdaptiveBlockReason);
-  const blockNames={none:'无阻塞',disabled:'自适应模式未启用','das-missing':'未收到 DAS 0x39B；固件过滤器已放行，请确认当前 CAN 总线是否存在该报文','das-stale':'DAS 反馈已过期','no-direction':'没有可靠方向依据','das-state':'DAS 状态禁止发送','ack-timeout':'DAS 确认超时'};
+  const blockNames={none:'无阻塞',disabled:'自适应模式未启用','das-missing':'未收到 DAS 0x39B；固件过滤器已放行，请确认当前 CAN 总线是否存在该报文','das-stale':'DAS 反馈已过期','no-direction':'没有可靠方向依据','das-state':'H6 以上状态要求保护停发','ack-timeout':'DAS 警告解除超时'};
   let health='就绪',healthTone='ready';
   if(mode!==5||phase==='disabled'){health='已关闭';healthTone='muted';}
-  else if(phase==='fault-hold'){health='故障停发';healthTone='error';}
+  else if(phase==='fault-hold'){health='保护停发';healthTone='error';}
   else if(!dasFresh||phase==='wait-das'){health='等待 DAS';healthTone=dasSeen?'error':'muted';}
   else if(phase==='maintenance'||phase==='corrective'){health='运行中';healthTone='active';}
   else if(nagDiagnosticSemanticTones[phase]){health=phase==='rest'?'就绪':'运行中';healthTone=nagDiagnosticSemanticTones[phase];}
@@ -1922,7 +1922,7 @@ function updateNagDiagnostics(d){
   setNagDiagnosticValue('nag-diag-counter',epasSeen?nagDiagnosticInteger(d.nagLastOemEpasCounter):'--',epasSeen?'active':'muted');
   const dasFrames=nagDiagnosticFinite(d.nagDasFrames),dasTone=dasFresh?'fresh':(dasSeen?'error':'muted'),dasFrameText=dasFrames===null?'--':nagDiagnosticInteger(dasFrames)+(dashLang==='zh'?' 帧':' frames');
   const freshness=dasFresh?'新鲜':(dasSeen?'已超时':'未见');setNagDiagnosticValue('nag-diag-das',freshness+' · '+dasFrameText+' / '+nagDiagnosticAge(d.nagDasAgeMs),dasTone);
-  setNagDiagnosticValue('nag-diag-hos',dasSeen&&hos!==null?'H'+Math.trunc(hos):'--',!dasSeen||hos===null?'muted':(hos>=8?'error':(hos>=2?'caution':'active')));
+  setNagDiagnosticValue('nag-diag-hos',dasSeen&&hos!==null?'H'+Math.trunc(hos):'--',!dasSeen||hos===null?'muted':(hos>=6?'error':(hos>=3?'caution':'active')));
   const phaseTone=phase==='wait-das'?(dasSeen?'error':'muted'):(nagDiagnosticPhaseTones[phase]||'active');
   setNagDiagnosticValue('nag-diag-phase',phaseNames[phase]||phase,phaseTone);
   setNagDiagnosticValue('nag-diag-target',nagDiagnosticFixed(d.nagAdaptiveTargetTorqueNm,2,' Nm'),phase==='disabled'?'muted':'active');
@@ -1995,7 +1995,7 @@ function updateNagCustomReadiness(d){
   const phase=String(d.nagAdaptivePhase===undefined?(d.adaptivePhase||'disabled'):d.nagAdaptivePhase);let label='就绪',reason='反馈新鲜，自适应策略可以运行',tone='ready';
   if(state.nagMode!==5){label='已关闭';reason='当前使用持续注入，自适应策略未启用';tone='disabled';}
   else if(!d.nagDasFresh){label='等待 DAS';reason='反馈失效，已停止自适应注入';tone='wait';}
-  else if(phase==='fault-hold'){label='故障停发';reason='闭环故障保持，等待有效反馈恢复';tone='fail';}
+  else if(phase==='fault-hold'){label='保护停发';reason='等待 H0～H2 连续稳定后自动恢复';tone='fail';}
   const status=$('nag-custom-readiness'),copy=$('nag-custom-readiness-reason');if(status){status.textContent=label;status.className='nag-readiness-state '+tone;}if(copy){copy.textContent=reason;copy.style.color=tone==='wait'||tone==='fail'?'var(--err)':'';}
 }
 async function loadNagAdaptive(){

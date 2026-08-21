@@ -74,12 +74,12 @@ CANL -> 车辆 CAN-L
 - 闭环同时观察校验有效的真实 EPAS `0x370` 和 DAS `0x39B`；`0x39B` 提供 HOS 状态，并受可配置 freshness 窗口约束。
 - 未见 DAS 或最后一帧超过 freshness 窗口时进入 `WAIT_DAS`，保持 no-send；即使总线之后完全静默，Web/API 也会按最后时间戳把诊断更新为 stale。
 - DAS 恢复后进入 `ARMING`，需要连续 3 个有效 OEM EPAS 帧才允许输出。
-- HOS 0 进入 `MAINTENANCE`，按测得扭矩的相反方向动态输出；默认预防幅值约为 `0.15 .. 0.18 Nm`。
-- HOS 2..7 进入 `CORRECTIVE`，执行 3..5 个成功发送帧的纠正 burst；动态幅值默认约为 `1.50 .. 1.80 Nm`。
+- HOS 0..2 属于正常范围，其中 HOS 0/2 可进入 `MAINTENANCE`，按测得扭矩的相反方向动态输出；默认预防幅值约为 `0.15 .. 0.18 Nm`，HOS 2 是当前系统常态，HOS 1 继续触发平滑释放。
+- 仅 HOS 3..5 进入 `CORRECTIVE`，执行 3..5 个成功发送帧的纠正 burst；动态幅值默认约为 `1.50 .. 1.80 Nm`。
 - `VERIFY` 等待 DAS 确认且不发送；首次确认失败可进行第二次纠正，连续失败进入 `FAULT_HOLD`。
-- HOS 回到 0/1 或维护窗口结束后进入 `RELEASE`，只从最后一次成功发送的 signed torque 单调衰减到 0；没有成功输出则直接进入 `REST`。
+- HOS 从警告区回到 0..2，或维护窗口结束后进入 `RELEASE`，只从最后一次成功发送的 signed torque 单调衰减到 0；没有成功输出则直接进入 `REST`。
 - `REST` 为 no-send 的动态休息窗口，结束后重新进入维护闭环。
-- HOS 8..15 均 fail-closed 并保守停发，其中 9..14 为未定义状态；DAS stale 或确认超时同样阻止发送。普通 fault recovery 需要 2000 ms 连续稳定，显式 reset 立即 off/on。
+- HOS 6..15 均 fail-closed 并保护停发，其中 9..14 为未定义状态；DAS stale 或警告解除超时同样阻止发送。HOS 0..2 连续稳定 2000 ms 后自动恢复，显式 reset 立即 off/on。
 - 所有动态扭矩均限制在 `±1.80 Nm`，counter、checksum、own-echo 跳过及 stale/fault no-send 约束保持不变。
 - 自适应参数保存在 NVS，重启后继续生效；详细状态机与参数见 [`docs/nag-adaptive-closed-loop.md`](docs/nag-adaptive-closed-loop.md)。
 - Gate B/C 实车验证仍为 **PENDING**，本文不声称已经完成实车验证。

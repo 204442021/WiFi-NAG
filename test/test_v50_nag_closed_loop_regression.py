@@ -162,7 +162,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         self.assertIn("!d.nagDasFresh", compact)
         self.assertIn("'等待 DAS'", self.source)
         self.assertIn("phase==='fault-hold'", compact)
-        self.assertIn("'故障停发'", self.source)
+        self.assertIn("'保护停发'", self.source)
         self.assertIn("'就绪'", self.source)
         self.assertIn("反馈失效，已停止自适应注入", self.source)
 
@@ -229,7 +229,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "constphaseNames={disabled:'关闭','wait-das':'等待DAS',"
             "arming:'确认OEM帧',maintenance:'预防扫动',release:'平滑释放',"
             "rest:'无发送休息',corrective:'纠正脉冲',verify:'等待DAS确认',"
-            "'fault-hold':'故障停发'};",
+            "'fault-hold':'保护停发'};",
             compact,
         )
         for selector in (
@@ -252,6 +252,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             self.assertIn(mapping, self.source)
         self.assertNotIn("arming: 'ready'", self.source)
         self.assertIn("dasFresh?'fresh':(dasSeen?'error':'muted')", compact)
+        self.assertIn("hos>=6?'error':(hos>=3?'caution':'active')", compact)
 
     def test_browser_event_timeline_is_deduplicated_capped_and_local_only(self):
         compact = re.sub(r"\s+", "", self.source)

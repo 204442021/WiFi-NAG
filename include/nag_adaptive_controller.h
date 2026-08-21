@@ -177,7 +177,7 @@ public:
     {
         applyReset(nowMs);
         const bool continuesNormalRecovery = faultRecoveryActive_ && das_.seen() &&
-                                             das_.raw() <= 1 &&
+                                             das_.raw() <= 2 &&
                                              das_.fresh(nowMs, config_.dasFreshTimeoutMs);
         const bool accepted = das_.observe(frame, nowMs);
         if (!accepted && phase_ == PHASE_FAULT_HOLD)
@@ -186,7 +186,7 @@ public:
             return false;
 
         const uint8_t hos = das_.raw();
-        if (hos >= 8)
+        if (hos >= 6)
         {
             enterFault(BLOCK_DAS_STATE);
             return accepted;
@@ -196,7 +196,7 @@ public:
 
         if (phase_ == PHASE_FAULT_HOLD)
         {
-            if (accepted && hos <= 1)
+            if (accepted && hos <= 2)
             {
                 if (!continuesNormalRecovery)
                 {
@@ -216,7 +216,7 @@ public:
             return accepted;
         }
 
-        if (hos >= 2)
+        if (hos >= 3 && hos <= 5)
         {
             if (!correctiveActive_)
             {
@@ -304,7 +304,7 @@ public:
 
         if (phase_ == PHASE_ARMING)
         {
-            if (das_.raw() >= 2 && das_.raw() <= 7)
+            if (das_.raw() >= 3 && das_.raw() <= 5)
                 beginCorrective(nowMs, correctiveAttempt_ == 0 ? 1 : correctiveAttempt_);
             else
                 beginMaintenance(nowMs, entropy);
@@ -326,7 +326,7 @@ public:
         {
             if (!phaseExpired(nowMs))
                 return blockedDecision(BLOCK_VERIFY);
-            if (correctiveAttempt_ == 1 && das_.raw() >= 2 && das_.raw() <= 7)
+            if (correctiveAttempt_ == 1 && das_.raw() >= 3 && das_.raw() <= 5)
                 beginCorrective(nowMs, 2);
             else if (correctiveAttempt_ >= 2)
             {

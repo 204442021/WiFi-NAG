@@ -76,8 +76,8 @@ The only active CAN write behavior is Nag echo on `0x370 / 880`. DAS `0x39B / 92
 
 - Requires fresh DAS HOS feedback from read-only `0x39B` and three valid OEM `0x370` frames before sending.
 - Uses HOS `0` for preventive `MAINTENANCE`; HOS `1` requests smooth `RELEASE`, which may send decaying echoes until the target reaches zero.
-- Uses HOS `2..7` for corrective bursts. `REST` and `VERIFY` are no-send phases.
-- Fails closed on stale DAS feedback, HOS `8..15`, or two corrective attempts without a DAS acknowledgement.
+- Treats HOS `0..2` as the normal range and uses HOS `3..5` for corrective bursts. `REST` and `VERIFY` are no-send phases.
+- Fails closed on stale DAS feedback, HOS `6..15`, or two corrective attempts without the warning returning to HOS `0..2`.
 - Selects injection direction opposite trusted measured steering torque, with a direction deadband and angle fallback.
 - Defaults to `0.15..0.18 Nm` preventive and `1.50..1.80 Nm` corrective magnitudes; every outgoing target is hard-clamped to `-1.80..+1.80 Nm`.
 - A rest target of zero means no additional `0x370` is transmitted, not a fabricated zero-torque echo.

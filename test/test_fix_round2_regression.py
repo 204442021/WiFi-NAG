@@ -104,10 +104,10 @@ class FixRound2RegressionTests(unittest.TestCase):
             "docs/nag-adaptive-closed-loop.md",
         ):
             self.assertIn(token, section)
-        self.assertIn("HOS 8..15", section)
+        self.assertIn("HOS 6..15", section)
         self.assertIn("9..14 为未定义", section)
-        self.assertIn("保守停发", section)
-        self.assertNotIn("HOS 8/9/15", section)
+        self.assertIn("保护停发", section)
+        self.assertNotIn("HOS 8..15", section)
         for obsolete in (
             "50.0°",
             "45.0°",

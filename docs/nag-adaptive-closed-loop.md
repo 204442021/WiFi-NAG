@@ -19,12 +19,12 @@ The controller does not treat a successful local `driver.send()` as proof that D
 |---:|---|---|
 | `0` | NOT_REQD | Allow a low-strength preventive window, then release and rest. |
 | `1` | REQD_DETECTED | Smoothly release the current output to zero and rest; a later preventive window remains possible. |
-| `2` | REQD_NOT_DETECTED | Interrupt maintenance/release/rest and start a corrective burst. |
+| `2` | REQD_NOT_DETECTED | Normal system baseline; allow low-strength preventive maintenance without a corrective burst. |
 | `3` | VISUAL | Start a corrective burst immediately. |
 | `4` | CHIME_1 | Start a corrective burst immediately. |
 | `5` | CHIME_2 | Start a corrective burst immediately. |
-| `6` | SLOWING | Start a corrective burst, with at most two attempts. |
-| `7` | STRUCK_OUT | Start a corrective burst, with at most two attempts. |
+| `6` | SLOWING | Stop sending and enter fail-closed protection hold. |
+| `7` | STRUCK_OUT | Stop sending and enter fail-closed protection hold. |
 | `8` | SUSPENDED | Stop sending and enter fail-closed fault hold. |
 | `9..14` | Undefined | Stop sending and enter fail-closed fault hold. |
 | `15` | SNA | Stop sending and enter fail-closed fault hold. |
@@ -38,14 +38,14 @@ WAIT_DAS -> ARMING -> MAINTENANCE -> RELEASE -> REST
                                       | retry once
                                       +-> CORRECTIVE -> VERIFY -> FAULT_HOLD
 
-FAULT_HOLD -> REST after fresh HOS 0/1 remains continuous for 2000 ms
+FAULT_HOLD -> REST after fresh HOS 0..2 remains continuous for 2000 ms
 ```
 
 `WAIT_DAS` requires fresh valid `0x39B`. `ARMING` requires three valid OEM `0x370` frames. `MAINTENANCE` produces the low-strength preventive walk. `RELEASE` uses smoothstep decay. `REST`, `WAIT_DAS`, `VERIFY`, and `FAULT_HOLD` do not send.
 
 The definition of rest is exact: target zero means `shouldSend == false`, so the firmware adds no `0x370` frame. It does not continuously transmit a fabricated 0 Nm echo.
 
-HOS `2..7` starts a corrective burst of 3 to 5 successful echoes. Failed local sends do not consume a burst frame. The first completed burst gets a `500 ms` DAS verification interval. If HOS remains `2..7`, a second burst is allowed and gets a final `1000 ms` verification interval. Failure to return to HOS `0/1` then enters `FAULT_HOLD`.
+HOS `3..5` starts a corrective burst of 3 to 5 successful echoes. Failed local sends do not consume a burst frame. The first completed burst gets a `500 ms` DAS verification interval. If HOS remains `3..5`, a second burst is allowed and gets a final `1000 ms` verification interval. Failure to return to HOS `0..2` then enters `FAULT_HOLD`.
 
 ## Defaults and configuration limits
 
@@ -53,8 +53,8 @@ HOS `2..7` starts a corrective burst of 3 to 5 successful echoes. Failed local s
 |---|---:|---:|---|
 | Preventive negative magnitude | `0.15..0.18 Nm` | `0.10..0.50 Nm` | Used opposite trusted positive OEM torque. |
 | Preventive positive magnitude | `0.15..0.18 Nm` | `0.10..0.50 Nm` | Used opposite trusted negative OEM torque. |
-| Corrective negative magnitude | `1.50..1.80 Nm` | `0.50..1.80 Nm` | HOS `2..7`. |
-| Corrective positive magnitude | `1.50..1.80 Nm` | `0.50..1.80 Nm` | HOS `2..7`. |
+| Corrective negative magnitude | `1.50..1.80 Nm` | `0.50..1.80 Nm` | HOS `3..5`. |
+| Corrective positive magnitude | `1.50..1.80 Nm` | `0.50..1.80 Nm` | HOS `3..5`. |
 | Direction deadband | `0.05 Nm` | `0..0.50 Nm` | Holds the last trusted direction inside the deadband. |
 | Direction reversal confirmation | `100 ms` | Fixed | Opposite measured torque must remain stable before the sign flips. |
 | Angle fallback threshold | `1.0 deg` | Fixed | Used only before a trusted torque direction exists; no direction means no send. |
@@ -65,7 +65,7 @@ HOS `2..7` starts a corrective burst of 3 to 5 successful echoes. Failed local s
 | EPAS gap rearm | `200 ms` | Fixed | A longer gap requires three valid OEM frames again. |
 | Corrective burst | `3..5` successful echoes | Fixed | Selected deterministically from controller entropy. |
 | Corrective attempts | Maximum `2` | Fixed | First verify `500 ms`; final verify `1000 ms`. |
-| Fault recovery | HOS `0/1` for `2000 ms` | Fixed | Toggling NAG off and on also resets the controller. |
+| Fault recovery | HOS `0..2` for `2000 ms` | Fixed | Toggling NAG off and on also resets the controller. |
 | Final torque clamp | `+/-1.80 Nm` | Cannot be raised | Applied immediately before encoding every echo. |
 
 Preventive magnitude changes by at most `1 cNm` per OEM frame and corrective magnitude by at most `5 cNm`; the controller uses a correlated xorshift32 walk rather than per-frame white noise. For API requests, only omitted fields retain their previous values. Every provided field must be finite, fully parsed, inside its business boundary, and preserve min/max ordering; otherwise the entire request returns HTTP 400 without publishing a command or changing NVS.
@@ -73,13 +73,13 @@ Preventive magnitude changes by at most `1 cNm` per OEM frame and corrective mag
 ## Fail-closed behavior
 
 - Missing or stale DAS feedback: stop sending and enter `WAIT_DAS`; do not substitute local send success for DAS freshness.
-- HOS `8`, `15`, or any unknown `9..14`: stop immediately and enter `FAULT_HOLD`.
-- Two corrective attempts without HOS returning to `0/1`: stop and enter `FAULT_HOLD` with an acknowledgement timeout.
+- HOS `6..15`: stop immediately and enter `FAULT_HOLD`.
+- Two corrective attempts without HOS returning to `0..2`: stop and enter `FAULT_HOLD` with a warning-clearance timeout.
 - NAG switch off: disable and reset the adaptive controller; no adaptive frame is requested.
 - `CAN Write OFF`: the driver blocks physical CAN transmission. Keep it off for listen-only validation and whenever safe behavior is uncertain.
 - CAN error, bus-off, unexpected steering behavior, or an FSD state anomaly during controlled validation: turn `CAN Write OFF` and stop the session.
 
-The controller may recover from fault hold only after fresh HOS `0/1` remains continuous for `2000 ms`, or after the operator explicitly cycles NAG off/on. Unknown, corrective, rejected, or stale DAS input resets the recovery interval.
+The controller may recover from fault hold only after fresh HOS `0..2` remains continuous for `2000 ms`, or after the operator explicitly cycles NAG off/on. Unknown, corrective, rejected, or stale DAS input resets the recovery interval.
 
 ## Telemetry: local TX is not DAS acknowledgement
 
@@ -88,7 +88,7 @@ The controller may recover from fault hold only after fresh HOS `0/1` remains co
 | Local attempt | `nagSendAttempts` | The handler called the CAN driver for an eligible echo. This is not evidence of bus delivery or DAS acceptance. |
 | Local failure | `nagSendFailures` | The driver rejected/failed an attempted send. A failure does not advance a corrective burst. |
 | Local success | `nagEcho` and last injected torque/age | The driver accepted the echo locally. It is still not a DAS acknowledgement. |
-| DAS response | `nagAcknowledgementCount`, `nagAcknowledgementTimeouts`, last/max latency | HOS actually returned from a corrective state to `0/1`, or failed to do so inside the verification interval. |
+| DAS response | `nagAcknowledgementCount`, `nagAcknowledgementTimeouts`, last/max latency | HOS actually returned from a corrective state to `0..2`, or failed to do so inside the verification interval. |
 
 Counter collision count and last gap are timing evidence only. They do not change scheduling and must not be hidden or redefined to improve a reported ratio.
 
@@ -124,7 +124,7 @@ Open a separate Late Echo design only after Gate C is complete and all of these 
 1. Local send success ratio is at least `99.9%`.
 2. DAS feedback freshness is at least `99.9%`.
 3. Immediate-echo counter collision ratio is at least `5%`.
-4. At least five HOS `2+` events correlate with a collision within `+/-100 ms`.
+4. At least five HOS `3..5` events correlate with a collision within `+/-100 ms`.
 5. Wrong HOS mapping, wrong bus, checksum rejection, own-echo misclassification, and TX queue failure have been excluded.
 
 Any later design must use a non-blocking timer/queue, re-evaluate counter and checksum handling, impose a strict expiry, and repeat every gate. Adding `delay()` to the handler is prohibited.
@@ -135,4 +135,4 @@ Gate A is the automated delivery-candidate gate: full Python discovery, generate
 
 Gate B is not automated and must not be claimed from a build. It requires at least 10 minutes of listen-only data from the exact vehicle/tap/software combination, both CAN IDs, interval statistics, and a manually observed HOS mapping.
 
-Gate C is not automated and must not begin until Gates A and B pass. It is limited to a closed course with immediate takeover capability: first five preventive windows, then at most three deliberate HOS `2..3` events, with local TX, HOS, acknowledgement latency, and collision evidence captured. Hardware validation, flashing, road testing, and release publication are outside this delivery-candidate build.
+Gate C is not automated and must not begin until Gates A and B pass. It is limited to a closed course with immediate takeover capability: first five preventive windows, then at most three deliberate HOS `3..5` events, with local TX, HOS, warning-clearance latency, and collision evidence captured. Hardware validation, flashing, road testing, and release publication are outside this delivery-candidate build.
