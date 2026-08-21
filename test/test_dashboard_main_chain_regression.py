@@ -143,25 +143,24 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             "wifi-nag-header",
             "config-card",
             "config-hardware-section",
+            "nag-h1-neg-min",
+            "nag-h1-neg-max",
+            "nag-h1-pos-min",
+            "nag-h1-pos-max",
+            "nag-h2-neg-min",
+            "nag-h2-neg-max",
+            "nag-h2-pos-min",
+            "nag-h2-pos-max",
             "ble-card",
             "ble-bridge-section",
-            "obstacle-shift-card",
-            "shift-enabled",
-            "shift-card-meta",
-            "shift-state",
-            "shift-brake",
-            "shift-gear",
-            "shift-speed",
-            "shift-118",
-            "shift-virtual-p",
-            "shift-reason",
-            "shift-counters",
             "wifi-config-card",
             "wifi-hotspot-section",
             "wifi-internet-section",
             "gateway-section",
             "system-card",
             "status-panel",
+            "nag-injected-meta",
+            "nag-direction-meta",
             "debug-log-section",
             "firmware-update-card",
         )
@@ -236,17 +235,6 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             "ble-summary",
             "ble-fsd-rx",
             "ble-counters",
-            "obstacle-shift-card",
-            "shift-enabled",
-            "shift-card-meta",
-            "shift-state",
-            "shift-brake",
-            "shift-gear",
-            "shift-speed",
-            "shift-118",
-            "shift-virtual-p",
-            "shift-reason",
-            "shift-counters",
         )
         for element_id in ble_ids:
             self.assert_has_id(self.source, element_id)
@@ -276,11 +264,10 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
 
     def test_static_main_cards_use_native_accordion(self) -> None:
         self.assertIn('<body class="wifi-nag ui-phone ui-shell">', self.source)
-        self.assertEqual(self.source.count("card ui-main-card collapsed"), 6)
+        self.assertEqual(self.source.count("card ui-main-card collapsed"), 5)
         order = [
             self.source.index('id="config-card"'),
             self.source.index('id="ble-card"'),
-            self.source.index('id="obstacle-shift-card"'),
             self.source.index('id="wifi-config-card"'),
         ]
         self.assertEqual(order, sorted(order))
@@ -291,21 +278,18 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         self.assertNotIn('id="ui-mode-strip"', self.source)
         initializer = (
             "initWifiNagAccordion();initBleBridgeUi();"
-            "initSystemMonitor();loadFirmwareInfo();loadGatewayDnsCached();"
+            "initSystemMonitor();syncDashboardSummary();loadFirmwareInfo();loadGatewayDnsCached();"
             "loadGatewayDns(true);loadGatewayStatus();poll();"
         )
         self.assertIn(initializer, re.sub(r"\s+", "", self.source))
 
-    def test_obstacle_shift_card_is_visible_but_forced_off(self) -> None:
+    def test_obstacle_shift_card_is_not_rendered(self) -> None:
         for label, html in (("source", self.source), ("generated", self.generated_html)):
-            shift = extract_element(html, "obstacle-shift-card")
             with self.subTest(file=label):
-                self.assertIn("功能已强制关闭", shift)
-                self.assertRegex(
-                    shift,
-                    r'<input\b(?=[^>]*\bid=(?:"shift-enabled"|\'shift-enabled\'|shift-enabled\b))(?=[^>]*\bdisabled\b)[^>]*>',
+                self.assertNotRegex(
+                    html,
+                    r'<section\b[^>]*\bid=(?:"obstacle-shift-card"|\'obstacle-shift-card\'|obstacle-shift-card\b)',
                 )
-                self.assertNotIn('onchange="bleSaveConfig()"', shift)
 
     def test_generated_wrapper_and_payload_are_current(self) -> None:
         base_include = '#include "web/mcp2515_dashboard_ui.base.h"'

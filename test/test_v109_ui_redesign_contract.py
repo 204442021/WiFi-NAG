@@ -131,7 +131,7 @@ class V109UiRedesignContractTests(unittest.TestCase):
             with self.subTest(card=card_id):
                 card = self.one(card_id)
                 self.assertTrue(card.has_class("ui-main-card"))
-                self.assertTrue(card.has_class("collapsed"))
+                self.assertEqual(card.has_class("collapsed"), card_id != "config-card")
                 self.assertIsNotNone(card.ancestor(data_page=page))
 
     def test_advanced_diagnostics_is_closed_and_owns_engineering_data(self):
@@ -140,7 +140,7 @@ class V109UiRedesignContractTests(unittest.TestCase):
         self.assertNotIn("open", advanced.attrs)
         self.assertIsNotNone(advanced.ancestor(node_id="system-card"))
         engineering_ids = {
-            "nag-echo-meta", "nag-live-meta", "nag-write-meta", "nag-av2-meta",
+            "nag-echo-meta", "nag-live-meta", "nag-injected-meta", "nag-direction-meta",
             "s-fps", "s-rx", "s-tx", "s-txerr", "ble-protocol", "ble-peer-id",
             "ble-255", "ble-12b", "ble-counters", "gw-diag", "net-perf-status",
             "sys-chip", "sys-heap", "log",

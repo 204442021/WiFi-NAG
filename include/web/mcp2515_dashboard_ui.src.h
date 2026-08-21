@@ -353,10 +353,10 @@ body.wifi-nag #config-hardware-section>.subsec-head .subsec-btn{display:none !im
 body.wifi-nag #can-write-row{padding-top:14px}
 body.wifi-nag #can-write-row .setting-name,
 body.wifi-nag #nag-mode-row .setting-name,
-body.wifi-nag #nag-av2-row .setting-name{font-weight:700}
+body.wifi-nag #nag-adaptive-row .setting-name{font-weight:700}
 body.wifi-nag #can-write-row .setting-desc,
 body.wifi-nag #nag-mode-row .setting-desc,
-body.wifi-nag #nag-av2-row .setting-desc{line-height:1.55}
+body.wifi-nag #nag-adaptive-row .setting-desc{line-height:1.55}
 body.wifi-nag #nag-echo-meta{display:inline-flex;margin-top:4px;padding:2px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg2);color:var(--tx2)}
 body.wifi-nag #nag-mode-seg .hw-btn.active{color:var(--gold);border-color:var(--goldBd);background:var(--goldBg)}
 body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
@@ -372,7 +372,7 @@ body.wifi-nag #can-write-tgl input:checked~.tgl-track{background:var(--ok)}
   .setting-row{gap:10px}
   body.wifi-nag #can-write-row,
   body.wifi-nag #nag-mode-row,
-  body.wifi-nag #nag-av2-row,
+  body.wifi-nag #nag-adaptive-row,
   body.wifi-nag #nag-adaptive-row{flex-direction:column;align-items:stretch}
   body.wifi-nag #can-write-row .tgl{align-self:flex-end;margin-left:0;margin-top:-4px}
   .nag-mode-control{width:100% !important;flex:0 0 auto !important}
@@ -499,7 +499,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
   <div class="brand">
     <div class="brand-copy">
       <div class="brand-title" id="brand-title">Albert FSD辅助系统</div>
-      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V4.1 V13</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
+      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V4.2 V13</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
     </div>
   </div>
   <div class="shell-actions">
@@ -510,7 +510,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
 </header>
 <section class="top-status-console" aria-label="设备状态总览">
   <div class="top-status-item"><span class="top-status-label">设备连接</span><b id="top-can-state">等待连接</b><small>CAN 线状态</small></div>
-  <div class="top-status-item"><span class="top-status-label">NAG</span><b id="top-nag-state">已开启</b><small id="top-nag-note">模式 A</small></div>
+  <div class="top-status-item"><span class="top-status-label">NAG</span><b id="top-nag-state">已开启</b><small id="top-nag-note">持续注入</small></div>
   <div class="top-status-item"><span class="top-status-label">温度</span><b id="top-temp-state">--</b><small>设备温度</small></div>
   <div class="top-status-item"><span class="top-status-label">上网连接</span><b id="top-wifi-state">未配置</b><small><a id="top-wifi-ip" class="external-ip-link" aria-disabled="true">外部 IP：--</a></small></div>
 </section>
@@ -530,43 +530,36 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
         <label class="tgl"><input type="checkbox" id="can-write-tgl" onchange="saveCanWrite()" checked><div class="tgl-track"><div class="tgl-thumb"></div></div></label>
       </div>
       <div class="setting-row nag-only" id="nag-mode-row">
-        <div class="setting-info"><div class="setting-name">工作模式</div><div class="setting-desc" id="nag-mode-meta">A 为固定模式；A_V2 在设定范围内变化。</div></div>
+        <div class="setting-info"><div class="setting-name">工作模式</div><div class="setting-desc" id="nag-mode-meta">持续注入为固定 +1.80 Nm；自适应按实测扭矩反向持续注入。</div></div>
         <div class="hw-seg nag-mode-control" id="nag-mode-seg">
-          <button class="hw-btn active" data-v="0" onclick="setNagMode(0)">A</button>
-          <button class="hw-btn" data-v="4" onclick="setNagMode(4)">A_V2</button>
+          <button class="hw-btn active" data-v="0" onclick="setNagMode(0)">持续注入</button>
           <button class="hw-btn" data-v="5" onclick="setNagMode(5)">自适应</button>
-        </div>
-      </div>
-      <div class="setting-row nag-only" id="nag-av2-row">
-        <div class="setting-info"><div class="setting-name">A_V2 范围</div><div class="setting-desc">设置扭矩变化范围（-1.80 至 +1.80 Nm）。</div></div>
-        <div class="nag-range-grid">
-          <input class="sniff-input" id="nag-av2-min" type="number" min="-1.8" max="1.8" step="0.01" value="1.50" onchange="saveNagAv2()">
-          <input class="sniff-input" id="nag-av2-max" type="number" min="-1.8" max="1.8" step="0.01" value="1.80" onchange="saveNagAv2()">
-          <button class="sniff-btn" onclick="saveNagAv2()">保存</button>
         </div>
       </div>
       <div class="setting-row nag-only nag-adaptive-row" id="nag-adaptive-row" style="display:none">
         <div class="setting-info">
           <div class="setting-name">自适应 NAG</div>
-          <div class="setting-desc">真实扭矩为正时发送负扭矩，真实扭矩为负时发送正扭矩；达到正负角度阈值时停止发送。</div>
+          <div class="setting-desc">完成 3 帧确认后持续发送非零扭矩；方向优先与实测扭矩相反，零点保持，候选方向稳定 100 ms 后翻转。Hands-On 只选择幅值范围，不停止发送。</div>
+          <div class="setting-name" style="margin-top:12px">Hands-On 1 扭矩范围（Nm）</div>
           <div class="nag-adaptive-grid">
-            <label class="nag-adaptive-field"><span>输出扭矩（Nm）</span><input class="sniff-input" id="nag-adaptive-torque" type="number" min="0.10" max="1.80" step="0.01" value="1.80"></label>
-            <label class="nag-adaptive-field"><span>扭矩死区（Nm）</span><input class="sniff-input" id="nag-adaptive-deadband" type="number" min="0" max="0.50" step="0.01" value="0.05"></label>
-            <label class="nag-adaptive-field"><span>最大角度（±°）</span><input class="sniff-input" id="nag-adaptive-angle" type="number" min="10" max="180" step="1" value="50"></label>
-            <label class="nag-adaptive-field"><span>发送时间（秒）</span><input class="sniff-input" id="nag-adaptive-send" type="number" min="1" max="60" step="0.1" value="10"></label>
-            <label class="nag-adaptive-field"><span>暂停最短（秒）</span><input class="sniff-input" id="nag-adaptive-pause-min" type="number" min="1" max="30" step="0.1" value="1"></label>
-            <label class="nag-adaptive-field"><span>暂停最长（秒）</span><input class="sniff-input" id="nag-adaptive-pause-max" type="number" min="1" max="30" step="0.1" value="3"></label>
+            <label class="nag-adaptive-field"><span>负向最小值</span><input class="sniff-input" id="nag-h1-neg-min" type="number" min="0.10" max="1.80" step="0.01" value="1.50"></label>
+            <label class="nag-adaptive-field"><span>负向最大值</span><input class="sniff-input" id="nag-h1-neg-max" type="number" min="0.10" max="1.80" step="0.01" value="1.80"></label>
+            <label class="nag-adaptive-field"><span>正向最小值</span><input class="sniff-input" id="nag-h1-pos-min" type="number" min="0.10" max="1.80" step="0.01" value="1.50"></label>
+            <label class="nag-adaptive-field"><span>正向最大值</span><input class="sniff-input" id="nag-h1-pos-max" type="number" min="0.10" max="1.80" step="0.01" value="1.80"></label>
+          </div>
+          <div class="setting-name" style="margin-top:12px">Hands-On 2 扭矩范围（Nm）</div>
+          <div class="nag-adaptive-grid">
+            <label class="nag-adaptive-field"><span>负向最小值</span><input class="sniff-input" id="nag-h2-neg-min" type="number" min="0.10" max="1.80" step="0.01" value="1.50"></label>
+            <label class="nag-adaptive-field"><span>负向最大值</span><input class="sniff-input" id="nag-h2-neg-max" type="number" min="0.10" max="1.80" step="0.01" value="1.80"></label>
+            <label class="nag-adaptive-field"><span>正向最小值</span><input class="sniff-input" id="nag-h2-pos-min" type="number" min="0.10" max="1.80" step="0.01" value="1.50"></label>
+            <label class="nag-adaptive-field"><span>正向最大值</span><input class="sniff-input" id="nag-h2-pos-max" type="number" min="0.10" max="1.80" step="0.01" value="1.80"></label>
           </div>
           <div class="nag-adaptive-actions"><button class="sniff-btn" id="nag-adaptive-save" onclick="saveNagAdaptive()">保存自适应设置</button></div>
           <div class="nag-adaptive-live">
             <span class="nag-status-pill" id="nag-adaptive-phase">阶段：--</span>
-            <span class="nag-status-pill" id="nag-adaptive-angle-live">角度：--</span>
             <span class="nag-status-pill" id="nag-adaptive-torque-live">真实扭矩：--</span>
-            <span class="nag-status-pill" id="nag-adaptive-target-live">目标扭矩：--</span>
-            <span class="nag-status-pill" id="nag-adaptive-countdown">剩余：--</span>
-            <span class="nag-status-pill" id="nag-adaptive-pause-live">本次暂停：--</span>
-            <span class="nag-status-pill" id="nag-adaptive-block">阻断：--</span>
-            <span class="nag-status-pill" id="nag-adaptive-stats">阻断次数：--</span>
+            <span class="nag-status-pill" id="nag-adaptive-handson-live">Hands-On：--</span>
+            <span class="nag-status-pill" id="nag-adaptive-source-live">方向依据：--</span>
           </div>
           <div class="setting-desc" id="nag-adaptive-msg" style="margin-top:8px"></div>
         </div>
@@ -778,7 +771,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
       <div class="stat"><div class="stat-lbl">蓝牙</div><div class="stat-val v-dim" id="diag-ble-state">未连接</div></div>
       <div class="stat"><div class="stat-lbl">Wi-Fi</div><div class="stat-val v-dim" id="diag-wifi-state">未配置</div></div>
       <div class="stat"><div class="stat-lbl">温度</div><div class="stat-val v-dim" id="sys-temp">--</div></div>
-      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V4.1 V13</div></div>
+      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V4.2 V13</div></div>
     </div>
     <details id="advanced-diagnostics">
       <summary>高级诊断</summary>
@@ -787,8 +780,8 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
         <div class="sys-grid">
           <div class="sys-item"><div class="sys-lbl">Echo 回显</div><div class="sys-val" id="nag-echo-meta">echo: --</div></div>
           <div class="sys-item"><div class="sys-lbl">实时扭矩</div><div class="sys-val" id="nag-live-meta">实时: --</div></div>
-          <div class="sys-item"><div class="sys-lbl">写入扭矩</div><div class="sys-val" id="nag-write-meta">写入: --</div></div>
-          <div class="sys-item"><div class="sys-lbl">A_V2</div><div class="sys-val" id="nag-av2-meta">skip: --</div></div>
+          <div class="sys-item"><div class="sys-lbl">实时注入扭矩</div><div class="sys-val" id="nag-injected-meta">--（未注入）</div></div>
+          <div class="sys-item"><div class="sys-lbl">Hands-On / 方向依据</div><div class="sys-val" id="nag-direction-meta">--</div></div>
         </div>
       </div>
       <div class="diag-group">
@@ -977,10 +970,9 @@ const I18N_ZH={
   'Waiting for CAN frames':'等待 CAN 帧','Dashboard disconnected':'仪表盘已断开','Dashboard reconnecting':'仪表盘正在重连','CAN running':'CAN 正常','CAN OK':'CAN 正常','CAN waiting':'等待 CAN','No frames':'无帧','Offline':'离线',
   'CAN Bus':'CAN 总线','CAN Frames':'CAN 帧','CAN TX':'CAN 发送','RX':'接收','TX':'发送','TX Errors':'发送错误','Uptime':'运行时间','Reboot':'重启','READ ONLY':'只读模式','CAN WRITE ON':'CAN 写入开启','Read Only':'只读模式',
   'Frames received per second / total RX':'每秒接收帧数 / 总接收数','CAN Write':'CAN 写入','CAN Write On':'开启 CAN 写入','CAN Write Off':'关闭 CAN 写入','CAN write is enabled. Nag echo can transmit.':'CAN 写入已开启，Nag echo 可发送。','Read-only mode. CAN frames are monitored but not written.':'只读模式：只监听 CAN 帧，不写入。',
-  'Configuration':'配置','Device settings':'设备设置','Device settings for Nag, WiFi, DNS and logging.':'Nag、WiFi、DNS 和日志设置。','Nag / CAN Write':'Nag / CAN 写入','Nag Mode':'Nag 模式','A_V2 Range':'A_V2 范围','Adaptive':'自适应','Adaptive NAG':'自适应 NAG',
-  'Positive real torque sends negative torque; negative real torque sends positive torque. Sending stops at either steering-angle limit.':'真实扭矩为正时发送负扭矩，真实扭矩为负时发送正扭矩；达到正负角度阈值时停止发送。','Output torque (Nm)':'输出扭矩（Nm）','Torque deadband (Nm)':'扭矩死区（Nm）','Maximum angle (±°)':'最大角度（±°）','Send duration (s)':'发送时间（秒）','Minimum pause (s)':'暂停最短（秒）','Maximum pause (s)':'暂停最长（秒）','Save adaptive settings':'保存自适应设置',
-  'Read-only monitoring when off; Nag 0x370 echo writes when on.':'关闭时仅监听；开启时发送 Nag 0x370 echo。','OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'关闭 = 只读 CAN 监听。开启 = 允许 Nag 880 (0x370) 计数器 +1 echo 写入。','A = fixed +1.80 Nm. A_V2 random-sweeps inside the range every 2000 ms.':'A = 固定 +1.80 Nm。A_V2 每 2000 ms 在范围内伪随机扫动。','Nm endpoints are clamped to -1.80 .. +1.80 and auto-swapped if reversed.':'Nm 端点限制在 -1.80 到 +1.80；如果填反会自动交换。','A_V2: random sweep':'A_V2：随机扫动','A: fixed +1.80 Nm echo':'A：固定 +1.80 Nm echo','ADAPTIVE: opposite torque with angle and duty-cycle gates':'ADAPTIVE：反向扭矩、角度门控和周期门控','echo':'echo','skip':'跳过','Adaptive settings saved':'自适应设置已保存','Adaptive settings save failed':'自适应设置保存失败',
-  'Save':'保存','Saved':'已保存','Saving...':'保存中...','Save failed':'保存失败','CAN write save failed':'CAN 写入保存失败','Nag mode save failed':'Nag 模式保存失败','A_V2 range save failed':'A_V2 范围保存失败',
+  'Configuration':'配置','Device settings':'设备设置','Device settings for Nag, WiFi, DNS and logging.':'Nag、WiFi、DNS 和日志设置。','Nag / CAN Write':'Nag / CAN 写入','Nag Mode':'Nag 模式','Adaptive':'自适应','Adaptive NAG':'自适应 NAG','Save adaptive settings':'保存自适应设置',
+  'Read-only monitoring when off; Nag 0x370 echo writes when on.':'关闭时仅监听；开启时发送 Nag 0x370 echo。','OFF = read-only CAN monitoring. ON allows Nag 880 (0x370) counter+1 echo writes.':'关闭 = 只读 CAN 监听。开启 = 允许 Nag 880 (0x370) 计数器 +1 echo 写入。','echo':'echo','Adaptive settings saved':'自适应设置已保存','Adaptive settings save failed':'自适应设置保存失败',
+  'Save':'保存','Saved':'已保存','Saving...':'保存中...','Save failed':'保存失败','CAN write save failed':'CAN 写入保存失败','Nag mode save failed':'Nag 模式保存失败',
   'System Status':'系统状态','Hardware and runtime health reported by the ESP32 firmware.':'ESP32 固件上报的硬件与运行状态。','Monitoring off':'监测关闭','Enable live hardware status sampling':'启用实时硬件状态采样','Chip':'芯片','CPU':'CPU','Clock / Bus':'时钟 / 总线','CPU Load':'CPU 负载','Board Specs':'板载规格','Temperature':'温度','Reset':'重启原因','Uptime / Core':'运行时间 / 核心','Heap RAM':'堆内存','Internal RAM':'内部 RAM','Largest Block':'最大连续内存块','Min Free Heap':'历史最低空闲内存','PSRAM':'PSRAM','Tasks':'任务','Flash':'Flash','Flash / App':'Flash / 应用','SPIFFS':'SPIFFS','WiFi RSSI':'WiFi 信号','WiFi Mode':'WiFi 模式','AP Clients':'AP 客户端','Bluetooth LE':'蓝牙 LE','Wireless':'无线','MAC / Firmware':'MAC / 固件','System status unavailable':'系统状态不可用','warming up':'采样中','unavailable':'不可用','offline':'离线','not enabled':'未启用','enabled':'已启用','supported':'支持','not supported':'不支持','firmware disabled':'固件未启用','STA online':'STA 在线','STA offline':'STA 离线','on':'开启','off':'关闭','unknown':'未知','fixed':'固定',
   'WiFi Hotspot':'WiFi 热点','Configure the device hotspot name, password and visibility. Saved in NVS.':'配置设备热点名称、密码和可见性，保存到 NVS。','Stored in NVS (non-volatile storage). The SSID and password survive firmware updates and reboots. Only a full factory erase via USB clears them.':'保存在 NVS（非易失存储）中。SSID 和密码在固件更新、重启后仍保留，只有通过 USB 完整恢复出厂才会清除。','Change the WiFi hotspot name and password':'修改 WiFi 热点名称和密码','Hotspot Name':'热点名称','New Password (min 8)':'新密码（至少 8 位）','Hide SSID':'隐藏 SSID','Don\'t broadcast the hotspot name \u2014 clients must enter it manually':'不广播热点名称，客户端需要手动输入','Changes take effect after reboot. Leave password empty to keep current.':'修改将在重启后生效。密码留空则保持当前密码。','Enter hotspot name':'请输入热点名称','Password min 8 chars':'密码至少 8 位','Saved! AP starts on CH1 and auto matches STA after WiFi connects.':'已保存！AP 从 CH1 启动，WiFi 连接后自动匹配 STA 信道。','Hotspot ready':'热点运行正常','firmware default':'固件默认值','sync':'同步','ok':'成功',
   'WiFi Internet':'WiFi 上网','Up to 4 saved networks. The device tries each in turn until one connects.':'最多保存 4 个网络，设备会按顺序尝试直到连接成功。','Not configured':'未配置','Save up to 4 networks (e.g. home + phone hotspot). Device tries each in turn. Stored in NVS \u2014 survives firmware updates.':'最多保存 4 个网络（例如家里 WiFi + 手机热点）。设备会按顺序尝试，配置保存在 NVS 中，固件更新后仍保留。','Add network':'添加网络','WiFi SSID':'WiFi SSID','Scan':'扫描','Scanning...':'扫描中...','Scan failed':'扫描失败','No networks found':'未发现网络','Password':'密码','Save & Connect':'保存并连接','Static IP (optional)':'静态 IP（可选）','Set a fixed IP configuration instead of using DHCP.':'使用固定 IP 配置，而不是 DHCP。','Use static IP':'使用静态 IP','IP (e.g. 192.168.1.100)':'IP（如 192.168.1.100）','Gateway (e.g. 192.168.1.1)':'网关（如 192.168.1.1）','Mask (255.255.255.0)':'掩码（255.255.255.0）','DNS (e.g. 8.8.8.8)':'DNS（如 8.8.8.8）','No networks saved.':'未保存网络。','connected':'已连接','trying':'尝试中','saved':'已保存','[static]':'[静态]','[connected]':'[已连接]','[trying]':'[连接中]','Reconnect':'重新连接','Connect':'连接','Edit':'编辑','Delete':'删除','Save Changes':'保存修改','Leave empty to keep current':'留空则保持当前密码','Delete WiFi':'删除 WiFi','Delete failed':'删除失败','Enter SSID':'请输入 SSID','Connect failed':'连接失败','connect failed':'连接失败','save failed':'保存失败','retry in':'后重试','switch to that WiFi and open this IP':'切换到该 WiFi 后打开此 IP','External IP':'外部 IP','External access address':'外部访问地址','Shown after connecting to external WiFi':'连接外部 Wi-Fi 后显示','Tap the IP to open the dashboard from the external network':'点击 IP 可通过外部网络进入后台',
@@ -1054,7 +1046,7 @@ function clientCountText(n){
   return dashLang==='zh'?(n+' 个客户端'):(n+' client'+(n===1?'':'s'));
 }
 function injectionStatusLabel(armed){return armed?trText('Enabled'):trText('Disabled');}
-let state={can:true,nagMode:0,nagAv2Min:1.5,nagAv2Max:1.8,nagAdaptiveTorque:1.8,nagAdaptiveDeadband:0.05,nagAdaptiveAngle:50,nagAdaptiveSend:10,nagAdaptivePauseMin:1,nagAdaptivePauseMax:3};
+let state={can:true,nagMode:0,nagRanges:{h1n:[1.5,1.8],h1p:[1.5,1.8],h2n:[1.5,1.8],h2p:[1.5,1.8]}};
 let otaFile=null;
 let logSince=0;
 let dashConfirmState=null;
@@ -1389,9 +1381,9 @@ function syncDashboardSummary(){
   mirrorDashboardText('wifi-status','top-wifi-state',trText('Not configured'));
   mirrorDashboardText('ble-main-card-meta','diag-ble-state',trText('Offline'));
   mirrorDashboardText('wifi-status','diag-wifi-state',trText('Not configured'));
-  mirrorDashboardText('fw-version','diag-version','V4.1 V13');
+  mirrorDashboardText('fw-version','diag-version','V4.2 V13');
   mirrorDashboardText('s-inj','nag-card-meta',trText('Enabled'));
-  const note=$('top-nag-note');if(note)note.textContent=trText('Mode')+' '+(state.nagMode===5?'ADAPTIVE':state.nagMode===4?'A_V2':'A');
+  const note=$('top-nag-note');if(note)note.textContent=state.nagMode===5?'自适应':'持续注入';
 }
 
 function initWifiNagAccordion(){
@@ -1708,64 +1700,45 @@ async function saveCanWrite(){
 }
 
 function updateNagControl(d){
-  const mode=Number(d.nagMode===undefined?(d.mode===undefined?state.nagMode:d.mode):d.nagMode)||0;
-  const min=Number(d.nagAv2MinNm===undefined?(d.av2MinNm===undefined?state.nagAv2Min:d.av2MinNm):d.nagAv2MinNm);
-  const max=Number(d.nagAv2MaxNm===undefined?(d.av2MaxNm===undefined?state.nagAv2Max:d.av2MaxNm):d.nagAv2MaxNm);
-  state.nagMode=mode;state.nagAv2Min=isNaN(min)?1.5:min;state.nagAv2Max=isNaN(max)?1.8:max;
+  const requestedMode=Number(d.nagMode===undefined?(d.mode===undefined?state.nagMode:d.mode):d.nagMode)||0;
+  const mode=requestedMode===5?5:0;
+  state.nagMode=mode;
   const seg=$('nag-mode-seg');if(seg)updSeg(seg,mode,'hw-btn');
-  const av2Row=$('nag-av2-row');if(av2Row)av2Row.style.display=mode===4?'':'none';
   const adaptiveRow=$('nag-adaptive-row');if(adaptiveRow)adaptiveRow.style.display=mode===5?'':'none';
-  const minInp=$('nag-av2-min');if(minInp&&document.activeElement!==minInp)minInp.value=state.nagAv2Min.toFixed(2);
-  const maxInp=$('nag-av2-max');if(maxInp&&document.activeElement!==maxInp)maxInp.value=state.nagAv2Max.toFixed(2);
-  const meta=$('nag-mode-meta');if(meta)meta.textContent=trText(mode===5?'ADAPTIVE: opposite torque with angle and duty-cycle gates':mode===4?'A_V2: random sweep':'A: fixed +1.80 Nm echo');
-  const live=Number(d.nagLiveTorqueNm===undefined?(d.liveTorqueNm||0):d.nagLiveTorqueNm);
-  const last=Number(d.nagLastTorqueNm===undefined?(d.lastTorqueNm||0):d.nagLastTorqueNm);
-  const liveMeta=$('nag-live-meta');if(liveMeta)liveMeta.textContent=(dashLang==='zh'?'\u5b9e\u65f6: ':'live: ')+live.toFixed(2)+' Nm';
-  const writeMeta=$('nag-write-meta');if(writeMeta)writeMeta.textContent=(dashLang==='zh'?'\u5199\u5165: ':'write: ')+last.toFixed(2)+' Nm';
-  const av2=$('nag-av2-meta');if(av2)av2.textContent=trText('skip')+': '+(d.nagOwnEchoSkip===undefined?(d.ownEchoSkip||0):d.nagOwnEchoSkip);
-
-  const value=(full,short,fallback)=>Number(d[full]===undefined?(d[short]===undefined?fallback:d[short]):d[full]);
-  const adaptiveTorque=value('nagAdaptiveTorqueNm','adaptiveTorqueNm',state.nagAdaptiveTorque);
-  const adaptiveDeadband=value('nagAdaptiveDeadbandNm','adaptiveDeadbandNm',state.nagAdaptiveDeadband);
-  const adaptiveAngle=value('nagAdaptiveAngleLimitDeg','adaptiveAngleLimitDeg',state.nagAdaptiveAngle);
-  const adaptiveSend=value('nagAdaptiveSendWindowSec','adaptiveSendWindowSec',state.nagAdaptiveSend);
-  const adaptivePauseMin=value('nagAdaptivePauseMinSec','adaptivePauseMinSec',state.nagAdaptivePauseMin);
-  const adaptivePauseMax=value('nagAdaptivePauseMaxSec','adaptivePauseMaxSec',state.nagAdaptivePauseMax);
-  if(!isNaN(adaptiveTorque))state.nagAdaptiveTorque=adaptiveTorque;
-  if(!isNaN(adaptiveDeadband))state.nagAdaptiveDeadband=adaptiveDeadband;
-  if(!isNaN(adaptiveAngle))state.nagAdaptiveAngle=adaptiveAngle;
-  if(!isNaN(adaptiveSend))state.nagAdaptiveSend=adaptiveSend;
-  if(!isNaN(adaptivePauseMin))state.nagAdaptivePauseMin=adaptivePauseMin;
-  if(!isNaN(adaptivePauseMax))state.nagAdaptivePauseMax=adaptivePauseMax;
-  const adaptiveInputs=[
-    ['nag-adaptive-torque',state.nagAdaptiveTorque,2],['nag-adaptive-deadband',state.nagAdaptiveDeadband,2],
-    ['nag-adaptive-angle',state.nagAdaptiveAngle,1],['nag-adaptive-send',state.nagAdaptiveSend,1],
-    ['nag-adaptive-pause-min',state.nagAdaptivePauseMin,1],['nag-adaptive-pause-max',state.nagAdaptivePauseMax,1]
+  const meta=$('nag-mode-meta');if(meta)meta.textContent=mode===5?'按实测扭矩反方向持续注入；Hands-On 选择幅值范围。':'持续注入：固定 +1.80 Nm。';
+  const num=(full,short,fallback)=>{const raw=d[full]===undefined?d[short]:d[full];const value=Number(raw);return Number.isFinite(value)?value:fallback;};
+  const rangeDefs=[
+    ['h1n','nagHandsOn1NegativeMinNm','handsOn1NegativeMinNm','nagHandsOn1NegativeMaxNm','handsOn1NegativeMaxNm','nag-h1-neg-min','nag-h1-neg-max'],
+    ['h1p','nagHandsOn1PositiveMinNm','handsOn1PositiveMinNm','nagHandsOn1PositiveMaxNm','handsOn1PositiveMaxNm','nag-h1-pos-min','nag-h1-pos-max'],
+    ['h2n','nagHandsOn2NegativeMinNm','handsOn2NegativeMinNm','nagHandsOn2NegativeMaxNm','handsOn2NegativeMaxNm','nag-h2-neg-min','nag-h2-neg-max'],
+    ['h2p','nagHandsOn2PositiveMinNm','handsOn2PositiveMinNm','nagHandsOn2PositiveMaxNm','handsOn2PositiveMaxNm','nag-h2-pos-min','nag-h2-pos-max']
   ];
-  adaptiveInputs.forEach(item=>{const input=$(item[0]);if(input&&document.activeElement!==input)input.value=Number(item[1]).toFixed(item[2]);});
-
+  rangeDefs.forEach(def=>{
+    const current=state.nagRanges[def[0]];
+    const next=[num(def[1],def[2],current[0]),num(def[3],def[4],current[1])];
+    state.nagRanges[def[0]]=next;
+    [[def[5],next[0]],[def[6],next[1]]].forEach(pair=>{const input=$(pair[0]);if(input&&document.activeElement!==input)input.value=pair[1].toFixed(2);});
+  });
+  const live=Number(d.nagLiveTorqueNm===undefined?(d.liveTorqueNm||0):d.nagLiveTorqueNm);
+  const liveMeta=$('nag-live-meta');if(liveMeta)liveMeta.textContent=(dashLang==='zh'?'\u5b9e\u65f6: ':'live: ')+live.toFixed(2)+' Nm';
+  const injectedValid=d.nagInjectedTorqueValid===undefined?!!d.injectedTorqueValid:!!d.nagInjectedTorqueValid;
+  const injected=num('nagInjectedTorqueNm','injectedTorqueNm',0);
+  const injectedMeta=$('nag-injected-meta');if(injectedMeta)injectedMeta.textContent=injectedValid?((injected>=0?'+':'')+injected.toFixed(2)+' Nm'):(dashLang==='zh'?'--（未注入）':'-- (not injecting)');
+  const handsOn=Math.trunc(num('nagHandsOnRaw','handsOnRaw',0));
+  const tier=Math.trunc(num('nagHandsOnTier','handsOnTier',1));
+  const source=String(d.nagDirectionSource===undefined?(d.directionSource||'default'):d.nagDirectionSource);
+  const sourceNames={torque:dashLang==='zh'?'实测扭矩':'measured torque',angle:dashLang==='zh'?'方向盘角度兜底':'steering-angle fallback',hold:dashLang==='zh'?'保持上一方向':'holding direction',default:dashLang==='zh'?'固定启动方向':'deterministic default'};
+  const directionMeta=$('nag-direction-meta');if(directionMeta)directionMeta.textContent='raw '+handsOn+' / H'+tier+' / '+(sourceNames[source]||source);
   const phase=String(d.nagAdaptivePhase===undefined?(d.adaptivePhase||'disabled'):d.nagAdaptivePhase);
-  const block=String(d.nagAdaptiveBlockReason===undefined?(d.adaptiveBlockReason||'disabled'):d.nagAdaptiveBlockReason);
-  const phaseNames={disabled:dashLang==='zh'?'关闭':'disabled',arming:dashLang==='zh'?'稳定等待':'arming',send:dashLang==='zh'?'发送':'send',pause:dashLang==='zh'?'只监听暂停':'listen-only pause'};
-  const blockNames={none:dashLang==='zh'?'无':'none',disabled:dashLang==='zh'?'功能关闭':'disabled',arming:dashLang==='zh'?'等待有效帧':'arming',pause:dashLang==='zh'?'随机暂停':'random pause',angle:dashLang==='zh'?'角度安全门':'angle gate','torque-deadband':dashLang==='zh'?'扭矩死区':'torque deadband'};
-  const liveAngle=value('nagAdaptiveAngleDeg','adaptiveAngleDeg',0);
-  const target=value('nagAdaptiveTargetTorqueNm','adaptiveTargetTorqueNm',0);
-  const remaining=value('nagAdaptivePhaseRemainingMs','adaptivePhaseRemainingMs',0);
-  const pauseMs=value('nagAdaptiveCurrentPauseMs','adaptiveCurrentPauseMs',0);
-  const angleEvents=value('nagAdaptiveAngleBlockEvents','adaptiveAngleBlockEvents',0);
-  const deadbandSkips=value('nagAdaptiveDeadbandSkips','adaptiveDeadbandSkips',0);
+  const phaseNames={disabled:dashLang==='zh'?'关闭':'disabled',arming:dashLang==='zh'?'等待 3 帧':'arming',send:dashLang==='zh'?'持续发送':'continuous'};
   if($('nag-adaptive-phase'))$('nag-adaptive-phase').textContent=(dashLang==='zh'?'阶段：':'phase: ')+(phaseNames[phase]||phase);
-  if($('nag-adaptive-angle-live'))$('nag-adaptive-angle-live').textContent=(dashLang==='zh'?'角度：':'angle: ')+liveAngle.toFixed(1)+'°';
   if($('nag-adaptive-torque-live'))$('nag-adaptive-torque-live').textContent=(dashLang==='zh'?'真实扭矩：':'real torque: ')+live.toFixed(2)+' Nm';
-  if($('nag-adaptive-target-live'))$('nag-adaptive-target-live').textContent=(dashLang==='zh'?'目标扭矩：':'target: ')+target.toFixed(2)+' Nm';
-  if($('nag-adaptive-countdown'))$('nag-adaptive-countdown').textContent=(dashLang==='zh'?'剩余：':'remaining: ')+(remaining/1000).toFixed(1)+' s';
-  if($('nag-adaptive-pause-live'))$('nag-adaptive-pause-live').textContent=(dashLang==='zh'?'本次暂停：':'pause: ')+(pauseMs/1000).toFixed(1)+' s';
-  if($('nag-adaptive-block'))$('nag-adaptive-block').textContent=(dashLang==='zh'?'阻断：':'block: ')+(blockNames[block]||block);
-  if($('nag-adaptive-stats'))$('nag-adaptive-stats').textContent=(dashLang==='zh'?'角度/死区：':'angle/deadband: ')+angleEvents+' / '+deadbandSkips;
+  if($('nag-adaptive-handson-live'))$('nag-adaptive-handson-live').textContent='Hands-On：raw '+handsOn+' / H'+tier;
+  if($('nag-adaptive-source-live'))$('nag-adaptive-source-live').textContent=(dashLang==='zh'?'方向依据：':'source: ')+(sourceNames[source]||source);
 }
 
 async function setNagMode(mode){
-  mode=mode===5?5:mode===4?4:0;
+  mode=mode===5?5:0;
   state.nagMode=mode;
   const seg=$('nag-mode-seg');if(seg)updSeg(seg,mode,'hw-btn');
   try{
@@ -1777,22 +1750,27 @@ async function setNagMode(mode){
 
 async function saveNagAdaptive(){
   const read=(id,fallback)=>{const input=$(id);const value=input?Number(input.value):fallback;return Number.isFinite(value)?value:fallback;};
-  let torque=Math.max(0.10,Math.min(1.80,read('nag-adaptive-torque',1.80)));
-  let deadband=Math.max(0,Math.min(0.50,read('nag-adaptive-deadband',0.05)));
-  let angle=Math.max(10,Math.min(180,read('nag-adaptive-angle',50)));
-  let send=Math.max(1,Math.min(60,read('nag-adaptive-send',10)));
-  let pauseMin=Math.max(1,Math.min(30,read('nag-adaptive-pause-min',1)));
-  let pauseMax=Math.max(1,Math.min(30,read('nag-adaptive-pause-max',3)));
-  if(pauseMin>pauseMax){const swap=pauseMin;pauseMin=pauseMax;pauseMax=swap;}
   const button=$('nag-adaptive-save'),message=$('nag-adaptive-msg');
   if(button){button.disabled=true;button.textContent=trText('Saving...');}
   if(message){message.textContent='';message.style.color='';}
-  const body='adaptiveTorqueNm='+encodeURIComponent(torque.toFixed(2))+
-    '&adaptiveDeadbandNm='+encodeURIComponent(deadband.toFixed(2))+
-    '&adaptiveAngleDeg='+encodeURIComponent(angle.toFixed(1))+
-    '&adaptiveSendSec='+encodeURIComponent(send.toFixed(1))+
-    '&adaptivePauseMinSec='+encodeURIComponent(pauseMin.toFixed(1))+
-    '&adaptivePauseMaxSec='+encodeURIComponent(pauseMax.toFixed(1));
+  const ranges=[
+    ['handsOn1Negative','nag-h1-neg-min','nag-h1-neg-max','h1n'],
+    ['handsOn1Positive','nag-h1-pos-min','nag-h1-pos-max','h1p'],
+    ['handsOn2Negative','nag-h2-neg-min','nag-h2-neg-max','h2n'],
+    ['handsOn2Positive','nag-h2-pos-min','nag-h2-pos-max','h2p']
+  ];
+  const params=[];
+  ranges.forEach(def=>{
+    const fallback=state.nagRanges[def[3]];
+    let min=Math.max(0.10,Math.min(1.80,read(def[1],fallback[0])));
+    let max=Math.max(0.10,Math.min(1.80,read(def[2],fallback[1])));
+    if(min>max){const swap=min;min=max;max=swap;}
+    state.nagRanges[def[3]]=[min,max];
+    $(def[1]).value=min.toFixed(2);$(def[2]).value=max.toFixed(2);
+    params.push(def[0]+'MinNm='+encodeURIComponent(min.toFixed(2)));
+    params.push(def[0]+'MaxNm='+encodeURIComponent(max.toFixed(2)));
+  });
+  const body=params.join('&');
   try{
     const response=await fetch('/api/nag-adaptive',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
     if(!response.ok)throw new Error('HTTP '+response.status);
@@ -1805,24 +1783,6 @@ async function saveNagAdaptive(){
   }finally{
     if(button){button.disabled=false;button.textContent=trText('Save adaptive settings');}
   }
-}
-
-async function saveNagAv2(){
-  const minInp=$('nag-av2-min'),maxInp=$('nag-av2-max');
-  if(!minInp||!maxInp)return;
-  let min=Number(minInp.value),max=Number(maxInp.value);
-  if(isNaN(min))min=-1.8;if(isNaN(max))max=1.8;
-  min=Math.max(-1.8,Math.min(1.8,min));
-  max=Math.max(-1.8,Math.min(1.8,max));
-  if(min>max){const t=min;min=max;max=t;}
-  minInp.value=min.toFixed(2);maxInp.value=max.toFixed(2);
-  try{
-    const body='av2MinNm='+encodeURIComponent(min.toFixed(2))+'&av2MaxNm='+encodeURIComponent(max.toFixed(2));
-    const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    state.nagAv2Min=min;state.nagAv2Max=max;
-    poll();
-  }catch(e){addLog(trText('A_V2 range save failed'),'le');}
 }
 
 async function pushLogging(){

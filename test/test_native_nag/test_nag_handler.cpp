@@ -72,10 +72,15 @@ void test_nag_filter_ids_value()
     TEST_ASSERT_EQUAL_UINT32(880, ids[0]);
 }
 
-void test_nag_av2_default_range_is_1_50_to_1_80_nm()
+void test_adaptive_handson_ranges_default_to_1_50_to_1_80_nm()
 {
-    TEST_ASSERT_EQUAL_INT16(150, handler.av2MinCenti());
-    TEST_ASSERT_EQUAL_INT16(180, handler.av2MaxCenti());
+    for (uint8_t tier = 1; tier <= 2; ++tier)
+    {
+        TEST_ASSERT_EQUAL_INT16(150, handler.handsOnRangeMinCenti(tier, -1));
+        TEST_ASSERT_EQUAL_INT16(180, handler.handsOnRangeMaxCenti(tier, -1));
+        TEST_ASSERT_EQUAL_INT16(150, handler.handsOnRangeMinCenti(tier, 1));
+        TEST_ASSERT_EQUAL_INT16(180, handler.handsOnRangeMaxCenti(tier, 1));
+    }
 }
 
 // ============================================================
@@ -289,99 +294,27 @@ void test_nag_output_torque_never_exceeds_safe_range()
 }
 
 // ============================================================
-// A V2 mode
+// Retired A_V2 compatibility value
 // ============================================================
 
-void test_nag_av2_random_sweep_starts_immediately()
+void test_nag_av2_is_not_supported_and_migrates_to_continuous()
 {
-    handler.setTestNowMs(0);
+    TEST_ASSERT_FALSE(NagHandler::isSupportedMode(NagHandler::MODE_A_V2));
     handler.setMode(NagHandler::MODE_A_V2);
-    handler.setAv2RangeNm(-1.50f, 0.0f);
+    TEST_ASSERT_EQUAL_UINT8(NagHandler::MODE_A, (uint8_t)handler.nagMode);
 
     CanFrame f = makeEpasFrame(0, 0.33, 0x02);
     handler.handleMessage(f, mock);
-
     TEST_ASSERT_EQUAL(1, mock.sent.size());
-    const float torque = decodeTorqueNm(mock.sent[0]);
-    TEST_ASSERT_TRUE(torque >= -1.50f);
-    TEST_ASSERT_TRUE(torque <= 0.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.80f, decodeTorqueNm(mock.sent[0]));
     TEST_ASSERT_TRUE(verifyChecksum(mock.sent[0]));
 }
 
-void test_nag_av2_random_sweep_updates_over_2000ms_period()
+void test_handson_range_clamps_magnitude_and_swaps_bounds()
 {
-    handler.setTestNowMs(100);
-    handler.setMode(NagHandler::MODE_A_V2);
-    handler.setAv2RangeNm(-1.50f, 0.0f);
-
-    const uint32_t start = 100;
-    const uint32_t times[] = {start, start + 500, start + 1000, start + 2000};
-    float observed[4] = {};
-
-    for (int i = 0; i < 4; i++)
-    {
-        mock.reset();
-        handler.setTestNowMs(times[i]);
-        CanFrame f = makeEpasFrame(0, 0.33, static_cast<uint8_t>(i));
-        handler.handleMessage(f, mock);
-        TEST_ASSERT_EQUAL(1, mock.sent.size());
-        observed[i] = decodeTorqueNm(mock.sent[0]);
-        TEST_ASSERT_TRUE(observed[i] >= -1.50f);
-        TEST_ASSERT_TRUE(observed[i] <= 0.0f);
-        TEST_ASSERT_TRUE(verifyChecksum(mock.sent[0]));
-    }
-    TEST_ASSERT_TRUE(observed[0] != observed[1] || observed[1] != observed[2] || observed[2] != observed[3]);
-}
-
-void test_nag_av2_clamps_and_swaps_range()
-{
-    handler.setAv2RangeNm(2.50f, -2.25f);
-    TEST_ASSERT_EQUAL_INT16(-180, handler.av2MinCenti());
-    TEST_ASSERT_EQUAL_INT16(180, handler.av2MaxCenti());
-}
-
-void test_nag_av2_negative_endpoint_encoding()
-{
-    handler.setTestNowMs(0);
-    handler.setMode(NagHandler::MODE_A_V2);
-    handler.setAv2RangeNm(-1.80f, -1.80f);
-
-    CanFrame f = makeEpasFrame(0, 0.33, 0x01);
-    handler.handleMessage(f, mock);
-
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-    TEST_ASSERT_EQUAL_HEX8(0x07, mock.sent[0].data[2] & 0x0F);
-    TEST_ASSERT_EQUAL_HEX8(0x4E, mock.sent[0].data[3]);
-    TEST_ASSERT_FLOAT_WITHIN(0.01, -1.80, decodeTorqueNm(mock.sent[0]));
-}
-
-void test_nag_av2_echoes_and_sets_handson_1_frame()
-{
-    handler.setTestNowMs(0);
-    handler.setMode(NagHandler::MODE_A_V2);
-
-    CanFrame f = makeEpasFrame(3, 0.33, 0x03);
-    handler.handleMessage(f, mock);
-
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-    uint8_t outHandsOn = (mock.sent[0].data[4] >> 6) & 0x03;
-    TEST_ASSERT_EQUAL_UINT8(1, outHandsOn);
-}
-
-void test_nag_av2_skips_own_echo()
-{
-    handler.setTestNowMs(0);
-    handler.setMode(NagHandler::MODE_A_V2);
-
-    CanFrame f = makeEpasFrame(0, 0.33, 0x03);
-    handler.handleMessage(f, mock);
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-
-    CanFrame ownEcho = mock.sent[0];
-    handler.handleMessage(ownEcho, mock);
-
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-    TEST_ASSERT_EQUAL_UINT32(1, handler.nagOwnEchoSkipCount);
+    handler.setHandsOnRangeCentiNm(2, -1, 250, -5);
+    TEST_ASSERT_EQUAL_INT16(10, handler.handsOnRangeMinCenti(2, -1));
+    TEST_ASSERT_EQUAL_INT16(180, handler.handsOnRangeMaxCenti(2, -1));
 }
 
 void test_nag_a_skips_own_echo()
@@ -486,7 +419,7 @@ int main()
     // Filter
     RUN_TEST(test_nag_filter_ids_count);
     RUN_TEST(test_nag_filter_ids_value);
-    RUN_TEST(test_nag_av2_default_range_is_1_50_to_1_80_nm);
+    RUN_TEST(test_adaptive_handson_ranges_default_to_1_50_to_1_80_nm);
 
     // Basic echo behavior
     RUN_TEST(test_nag_echoes_when_handson_0);
@@ -519,13 +452,9 @@ int main()
     RUN_TEST(test_nag_output_torque_never_exceeds_safe_range);
     RUN_TEST(test_nag_output_sets_each_handson_level_to_1);
 
-    // A V2
-    RUN_TEST(test_nag_av2_random_sweep_starts_immediately);
-    RUN_TEST(test_nag_av2_random_sweep_updates_over_2000ms_period);
-    RUN_TEST(test_nag_av2_clamps_and_swaps_range);
-    RUN_TEST(test_nag_av2_negative_endpoint_encoding);
-    RUN_TEST(test_nag_av2_echoes_and_sets_handson_1_frame);
-    RUN_TEST(test_nag_av2_skips_own_echo);
+    // A_V2 is retained only as a migration value.
+    RUN_TEST(test_nag_av2_is_not_supported_and_migrates_to_continuous);
+    RUN_TEST(test_handson_range_clamps_magnitude_and_swaps_bounds);
     RUN_TEST(test_nag_a_skips_own_echo);
 
     // Counters

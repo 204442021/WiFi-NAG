@@ -74,19 +74,34 @@ struct NagHandler : public CarManagerBase
     Shared<uint32_t> nagChecksumRejectCount{0};
     Shared<uint32_t> nagInvalidTorqueRejectCount{0};
     Shared<uint8_t> nagMode{MODE_A};
-    Shared<int16_t> av2MinCentiNm{150};
-    Shared<int16_t> av2MaxCentiNm{180};
+    Shared<int16_t> handsOn1NegativeMinCentiNm{150};
+    Shared<int16_t> handsOn1NegativeMaxCentiNm{180};
+    Shared<int16_t> handsOn1PositiveMinCentiNm{150};
+    Shared<int16_t> handsOn1PositiveMaxCentiNm{180};
+    Shared<int16_t> handsOn2NegativeMinCentiNm{150};
+    Shared<int16_t> handsOn2NegativeMaxCentiNm{180};
+    Shared<int16_t> handsOn2PositiveMinCentiNm{150};
+    Shared<int16_t> handsOn2PositiveMaxCentiNm{180};
     Shared<int16_t> lastObservedCentiNm{0};
     Shared<int16_t> lastInjectedCentiNm{0};
+    Shared<bool> lastInjectedValid{false};
+    Shared<uint32_t> lastInjectedAtMs{0};
+    Shared<uint8_t> lastHandsOnRaw{0};
+    Shared<uint8_t> lastHandsOnTier{1};
     NagAdaptiveController adaptiveController;
 
-    static constexpr uint32_t kAv2SweepPeriodMs = 2000;
+    static constexpr uint32_t kRangeSweepPeriodMs = 2000;
+    static constexpr uint32_t kInjectedFreshMs = 200;
     static constexpr int16_t kTorqueMinCentiNm = -180;
     static constexpr int16_t kTorqueMaxCentiNm = 180;
     static constexpr uint32_t kOwnEchoFingerprintLifetimeMs = 100;
     static constexpr uint8_t kRecentEchoCount = 4;
 
     uint32_t modeStartMs = 0;
+    int16_t adaptiveLastMagnitudeCentiNm = 0;
+    int16_t adaptiveTransitionFromCentiNm = 0;
+    uint32_t adaptiveTransitionStartMs = 0;
+    uint8_t adaptiveRangeKey = 0;
     struct RecentEcho
     {
         CanFrame frame;
@@ -224,7 +239,7 @@ struct NagHandler : public CarManagerBase
 
     static bool isSupportedMode(uint8_t mode)
     {
-        return mode == MODE_A || mode == MODE_A_V2 || mode == MODE_ADAPTIVE;
+        return mode == MODE_A || mode == MODE_ADAPTIVE;
     }
 
     void setMode(uint8_t mode)
@@ -235,6 +250,10 @@ struct NagHandler : public CarManagerBase
         {
             nagMode = mode;
             modeStartMs = nowMs();
+            adaptiveLastMagnitudeCentiNm = 0;
+            adaptiveTransitionFromCentiNm = 0;
+            adaptiveTransitionStartMs = modeStartMs;
+            adaptiveRangeKey = 0;
             adaptiveController.requestReset();
         }
     }
@@ -244,29 +263,86 @@ struct NagHandler : public CarManagerBase
         modeStartMs = nowMs();
     }
 
-    void setAv2RangeNm(float minNm, float maxNm)
+    static int16_t clampMagnitudeCentiNm(int16_t value)
     {
-        setAv2RangeCentiNm(nmToCentiNm(minNm), nmToCentiNm(maxNm));
+        int32_t magnitude = value;
+        if (magnitude < 0)
+            magnitude = -magnitude;
+        if (magnitude < 10)
+            return 10;
+        if (magnitude > kTorqueMaxCentiNm)
+            return kTorqueMaxCentiNm;
+        return static_cast<int16_t>(magnitude);
     }
 
-    void setAv2RangeCentiNm(int16_t minCentiNm, int16_t maxCentiNm)
+    void setHandsOnRangeCentiNm(uint8_t tier, int8_t sign,
+                                int16_t minCentiNm, int16_t maxCentiNm)
     {
-        minCentiNm = clampTorqueCentiNm(minCentiNm);
-        maxCentiNm = clampTorqueCentiNm(maxCentiNm);
+        minCentiNm = clampMagnitudeCentiNm(minCentiNm);
+        maxCentiNm = clampMagnitudeCentiNm(maxCentiNm);
         if (minCentiNm > maxCentiNm)
             std::swap(minCentiNm, maxCentiNm);
-        av2MinCentiNm = minCentiNm;
-        av2MaxCentiNm = maxCentiNm;
+        if (tier == 2)
+        {
+            if (sign < 0)
+            {
+                handsOn2NegativeMinCentiNm = minCentiNm;
+                handsOn2NegativeMaxCentiNm = maxCentiNm;
+            }
+            else
+            {
+                handsOn2PositiveMinCentiNm = minCentiNm;
+                handsOn2PositiveMaxCentiNm = maxCentiNm;
+            }
+        }
+        else if (sign < 0)
+        {
+            handsOn1NegativeMinCentiNm = minCentiNm;
+            handsOn1NegativeMaxCentiNm = maxCentiNm;
+        }
+        else
+        {
+            handsOn1PositiveMinCentiNm = minCentiNm;
+            handsOn1PositiveMaxCentiNm = maxCentiNm;
+        }
     }
 
-    int16_t av2MinCenti() const { return (int16_t)av2MinCentiNm; }
-    int16_t av2MaxCenti() const { return (int16_t)av2MaxCentiNm; }
-    float av2MinNm() const { return centiNmToNm(av2MinCenti()); }
-    float av2MaxNm() const { return centiNmToNm(av2MaxCenti()); }
+    int16_t handsOnRangeMinCenti(uint8_t tier, int8_t sign) const
+    {
+        if (tier == 2)
+            return sign < 0 ? static_cast<int16_t>(handsOn2NegativeMinCentiNm)
+                            : static_cast<int16_t>(handsOn2PositiveMinCentiNm);
+        return sign < 0 ? static_cast<int16_t>(handsOn1NegativeMinCentiNm)
+                        : static_cast<int16_t>(handsOn1PositiveMinCentiNm);
+    }
+
+    int16_t handsOnRangeMaxCenti(uint8_t tier, int8_t sign) const
+    {
+        if (tier == 2)
+            return sign < 0 ? static_cast<int16_t>(handsOn2NegativeMaxCentiNm)
+                            : static_cast<int16_t>(handsOn2PositiveMaxCentiNm);
+        return sign < 0 ? static_cast<int16_t>(handsOn1NegativeMaxCentiNm)
+                        : static_cast<int16_t>(handsOn1PositiveMaxCentiNm);
+    }
+
     int16_t lastObservedCenti() const { return (int16_t)lastObservedCentiNm; }
     float lastObservedNm() const { return centiNmToNm(lastObservedCenti()); }
     int16_t lastInjectedCenti() const { return (int16_t)lastInjectedCentiNm; }
     float lastInjectedNm() const { return centiNmToNm(lastInjectedCenti()); }
+    uint32_t lastInjectedAgeMs() const
+    {
+        if (!static_cast<bool>(lastInjectedValid))
+            return 0xFFFFFFFFu;
+        return nowMs() - static_cast<uint32_t>(lastInjectedAtMs);
+    }
+    bool injectedTorqueIsValid() const
+    {
+        return static_cast<bool>(lastInjectedValid) &&
+               static_cast<bool>(nagKillerActive) && nagKillerRuntime &&
+               lastInjectedAgeMs() <= kInjectedFreshMs;
+    }
+    uint8_t handsOnRaw() const { return static_cast<uint8_t>(lastHandsOnRaw); }
+    uint8_t handsOnTier() const { return static_cast<uint8_t>(lastHandsOnTier); }
 
     void setAdaptiveConfig(const NagAdaptiveConfig &config)
     {
@@ -280,7 +356,7 @@ struct NagHandler : public CarManagerBase
     float adaptiveTargetNm() const { return centiNmToNm(adaptiveTargetCentiNm()); }
     uint32_t adaptivePhaseRemainingMs() const { return adaptiveController.phaseRemainingMs(nowMs()); }
 
-    static uint32_t av2RandomWord(uint32_t period)
+    static uint32_t rangeRandomWord(uint32_t period)
     {
         uint32_t x = period + 0x9E3779B9u;
         x ^= x >> 16;
@@ -291,35 +367,71 @@ struct NagHandler : public CarManagerBase
         return x;
     }
 
-    int16_t av2RandomEndpointCentiNm(uint32_t period) const
+    static int16_t rangeRandomEndpointCentiNm(int16_t minNm, int16_t maxNm,
+                                              uint32_t period)
     {
-        const int16_t minNm = av2MinCenti();
-        const int16_t maxNm = av2MaxCenti();
         const uint16_t span = static_cast<uint16_t>(maxNm - minNm);
         if (span == 0)
             return minNm;
 
-        return static_cast<int16_t>(minNm + static_cast<int16_t>(av2RandomWord(period) % (static_cast<uint32_t>(span) + 1)));
+        return static_cast<int16_t>(minNm + static_cast<int16_t>(rangeRandomWord(period) % (static_cast<uint32_t>(span) + 1)));
     }
 
-    int16_t randomSweepCentiNm(uint32_t elapsedMs) const
+    static int16_t smoothRangeMagnitudeCentiNm(int16_t minNm, int16_t maxNm,
+                                               uint32_t elapsedMs)
     {
-        const uint32_t phase = elapsedMs % kAv2SweepPeriodMs;
-        const uint32_t period = elapsedMs / kAv2SweepPeriodMs;
-        const int16_t start = av2RandomEndpointCentiNm(period);
-        const int16_t end = av2RandomEndpointCentiNm(period + 1);
+        const uint32_t phase = elapsedMs % kRangeSweepPeriodMs;
+        const uint32_t period = elapsedMs / kRangeSweepPeriodMs;
+        const int16_t start = rangeRandomEndpointCentiNm(minNm, maxNm, period);
+        const int16_t end = rangeRandomEndpointCentiNm(minNm, maxNm, period + 1);
         const int32_t delta = static_cast<int32_t>(end) - static_cast<int32_t>(start);
-        return clampTorqueCentiNm(static_cast<int16_t>(static_cast<int32_t>(start) +
-                                                       (delta * static_cast<int32_t>(phase)) /
-                                                           static_cast<int32_t>(kAv2SweepPeriodMs)));
+        return clampMagnitudeCentiNm(static_cast<int16_t>(static_cast<int32_t>(start) +
+                                                          (delta * static_cast<int32_t>(phase)) /
+                                                              static_cast<int32_t>(kRangeSweepPeriodMs)));
     }
 
     int16_t targetTorqueCentiNm() const
     {
-        if ((uint8_t)nagMode != MODE_A_V2)
-            return kTorqueMaxCentiNm;
+        return kTorqueMaxCentiNm;
+    }
 
-        return randomSweepCentiNm(nowMs() - modeStartMs);
+    int16_t adaptiveMagnitudeCentiNm(uint8_t tier, int8_t sign)
+    {
+        const int16_t minValue = handsOnRangeMinCenti(tier, sign);
+        const int16_t maxValue = handsOnRangeMaxCenti(tier, sign);
+        const uint32_t now = nowMs();
+        const int16_t desired = smoothRangeMagnitudeCentiNm(
+            minValue, maxValue, now - modeStartMs);
+        const uint8_t key = static_cast<uint8_t>((tier == 2 ? 2 : 0) | (sign > 0 ? 1 : 0));
+
+        if (adaptiveLastMagnitudeCentiNm == 0)
+        {
+            adaptiveLastMagnitudeCentiNm = desired;
+            adaptiveRangeKey = key;
+            return desired;
+        }
+        if (adaptiveRangeKey != key)
+        {
+            adaptiveRangeKey = key;
+            adaptiveTransitionFromCentiNm = adaptiveLastMagnitudeCentiNm;
+            adaptiveTransitionStartMs = now;
+        }
+
+        const uint32_t transitionElapsed = now - adaptiveTransitionStartMs;
+        int16_t magnitude = desired;
+        if (adaptiveTransitionFromCentiNm > 0 && transitionElapsed < kRangeSweepPeriodMs)
+        {
+            const int32_t delta = static_cast<int32_t>(desired) - adaptiveTransitionFromCentiNm;
+            magnitude = static_cast<int16_t>(adaptiveTransitionFromCentiNm +
+                                             delta * static_cast<int32_t>(transitionElapsed) /
+                                                 static_cast<int32_t>(kRangeSweepPeriodMs));
+        }
+        else
+        {
+            adaptiveTransitionFromCentiNm = 0;
+        }
+        adaptiveLastMagnitudeCentiNm = clampMagnitudeCentiNm(magnitude);
+        return adaptiveLastMagnitudeCentiNm;
     }
 
     bool isOwnEcho(const CanFrame &frame) const
@@ -370,6 +482,10 @@ struct NagHandler : public CarManagerBase
 
         const uint16_t observedTorqueRaw = readTorqueRaw(frame);
         lastObservedCentiNm = rawToObservedCentiNm(observedTorqueRaw);
+        const uint8_t rawHandsOn = static_cast<uint8_t>((frame.data[4] >> 6) & 0x03);
+        lastHandsOnRaw = rawHandsOn;
+        if (rawHandsOn == 1 || rawHandsOn == 2)
+            lastHandsOnTier = rawHandsOn;
 
         if (!nagKillerActive || !nagKillerRuntime)
         {
@@ -392,7 +508,9 @@ struct NagHandler : public CarManagerBase
                 frameEntropy(frame));
             if (!decision.shouldSend)
                 return;
-            torqueCentiNm = decision.targetTorqueCentiNm;
+            const int16_t magnitude = adaptiveMagnitudeCentiNm(
+                static_cast<uint8_t>(lastHandsOnTier), decision.injectionSign);
+            torqueCentiNm = static_cast<int16_t>(decision.injectionSign * magnitude);
         }
         else
         {
@@ -421,6 +539,8 @@ struct NagHandler : public CarManagerBase
             framesSent++;
             nagEchoCount++;
             lastInjectedCentiNm = torqueCentiNm;
+            lastInjectedAtMs = nowMs();
+            lastInjectedValid = true;
             rememberSuccessfulEcho(echo);
         }
         else

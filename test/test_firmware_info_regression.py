@@ -29,7 +29,7 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
         cls.ui_wrapper = UI_WRAPPER_FILE.read_text(encoding="utf-8-sig")
 
     def test_version_file_is_single_v4_1_v13_source(self) -> None:
-        self.assertEqual(self.version, "V4.1 V13")
+        self.assertEqual(self.version, "V4.2 V13")
         self.assertNotIn("3.0.0-beta.5", self.version)
 
     def test_v1_0_7_release_notes_match_internal_version(self) -> None:

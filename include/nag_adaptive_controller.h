@@ -6,8 +6,11 @@
 
 struct NagAdaptiveConfig
 {
+    // Retained for settings compatibility. Hands-On ranges select the actual magnitude.
     int16_t torqueMagnitudeCentiNm = 180;
+    // Direction-noise threshold; it never creates a transmit dead zone.
     int16_t torqueDeadbandCentiNm = 5;
+    // Legacy persisted fields. V4.2 does not use them as send gates.
     int16_t angleLimitDeciDeg = 500;
     uint32_t sendWindowMs = 10000;
     uint32_t pauseMinMs = 1000;
@@ -18,6 +21,8 @@ struct NagAdaptiveDecision
 {
     bool shouldSend = false;
     int16_t targetTorqueCentiNm = 0;
+    int8_t injectionSign = 0;
+    bool directionChanged = false;
 };
 
 class NagAdaptiveController
@@ -28,7 +33,7 @@ public:
         PHASE_DISABLED = 0,
         PHASE_ARMING = 1,
         PHASE_SEND = 2,
-        PHASE_PAUSE = 3,
+        PHASE_PAUSE = 3, // Legacy telemetry value; V4.2 never enters it.
     };
 
     enum BlockReason : uint8_t
@@ -41,9 +46,18 @@ public:
         BLOCK_TORQUE_DEADBAND = 5,
     };
 
+    enum DirectionSource : uint8_t
+    {
+        DIRECTION_DEFAULT = 0,
+        DIRECTION_ANGLE = 1,
+        DIRECTION_TORQUE = 2,
+        DIRECTION_HOLD = 3,
+    };
+
     static constexpr uint8_t kArmingFrameCount = 3;
-    static constexpr uint8_t kAngleResumeFrameCount = 3;
-    static constexpr int16_t kAngleHysteresisDeciDeg = 50;
+    static constexpr uint32_t kDirectionStableMs = 100;
+    static constexpr int16_t kAngleDirectionNoiseDeciDeg = 10;
+    static constexpr int16_t kAngleHysteresisDeciDeg = 50; // API compatibility
 
     static NagAdaptiveConfig normalizeConfig(NagAdaptiveConfig value)
     {
@@ -94,17 +108,15 @@ public:
     void disable(uint32_t now)
     {
         (void)now;
-        if (!enabled_ && phaseValue() == PHASE_DISABLED)
-            return;
         enabled_ = false;
-        angleBlocked_ = false;
-        angleSafeFrames_ = 0;
         armingFrames_ = 0;
+        injectionSign_ = 0;
+        candidateSign_ = 0;
+        candidateStartedMs_ = 0;
         phase_ = PHASE_DISABLED;
         blockReason_ = BLOCK_DISABLED;
+        directionSource_ = DIRECTION_DEFAULT;
         targetTorqueCentiNm_ = 0;
-        phaseDeadlineMs_ = 0;
-        phaseStartedMs_ = 0;
     }
 
     NagAdaptiveDecision observe(uint32_t now,
@@ -112,13 +124,13 @@ public:
                                 int16_t observedTorqueCentiNm,
                                 uint32_t entropy)
     {
+        (void)entropy;
         syncRequestedState(now);
         if (!enabled_)
-            beginArming(now);
+            beginArming();
 
         lastAngleDeciDeg_ = steeringAngleDeciDeg;
         lastObservedTorqueCentiNm_ = observedTorqueCentiNm;
-        updateAngleGate(steeringAngleDeciDeg);
 
         if (phaseValue() == PHASE_ARMING)
         {
@@ -130,88 +142,87 @@ public:
                 targetTorqueCentiNm_ = 0;
                 return {};
             }
-            beginSend(now);
+            phase_ = PHASE_SEND;
         }
-        else if (phaseValue() == PHASE_SEND && deadlineReached(now, phaseDeadlineValue()))
+
+        const int8_t desiredSign = torqueDirectionSign(observedTorqueCentiNm);
+        bool changed = false;
+        if (injectionSign_ == 0)
         {
-            beginPause(now, entropy);
-        }
-        else if (phaseValue() == PHASE_PAUSE)
-        {
-            if (!deadlineReached(now, phaseDeadlineValue()))
+            if (desiredSign != 0)
             {
-                pauseSkipCount_++;
-                blockReason_ = BLOCK_PAUSE;
-                targetTorqueCentiNm_ = 0;
-                return {};
+                injectionSign_ = desiredSign;
+                directionSource_ = DIRECTION_TORQUE;
             }
-            beginSend(now);
+            else if (steeringAngleDeciDeg > kAngleDirectionNoiseDeciDeg)
+            {
+                injectionSign_ = -1;
+                directionSource_ = DIRECTION_ANGLE;
+            }
+            else if (steeringAngleDeciDeg < -kAngleDirectionNoiseDeciDeg)
+            {
+                injectionSign_ = 1;
+                directionSource_ = DIRECTION_ANGLE;
+            }
+            else
+            {
+                injectionSign_ = 1;
+                directionSource_ = DIRECTION_DEFAULT;
+            }
         }
-
-        if (phaseValue() == PHASE_PAUSE)
+        else if (desiredSign == 0)
         {
-            pauseSkipCount_++;
-            blockReason_ = BLOCK_PAUSE;
-            targetTorqueCentiNm_ = 0;
-            return {};
+            candidateSign_ = 0;
+            directionSource_ = DIRECTION_HOLD;
         }
-
-        if (angleBlocked_)
+        else if (desiredSign == injectionSign_)
         {
-            angleBlockedFrameCount_++;
-            blockReason_ = BLOCK_ANGLE;
-            targetTorqueCentiNm_ = 0;
-            return {};
+            candidateSign_ = 0;
+            directionSource_ = DIRECTION_TORQUE;
         }
-
-        const NagAdaptiveConfig value = config();
-        int16_t target = 0;
-        if (observedTorqueCentiNm > value.torqueDeadbandCentiNm)
-            target = static_cast<int16_t>(-value.torqueMagnitudeCentiNm);
-        else if (observedTorqueCentiNm < -value.torqueDeadbandCentiNm)
-            target = value.torqueMagnitudeCentiNm;
+        else if (candidateSign_ != desiredSign)
+        {
+            candidateSign_ = desiredSign;
+            candidateStartedMs_ = now;
+            directionSource_ = DIRECTION_HOLD;
+        }
+        else if (static_cast<uint32_t>(now - candidateStartedMs_) >= kDirectionStableMs)
+        {
+            injectionSign_ = desiredSign;
+            candidateSign_ = 0;
+            directionSource_ = DIRECTION_TORQUE;
+            changed = true;
+        }
         else
         {
-            torqueDeadbandSkipCount_++;
-            blockReason_ = BLOCK_TORQUE_DEADBAND;
-            targetTorqueCentiNm_ = 0;
-            return {};
+            directionSource_ = DIRECTION_HOLD;
         }
 
         blockReason_ = BLOCK_NONE;
+        const int16_t magnitude = config().torqueMagnitudeCentiNm;
+        const int16_t target = static_cast<int16_t>(injectionSign_ * magnitude);
         targetTorqueCentiNm_ = target;
-        return {true, target};
+        return {true, target, static_cast<int8_t>(injectionSign_), changed};
     }
 
     uint32_t phaseRemainingMs(uint32_t now) const
     {
-        const Phase current = phaseValue();
-        if (current != PHASE_SEND && current != PHASE_PAUSE)
-            return 0;
-        const uint32_t deadline = phaseDeadlineValue();
-        if (deadlineReached(now, deadline))
-            return 0;
-        return deadline - now;
+        (void)now;
+        return 0;
     }
 
-    Phase phaseValue() const
-    {
-        return static_cast<Phase>(static_cast<uint8_t>(phase_));
-    }
-
-    BlockReason blockReasonValue() const
-    {
-        return static_cast<BlockReason>(static_cast<uint8_t>(blockReason_));
-    }
-
+    Phase phaseValue() const { return static_cast<Phase>(static_cast<uint8_t>(phase_)); }
+    BlockReason blockReasonValue() const { return static_cast<BlockReason>(static_cast<uint8_t>(blockReason_)); }
+    DirectionSource directionSourceValue() const { return static_cast<DirectionSource>(static_cast<uint8_t>(directionSource_)); }
+    int8_t injectionSign() const { return static_cast<int8_t>(injectionSign_); }
     int16_t lastAngleDeciDeg() const { return static_cast<int16_t>(lastAngleDeciDeg_); }
     int16_t lastObservedTorqueCentiNm() const { return static_cast<int16_t>(lastObservedTorqueCentiNm_); }
     int16_t targetTorqueCentiNm() const { return static_cast<int16_t>(targetTorqueCentiNm_); }
-    uint32_t currentPauseMs() const { return static_cast<uint32_t>(currentPauseMs_); }
-    uint32_t angleBlockEventCount() const { return static_cast<uint32_t>(angleBlockEventCount_); }
-    uint32_t angleBlockedFrameCount() const { return static_cast<uint32_t>(angleBlockedFrameCount_); }
-    uint32_t torqueDeadbandSkipCount() const { return static_cast<uint32_t>(torqueDeadbandSkipCount_); }
-    uint32_t pauseSkipCount() const { return static_cast<uint32_t>(pauseSkipCount_); }
+    uint32_t currentPauseMs() const { return 0; }
+    uint32_t angleBlockEventCount() const { return 0; }
+    uint32_t angleBlockedFrameCount() const { return 0; }
+    uint32_t torqueDeadbandSkipCount() const { return 0; }
+    uint32_t pauseSkipCount() const { return 0; }
 
 private:
     static int16_t clampI16(int16_t value, int16_t minValue, int16_t maxValue)
@@ -232,38 +243,14 @@ private:
         return value;
     }
 
-    static uint32_t randomWord(uint32_t value)
+    int8_t torqueDirectionSign(int16_t observedTorqueCentiNm) const
     {
-        uint32_t x = value + 0x9E3779B9u;
-        x ^= x >> 16;
-        x *= 0x7FEB352Du;
-        x ^= x >> 15;
-        x *= 0x846CA68Bu;
-        x ^= x >> 16;
-        return x;
-    }
-
-    static bool deadlineReached(uint32_t now, uint32_t deadline)
-    {
-        return static_cast<int32_t>(now - deadline) >= 0;
-    }
-
-    static int32_t absolute(int16_t value)
-    {
-        const int32_t widened = value;
-        return widened < 0 ? -widened : widened;
-    }
-
-    uint32_t phaseDeadlineValue() const
-    {
-        return static_cast<uint32_t>(phaseDeadlineMs_);
-    }
-
-    int16_t resumeAngleDeciDeg() const
-    {
-        const NagAdaptiveConfig value = config();
-        const int16_t resume = static_cast<int16_t>(value.angleLimitDeciDeg - kAngleHysteresisDeciDeg);
-        return resume > 0 ? resume : 0;
+        const int16_t noise = config().torqueDeadbandCentiNm;
+        if (observedTorqueCentiNm > noise)
+            return -1;
+        if (observedTorqueCentiNm < -noise)
+            return 1;
+        return 0;
     }
 
     void syncRequestedState(uint32_t now)
@@ -273,81 +260,22 @@ private:
         if (configGeneration == appliedConfigGeneration_ &&
             resetGeneration == appliedResetGeneration_)
             return;
-
         appliedConfigGeneration_ = configGeneration;
         appliedResetGeneration_ = resetGeneration;
-        enabled_ = false;
-        beginArming(now);
+        disable(now);
+        beginArming();
     }
 
-    void beginArming(uint32_t now)
+    void beginArming()
     {
         enabled_ = true;
-        angleBlocked_ = false;
-        angleSafeFrames_ = 0;
         armingFrames_ = 0;
+        injectionSign_ = 0;
+        candidateSign_ = 0;
         phase_ = PHASE_ARMING;
         blockReason_ = BLOCK_ARMING;
+        directionSource_ = DIRECTION_DEFAULT;
         targetTorqueCentiNm_ = 0;
-        phaseStartedMs_ = now;
-        phaseDeadlineMs_ = 0;
-        currentPauseMs_ = 0;
-    }
-
-    void beginSend(uint32_t now)
-    {
-        const NagAdaptiveConfig value = config();
-        phase_ = PHASE_SEND;
-        blockReason_ = BLOCK_NONE;
-        phaseStartedMs_ = now;
-        phaseDeadlineMs_ = now + value.sendWindowMs;
-        currentPauseMs_ = 0;
-    }
-
-    void beginPause(uint32_t now, uint32_t entropy)
-    {
-        const NagAdaptiveConfig value = config();
-        randomSequence_++;
-        const uint32_t span = value.pauseMaxMs - value.pauseMinMs;
-        const uint32_t word = randomWord(now ^ entropy ^ (randomSequence_ * 0x85EBCA6Bu));
-        const uint32_t pauseMs = value.pauseMinMs + (span == 0 ? 0 : word % (span + 1U));
-        currentPauseMs_ = pauseMs;
-        phase_ = PHASE_PAUSE;
-        blockReason_ = BLOCK_PAUSE;
-        phaseStartedMs_ = now;
-        phaseDeadlineMs_ = now + pauseMs;
-    }
-
-    void updateAngleGate(int16_t steeringAngleDeciDeg)
-    {
-        const NagAdaptiveConfig value = config();
-        const int32_t magnitude = absolute(steeringAngleDeciDeg);
-        if (magnitude >= value.angleLimitDeciDeg)
-        {
-            if (!angleBlocked_)
-                angleBlockEventCount_++;
-            angleBlocked_ = true;
-            angleSafeFrames_ = 0;
-            return;
-        }
-
-        if (!angleBlocked_)
-            return;
-
-        if (magnitude <= resumeAngleDeciDeg())
-        {
-            if (angleSafeFrames_ < kAngleResumeFrameCount)
-                angleSafeFrames_++;
-            if (angleSafeFrames_ >= kAngleResumeFrameCount)
-            {
-                angleBlocked_ = false;
-                angleSafeFrames_ = 0;
-            }
-        }
-        else
-        {
-            angleSafeFrames_ = 0;
-        }
     }
 
     Shared<int16_t> torqueMagnitudeCentiNm_{180};
@@ -361,22 +289,16 @@ private:
 
     Shared<uint8_t> phase_{PHASE_DISABLED};
     Shared<uint8_t> blockReason_{BLOCK_DISABLED};
+    Shared<uint8_t> directionSource_{DIRECTION_DEFAULT};
     Shared<int16_t> lastAngleDeciDeg_{0};
     Shared<int16_t> lastObservedTorqueCentiNm_{0};
     Shared<int16_t> targetTorqueCentiNm_{0};
-    Shared<uint32_t> phaseStartedMs_{0};
-    Shared<uint32_t> phaseDeadlineMs_{0};
-    Shared<uint32_t> currentPauseMs_{0};
-    Shared<uint32_t> angleBlockEventCount_{0};
-    Shared<uint32_t> angleBlockedFrameCount_{0};
-    Shared<uint32_t> torqueDeadbandSkipCount_{0};
-    Shared<uint32_t> pauseSkipCount_{0};
 
     bool enabled_ = false;
-    bool angleBlocked_ = false;
-    uint8_t angleSafeFrames_ = 0;
     uint8_t armingFrames_ = 0;
-    uint32_t randomSequence_ = 0;
+    int8_t injectionSign_ = 0;
+    int8_t candidateSign_ = 0;
+    uint32_t candidateStartedMs_ = 0;
     uint32_t appliedConfigGeneration_ = 0;
     uint32_t appliedResetGeneration_ = 0;
 };

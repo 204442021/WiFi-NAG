@@ -10,6 +10,8 @@ DASH_FILE = ROOT / "include" / "web" / "mcp2515_dashboard.h"
 GATEWAY_FILE = ROOT / "include" / "web" / "dash_gateway.h"
 RUNTIME_FILE = ROOT / "src" / "espidf_runtime.cpp"
 PROFILE_EXAMPLE_FILE = ROOT / "platformio_profile.example.h"
+PLATFORMIO_FILE = ROOT / "platformio.ini"
+PROFILE_SCRIPT_FILE = ROOT / "scripts" / "platformio_sync_profile.py"
 
 
 class WifiNagRegressionTests(unittest.TestCase):
@@ -21,6 +23,8 @@ class WifiNagRegressionTests(unittest.TestCase):
         cls.gateway = GATEWAY_FILE.read_text(encoding="utf-8")
         cls.runtime = RUNTIME_FILE.read_text(encoding="utf-8")
         cls.profile_example = PROFILE_EXAMPLE_FILE.read_text(encoding="utf-8")
+        cls.platformio = PLATFORMIO_FILE.read_text(encoding="utf-8")
+        cls.profile_script = PROFILE_SCRIPT_FILE.read_text(encoding="utf-8")
 
     def assertHasUiId(self, element_id: str) -> None:
         pattern = rf'\bid=(?:"{re.escape(element_id)}"|{re.escape(element_id)}\b)'
@@ -88,6 +92,10 @@ class WifiNagRegressionTests(unittest.TestCase):
         )
         self.assertEqual(defaults.get("DASH_SSID"), "Albert-WX")
         self.assertEqual(defaults.get("DASH_PASS"), "12345678")
+        self.assertIn('-DDASH_SSID=\\"Albert-WX\\"', self.platformio)
+        self.assertIn('-DDASH_PASS=\\"12345678\\"', self.platformio)
+        self.assertNotIn("DASH_SSID", self.profile_script)
+        self.assertNotIn("DASH_PASS", self.profile_script)
         self.assertNotIn("DASH_OTA_USER", self.profile_example)
         self.assertNotIn("DASH_OTA_PASS", self.profile_example)
         self.assertNotIn("server.authenticate", self.dash)
@@ -103,6 +111,7 @@ class WifiNagRegressionTests(unittest.TestCase):
         self.assertIn('prefs.getUChar("ap_cred_rev", 0)', self.dash)
         self.assertIn('prefs.remove("ap_ssid");', self.dash)
         self.assertIn('prefs.remove("ap_pass");', self.dash)
+        self.assertIn("kDashApCredentialRevision = 2", self.dash)
 
     def test_gateway_dns_routes_exist(self) -> None:
         required_routes = [
@@ -129,7 +138,14 @@ class WifiNagRegressionTests(unittest.TestCase):
             with self.subTest(route=route):
                 self.assertIn(route, self.dash)
 
-        for element_id in ["can-write-tgl", "nag-mode", "nag-av2-min", "nag-av2-max"]:
+        for element_id in [
+            "can-write-tgl",
+            "nag-mode-seg",
+            "nag-h1-neg-min",
+            "nag-h1-neg-max",
+            "nag-h2-pos-min",
+            "nag-h2-pos-max",
+        ]:
             with self.subTest(element_id=element_id):
                 self.assertHasUiId(element_id)
 

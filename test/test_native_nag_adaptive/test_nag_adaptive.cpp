@@ -17,16 +17,15 @@ static void updateChecksum(CanFrame &frame)
 
 static CanFrame makeFrame(uint8_t counter,
                           int16_t torqueCentiNm,
-                          int16_t angleDeciDeg)
+                          int16_t angleDeciDeg,
+                          uint8_t handsOn = 1)
 {
     CanFrame frame = {.id = 880, .dlc = 8};
     frame.data[0] = 0x12;
     frame.data[1] = 0x00;
     frame.data[2] = 0x80;
-    NagHandler::writeTorqueRaw(
-        frame,
-        static_cast<uint16_t>(2050 + torqueCentiNm));
-    frame.data[4] = 0x00;
+    NagHandler::writeTorqueRaw(frame, static_cast<uint16_t>(2050 + torqueCentiNm));
+    frame.data[4] = static_cast<uint8_t>((handsOn & 0x03) << 6);
     NagHandler::writeSteeringAngleDeciDeg(frame, angleDeciDeg);
     frame.data[6] = static_cast<uint8_t>(0x40 | (counter & 0x0F));
     updateChecksum(frame);
@@ -41,18 +40,21 @@ static int16_t outputTorqueCentiNm(const CanFrame &frame)
 static void observeAt(uint32_t now,
                       uint8_t counter,
                       int16_t torqueCentiNm,
-                      int16_t angleDeciDeg)
+                      int16_t angleDeciDeg,
+                      uint8_t handsOn = 1)
 {
     handler.setTestNowMs(now);
-    CanFrame frame = makeFrame(counter, torqueCentiNm, angleDeciDeg);
+    CanFrame frame = makeFrame(counter, torqueCentiNm, angleDeciDeg, handsOn);
     handler.handleMessage(frame, mock);
 }
 
-static void armAdaptive(int16_t torqueCentiNm = 20)
+static void armAdaptive(int16_t torqueCentiNm = 20,
+                        int16_t angleDeciDeg = 0,
+                        uint8_t handsOn = 1)
 {
-    observeAt(0, 0, torqueCentiNm, 0);
-    observeAt(10, 1, torqueCentiNm, 0);
-    observeAt(20, 2, torqueCentiNm, 0);
+    observeAt(0, 0, torqueCentiNm, angleDeciDeg, handsOn);
+    observeAt(10, 1, torqueCentiNm, angleDeciDeg, handsOn);
+    observeAt(20, 2, torqueCentiNm, angleDeciDeg, handsOn);
 }
 
 void setUp()
@@ -83,126 +85,113 @@ void test_adaptive_requires_three_valid_frames_before_first_send()
     TEST_ASSERT_EQUAL(1, mock.sent.size());
 }
 
-void test_positive_vehicle_torque_sends_negative_and_negative_sends_positive()
+void test_zero_and_small_torque_still_send_nonzero_after_arming()
+{
+    armAdaptive(0);
+    observeAt(30, 3, 1, 0);
+    observeAt(40, 4, -1, 0);
+    TEST_ASSERT_EQUAL(3, mock.sent.size());
+    for (const CanFrame &frame : mock.sent)
+        TEST_ASSERT_NOT_EQUAL(0, outputTorqueCentiNm(frame));
+}
+
+void test_measured_torque_selects_opposite_injection_direction()
 {
     armAdaptive(20);
-    TEST_ASSERT_EQUAL_INT16(-180, outputTorqueCentiNm(mock.sent.back()));
+    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) < 0);
 
+    setUp();
+    armAdaptive(-20);
+    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
+}
+
+void test_opposite_candidate_must_be_stable_for_100ms_before_flip()
+{
+    armAdaptive(20);
     observeAt(30, 3, -20, 0);
-    TEST_ASSERT_EQUAL(2, mock.sent.size());
-    TEST_ASSERT_EQUAL_INT16(180, outputTorqueCentiNm(mock.sent.back()));
+    observeAt(129, 4, -20, 0);
+    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) < 0);
+    observeAt(130, 5, -20, 0);
+    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
 }
 
-void test_torque_deadband_does_not_send()
+void test_noise_band_holds_previous_direction_and_cancels_candidate()
 {
-    armAdaptive(5);
-    TEST_ASSERT_EQUAL(0, mock.sent.size());
-    observeAt(30, 3, -5, 0);
-    TEST_ASSERT_EQUAL(0, mock.sent.size());
-    observeAt(40, 4, 6, 0);
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-    TEST_ASSERT_EQUAL_INT16(-180, outputTorqueCentiNm(mock.sent.back()));
+    armAdaptive(20);
+    observeAt(30, 3, -20, 0);
+    observeAt(80, 4, 0, 0);
+    observeAt(130, 5, -20, 0);
+    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) < 0);
+    observeAt(229, 6, -20, 0);
+    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) < 0);
+    observeAt(230, 7, -20, 0);
+    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
 }
 
-void test_positive_fifty_degrees_blocks_immediately()
+void test_startup_falls_back_to_opposite_steering_angle()
 {
-    armAdaptive();
-    observeAt(30, 3, 20, 500);
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_ANGLE,
-                            handler.adaptiveController.blockReasonValue());
+    armAdaptive(0, 100);
+    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) < 0);
+
+    setUp();
+    armAdaptive(0, -100);
+    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
 }
 
-void test_negative_fifty_degrees_blocks_immediately()
+void test_startup_near_zero_uses_deterministic_positive_default()
 {
-    armAdaptive();
-    observeAt(30, 3, 20, -500);
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_ANGLE,
-                            handler.adaptiveController.blockReasonValue());
+    armAdaptive(0, 0);
+    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
+    observeAt(30, 3, 0, 0);
+    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::DIRECTION_HOLD,
+                            handler.adaptiveController.directionSourceValue());
 }
 
-void test_angle_block_requires_three_frames_at_or_below_forty_five_degrees()
-{
-    armAdaptive();
-    observeAt(30, 3, 20, 500);
-    observeAt(40, 4, 20, 450);
-    observeAt(50, 5, 20, -450);
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-    observeAt(60, 6, 20, 450);
-    TEST_ASSERT_EQUAL(2, mock.sent.size());
-}
-
-void test_angle_fields_are_preserved_in_echo()
-{
-    armAdaptive();
-    observeAt(30, 3, -20, 321);
-    TEST_ASSERT_EQUAL(2, mock.sent.size());
-    TEST_ASSERT_EQUAL_INT16(321,
-                            NagHandler::readSteeringAngleDeciDeg(mock.sent.back()));
-    TEST_ASSERT_EQUAL_UINT8(1, (mock.sent.back().data[4] >> 6) & 0x03);
-}
-
-void test_send_window_then_pause_then_resume()
+void test_large_angle_and_legacy_pause_time_do_not_stop_sending()
 {
     NagAdaptiveConfig config = handler.adaptiveConfig();
     config.sendWindowMs = 1000;
     config.pauseMinMs = 1000;
     config.pauseMaxMs = 1000;
     handler.setAdaptiveConfig(config);
-
-    armAdaptive();
-    observeAt(1019, 3, 20, 0);
-    TEST_ASSERT_EQUAL(2, mock.sent.size());
-    observeAt(1020, 4, 20, 0);
-    observeAt(2019, 5, 20, 0);
-    TEST_ASSERT_EQUAL(2, mock.sent.size());
-    observeAt(2020, 6, 20, 0);
+    armAdaptive(20, 600);
+    observeAt(1020, 3, 20, -600);
+    observeAt(2020, 4, 20, 600);
     TEST_ASSERT_EQUAL(3, mock.sent.size());
 }
 
-void test_random_pause_stays_inside_configured_range()
+void test_handson_1_and_2_choose_their_direction_ranges()
 {
-    NagAdaptiveController controller;
-    NagAdaptiveConfig config;
-    config.sendWindowMs = 1000;
-    config.pauseMinMs = 1000;
-    config.pauseMaxMs = 3000;
-    controller.setConfig(config);
+    handler.setHandsOnRangeCentiNm(1, -1, 110, 110);
+    handler.setHandsOnRangeCentiNm(2, -1, 140, 140);
+    armAdaptive(20, 0, 1);
+    TEST_ASSERT_EQUAL_INT16(-110, outputTorqueCentiNm(mock.sent.back()));
 
-    controller.observe(0, 0, 20, 1);
-    controller.observe(1, 0, 20, 2);
-    controller.observe(2, 0, 20, 3);
-
-    uint32_t now = 1002;
-    uint32_t firstPause = 0;
-    bool sawDifferentPause = false;
-    for (uint32_t cycle = 0; cycle < 8; ++cycle)
-    {
-        controller.observe(now, 0, 20, 0x12340000u + cycle);
-        const uint32_t pauseMs = controller.currentPauseMs();
-        TEST_ASSERT_TRUE(pauseMs >= 1000);
-        TEST_ASSERT_TRUE(pauseMs <= 3000);
-        if (cycle == 0)
-            firstPause = pauseMs;
-        else if (pauseMs != firstPause)
-            sawDifferentPause = true;
-
-        now += pauseMs;
-        TEST_ASSERT_TRUE(controller.observe(now, 0, 20, cycle).shouldSend);
-        now += 1000;
-    }
-    TEST_ASSERT_TRUE(sawDifferentPause);
+    setUp();
+    handler.setHandsOnRangeCentiNm(1, -1, 110, 110);
+    handler.setHandsOnRangeCentiNm(2, -1, 140, 140);
+    armAdaptive(20, 0, 2);
+    TEST_ASSERT_EQUAL_INT16(-140, outputTorqueCentiNm(mock.sent.back()));
 }
 
-void test_pause_bounds_are_normalized_and_swapped()
+void test_handson_0_and_3_retain_last_valid_tier_with_h1_boot_fallback()
 {
-    NagAdaptiveConfig config;
-    config.pauseMinMs = 9000;
-    config.pauseMaxMs = 500;
-    const NagAdaptiveConfig normalized = NagAdaptiveController::normalizeConfig(config);
-    TEST_ASSERT_EQUAL_UINT32(1000, normalized.pauseMinMs);
-    TEST_ASSERT_EQUAL_UINT32(9000, normalized.pauseMaxMs);
+    observeAt(0, 0, 20, 0, 0);
+    TEST_ASSERT_EQUAL_UINT8(1, handler.handsOnTier());
+    observeAt(10, 1, 20, 0, 2);
+    TEST_ASSERT_EQUAL_UINT8(2, handler.handsOnTier());
+    observeAt(20, 2, 20, 0, 3);
+    TEST_ASSERT_EQUAL_UINT8(2, handler.handsOnTier());
+    TEST_ASSERT_EQUAL(1, mock.sent.size());
+}
+
+void test_input_handson_is_captured_before_output_is_forced_to_one()
+{
+    armAdaptive(20, 0, 2);
+    TEST_ASSERT_EQUAL_UINT8(2, handler.handsOnRaw());
+    TEST_ASSERT_EQUAL_UINT8(2, handler.handsOnTier());
+    TEST_ASSERT_EQUAL_UINT8(1, (mock.sent.back().data[4] >> 6) & 0x03);
 }
 
 void test_bad_checksum_is_rejected_and_does_not_arm()
@@ -219,14 +208,36 @@ void test_bad_checksum_is_rejected_and_does_not_arm()
     TEST_ASSERT_EQUAL_UINT32(1, handler.nagChecksumRejectCount);
 }
 
-void test_failed_send_is_not_counted_as_success()
+void test_failed_send_does_not_update_actual_injection_snapshot()
 {
     mock.writeEnabled = false;
     armAdaptive();
     TEST_ASSERT_EQUAL_UINT32(1, handler.nagSendAttemptCount);
     TEST_ASSERT_EQUAL_UINT32(1, handler.nagSendFailureCount);
     TEST_ASSERT_EQUAL_UINT32(0, handler.nagEchoCount);
-    TEST_ASSERT_EQUAL_UINT32(0, handler.framesSent);
+    TEST_ASSERT_FALSE(handler.injectedTorqueIsValid());
+}
+
+void test_successful_send_snapshot_expires_after_200ms()
+{
+    armAdaptive();
+    TEST_ASSERT_TRUE(handler.injectedTorqueIsValid());
+    TEST_ASSERT_TRUE(handler.lastInjectedCenti() < 0);
+    handler.setTestNowMs(220);
+    TEST_ASSERT_TRUE(handler.injectedTorqueIsValid());
+    handler.setTestNowMs(221);
+    TEST_ASSERT_FALSE(handler.injectedTorqueIsValid());
+}
+
+void test_reserved_torque_is_rejected()
+{
+    handler.setTestNowMs(0);
+    CanFrame frame = makeFrame(0, 20, 0);
+    NagHandler::writeTorqueRaw(frame, 0);
+    updateChecksum(frame);
+    handler.handleMessage(frame, mock);
+    TEST_ASSERT_EQUAL(0, mock.sent.size());
+    TEST_ASSERT_EQUAL_UINT32(1, handler.nagInvalidTorqueRejectCount);
 }
 
 void test_successful_echo_is_skipped_as_own_echo()
@@ -244,17 +255,20 @@ int main()
     UNITY_BEGIN();
     RUN_TEST(test_angle_decoder_uses_both_directions);
     RUN_TEST(test_adaptive_requires_three_valid_frames_before_first_send);
-    RUN_TEST(test_positive_vehicle_torque_sends_negative_and_negative_sends_positive);
-    RUN_TEST(test_torque_deadband_does_not_send);
-    RUN_TEST(test_positive_fifty_degrees_blocks_immediately);
-    RUN_TEST(test_negative_fifty_degrees_blocks_immediately);
-    RUN_TEST(test_angle_block_requires_three_frames_at_or_below_forty_five_degrees);
-    RUN_TEST(test_angle_fields_are_preserved_in_echo);
-    RUN_TEST(test_send_window_then_pause_then_resume);
-    RUN_TEST(test_random_pause_stays_inside_configured_range);
-    RUN_TEST(test_pause_bounds_are_normalized_and_swapped);
+    RUN_TEST(test_zero_and_small_torque_still_send_nonzero_after_arming);
+    RUN_TEST(test_measured_torque_selects_opposite_injection_direction);
+    RUN_TEST(test_opposite_candidate_must_be_stable_for_100ms_before_flip);
+    RUN_TEST(test_noise_band_holds_previous_direction_and_cancels_candidate);
+    RUN_TEST(test_startup_falls_back_to_opposite_steering_angle);
+    RUN_TEST(test_startup_near_zero_uses_deterministic_positive_default);
+    RUN_TEST(test_large_angle_and_legacy_pause_time_do_not_stop_sending);
+    RUN_TEST(test_handson_1_and_2_choose_their_direction_ranges);
+    RUN_TEST(test_handson_0_and_3_retain_last_valid_tier_with_h1_boot_fallback);
+    RUN_TEST(test_input_handson_is_captured_before_output_is_forced_to_one);
     RUN_TEST(test_bad_checksum_is_rejected_and_does_not_arm);
-    RUN_TEST(test_failed_send_is_not_counted_as_success);
+    RUN_TEST(test_failed_send_does_not_update_actual_injection_snapshot);
+    RUN_TEST(test_successful_send_snapshot_expires_after_200ms);
+    RUN_TEST(test_reserved_torque_is_rejected);
     RUN_TEST(test_successful_echo_is_skipped_as_own_echo);
     return UNITY_END();
 }

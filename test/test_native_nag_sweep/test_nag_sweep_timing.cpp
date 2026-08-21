@@ -86,31 +86,20 @@ void test_a_mode_keeps_positive_one_point_eight_nm_on_every_echo()
         TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.80f, decodeTorqueNm(frame));
 }
 
-void test_a_v2_uses_the_2000ms_torque_curve_while_echoing_every_frame()
+void test_a_v2_compatibility_value_falls_back_to_continuous_mode()
 {
     handler.setMode(NagHandler::MODE_A_V2);
-    handler.setAv2RangeNm(1.50f, 1.80f);
-
-    const uint32_t times[] = {0U, 500U, 1000U, 2000U};
-    float observed[4] = {};
+    TEST_ASSERT_EQUAL_UINT8(NagHandler::MODE_A, (uint8_t)handler.nagMode);
     for (uint8_t index = 0; index < 4; ++index)
     {
-        handler.setTestNowMs(times[index]);
+        handler.setTestNowMs(static_cast<uint32_t>(index) * 500U);
         CanFrame frame = makeEpasFrame(index);
         handler.handleMessage(frame, mock);
-        if (mock.sent.size() > index)
-            observed[index] = decodeTorqueNm(mock.sent[index]);
     }
 
     TEST_ASSERT_EQUAL(4, mock.sent.size());
-    for (float torque : observed)
-    {
-        TEST_ASSERT_TRUE(torque >= 1.50f);
-        TEST_ASSERT_TRUE(torque <= 1.80f);
-    }
-    TEST_ASSERT_TRUE(observed[0] != observed[1] ||
-                     observed[1] != observed[2] ||
-                     observed[2] != observed[3]);
+    for (const CanFrame &frame : mock.sent)
+        TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.80f, decodeTorqueNm(frame));
 }
 
 int main()
@@ -118,6 +107,6 @@ int main()
     UNITY_BEGIN();
     RUN_TEST(test_each_new_real_370_frame_is_echoed_without_a_send_interval);
     RUN_TEST(test_a_mode_keeps_positive_one_point_eight_nm_on_every_echo);
-    RUN_TEST(test_a_v2_uses_the_2000ms_torque_curve_while_echoing_every_frame);
+    RUN_TEST(test_a_v2_compatibility_value_falls_back_to_continuous_mode);
     return UNITY_END();
 }

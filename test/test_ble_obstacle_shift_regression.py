@@ -161,9 +161,10 @@ class BleObstacleShiftRegressionTests(unittest.TestCase):
         self.assertIn('bleBridgeArgEnabled("shift"', self.bridge)
         self.assertIn("setObstacleShiftEnabled", self.bridge)
 
-    def test_dashboard_keeps_obstacle_shift_visibly_forced_off(self):
+    def test_dashboard_does_not_render_obstacle_shift_controls(self):
         self.assertIn("功能已强制关闭", self.source)
-        self.assertIn('id="shift-enabled" disabled', self.source)
+        self.assertNotIn('id="obstacle-shift-card"', self.source)
+        self.assertNotIn('id="shift-enabled"', self.source)
         self.assertIn("shiftEnabled.checked=false", self.source)
         self.assertIn("shiftEnabled.disabled=true", self.source)
         self.assertIn("shift:'0'", self.source)

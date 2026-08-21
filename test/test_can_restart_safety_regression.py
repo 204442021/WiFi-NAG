@@ -31,7 +31,7 @@ class CanRestartSafetyRegressionTests(unittest.TestCase):
         )
 
     def test_v4_1_v13_is_the_single_internal_version(self) -> None:
-        self.assertEqual(self.version, "V4.1 V13")
+        self.assertEqual(self.version, "V4.2 V13")
 
     def test_read_only_starts_the_hardware_controller_in_listen_only_mode(self) -> None:
         self.assertIn("TWAI_MODE_LISTEN_ONLY", self.twai)
