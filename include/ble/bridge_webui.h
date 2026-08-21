@@ -341,6 +341,17 @@ static void bleBridgeHandleUnbind()
 
 static void bleBridgeHandleUnifiedConfig()
 {
+#if defined(NAG_KILLER)
+    DashNagConfigError nagConfigError;
+    const NagAdaptiveConfigInput::ApplyResult nagConfigResult =
+        dashApplyNagConfigArgs(nagConfigError);
+    if (NagAdaptiveConfigInput::shouldRejectRequest(nagConfigResult))
+    {
+        server.send(400, "application/json",
+                    dashNagConfigErrorJson(nagConfigError));
+        return;
+    }
+#endif
     bool ok = true;
     if (server.hasArg("can") || server.hasArg("force"))
     {
@@ -352,9 +363,8 @@ static void bleBridgeHandleUnifiedConfig()
     }
 #if defined(NAG_KILLER)
     nagKillerEnabled = true;
-    const bool nagConfigChanged = dashApplyNagConfigArgs();
     dashApplyRuntimeState();
-    if (nagConfigChanged)
+    if (NagAdaptiveConfigInput::shouldPublishCommand(nagConfigResult))
         dashSavePrefs();
 #endif
     bleBridgeClient.forceNagState();
