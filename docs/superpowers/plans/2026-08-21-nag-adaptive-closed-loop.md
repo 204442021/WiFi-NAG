@@ -1050,6 +1050,7 @@ Expected: 7 个计划内提交可独立审查，工作树干净；远端分支�
 
 #### Task 7 自动化执行记录（2026-08-21）
 
+- **Checksum mutation guard：** 在 100,000 序列矩阵中对每个成功初始 echo，以及代表性 corrective burst 的每个成功 echo，独立按 `data[0..6]` 重算 `(sum + 0x73) & 0xFF` 并比较 `data[7]`；driver send failure 无成功帧时不执行虚假 checksum 校验。临时将 production TX checksum 常量改为 `0x74` 后，`pio test -e native_nag_adaptive` exit `1`，矩阵按预期失败（`Expected 160 Was 161`）；恢复原始 `0x73` 并确认 production 无 diff 后，GREEN exit `0`，`38/38`（`1.244 s`）。Gate B、Gate C 与 `0x39B` 实车 capture 仍为 **PENDING / 未执行**。
 - **Fix Round 1 / Gate A 重新关闭：** `pio test -e native_nag_adaptive` exit `0`，`38/38`（`1.269 s`）。强化后的 `test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix` 保持精确 `100,000` 个顶层序列，并显式循环覆盖 counter `0..15`、HOS `0..15`、正向/负向/死区、DAS fresh/stale、local send success/failure 的全部 `3,072` 个组合。fresh 合法方向下 HOS `0` 与 HOS `2..7` 断言正向发送尝试/成功；stale、HOS `1`、HOS `8..15`、无方向断言零发送。字面量帧期望独立检查扭矩符号、`+/-180 cNm` 上限与 counter `+1` wrap；代表性 corrective burst 完整进入 `VERIFY`（该阶段零发送）并由 DAS 转换确认；实际驱动发送失败断言 attempts/failures 增长而成功 echo、burst 进度及 acknowledgement 均不变。Gate B、Gate C 与 `0x39B` 实车 capture 仍为 **PENDING / 未执行**。
 - 安全矩阵：新增并单独提交 `test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix`；`pio test -e native_nag_adaptive` exit `0`，`38/38`，覆盖精确 100,000 组确定性 `0x370` 序列、counter wrap、正/负方向、死区、DAS stale、HOS `0..15`，所有发送目标均在 `[-180,+180] cNm`。
 - Python：`py -3 -m unittest discover -s test -p "test_*.py" -v` exit `0`，`110/110`（`1.462 s`）。首次运行暴露 3 个旧 V4.0 静态合同文件，修正为 V5.0 双 ID、可见诊断和新控件合同后全绿。

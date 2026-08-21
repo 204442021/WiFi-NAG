@@ -493,6 +493,14 @@ void test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix()
                                                    frame.data[3]);
         return static_cast<int16_t>(raw) - 2050;
     };
+    const auto assertLiteralChecksum = [](const CanFrame &frame) {
+        uint16_t byteSum = 0;
+        for (uint8_t index = 0; index < 7; ++index)
+            byteSum += frame.data[index];
+        const uint8_t expectedChecksum =
+            static_cast<uint8_t>((byteSum + 0x73U) & 0xFFU);
+        TEST_ASSERT_EQUAL_UINT8(expectedChecksum, frame.data[7]);
+    };
 
     uint32_t allowedCases = 0;
     uint32_t prohibitedCases = 0;
@@ -597,6 +605,7 @@ void test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix()
         TEST_ASSERT_EQUAL(1, driver.sent.size());
 
         const CanFrame &initialEcho = driver.sent[0];
+        assertLiteralChecksum(initialEcho);
         const int16_t sentTorqueCentiNm = readLiteralTorqueCentiNm(initialEcho);
         const int16_t sentMagnitudeCentiNm = sentTorqueCentiNm < 0 ?
                                              static_cast<int16_t>(-sentTorqueCentiNm) :
@@ -642,6 +651,7 @@ void test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix()
                          makeLiteralEpasFrame(nextCounter, observedTorqueCentiNm), nowMs);
                 TEST_ASSERT_EQUAL(sentBefore + 1U, driver.sent.size());
                 const CanFrame &burstEcho = driver.sent.back();
+                assertLiteralChecksum(burstEcho);
                 const int16_t burstTorqueCentiNm = readLiteralTorqueCentiNm(burstEcho);
                 TEST_ASSERT_TRUE(burstTorqueCentiNm >= -180 && burstTorqueCentiNm <= 180);
                 TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>((nextCounter + 1U) & 0x0FU),
