@@ -87,6 +87,69 @@ jobs:
             0x19000 .pio/build/wifi_nag_ESP32_S3_CAN/ota_data_initial.bin \
             0x20000 .pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin
           test "$(stat -c%s "dist/WIFI-NAG-V4.4-V13-${SOURCE_SHA:0:7}-FACTORY-16MB.bin")" -eq 16777216
+
+      - name: Verify 16MB factory image integrity
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          ESPTOOL="$HOME/.platformio/packages/tool-esptoolpy/esptool.py"
+          BUILD=.pio/build/wifi_nag_ESP32_S3_CAN
+          FACTORY="dist/WIFI-NAG-V4.4-V13-${SOURCE_SHA:0:7}-FACTORY-16MB.bin"
+          OTA="dist/WIFI-NAG-V4.4-V13-${SOURCE_SHA:0:7}-OTA.bin"
+
+          python "$ESPTOOL" --chip esp32s3 image_info "$BUILD/bootloader.bin"
+          python "$ESPTOOL" --chip esp32s3 image_info "$BUILD/firmware.bin"
+
+          python - <<'PY'
+          from pathlib import Path
+          import os, hashlib
+
+          build = Path('.pio/build/wifi_nag_ESP32_S3_CAN')
+          sha = os.environ['SOURCE_SHA'][:7]
+          factory = Path(f'dist/WIFI-NAG-V4.4-V13-{sha}-FACTORY-16MB.bin')
+          ota = Path(f'dist/WIFI-NAG-V4.4-V13-{sha}-OTA.bin')
+          data = factory.read_bytes()
+          assert len(data) == 16 * 1024 * 1024, f'factory size={len(data)}'
+
+          components = [
+              (0x00000, build / 'bootloader.bin'),
+              (0x08000, build / 'partitions.bin'),
+              (0x19000, build / 'ota_data_initial.bin'),
+              (0x20000, build / 'firmware.bin'),
+          ]
+          for offset, path in components:
+              payload = path.read_bytes()
+              embedded = data[offset:offset + len(payload)]
+              assert embedded == payload, f'{path.name} mismatch at 0x{offset:X}'
+              print(f'OK {path.name}: offset=0x{offset:X} size={len(payload)} sha256={hashlib.sha256(payload).hexdigest()}')
+
+          firmware = (build / 'firmware.bin').read_bytes()
+          assert len(firmware) <= 0x400000, f'app exceeds ota_0 partition: {len(firmware)} > 0x400000'
+          assert ota.read_bytes() == firmware, 'OTA artifact differs from compiled firmware.bin'
+
+          # Partition map contract for this board/release.
+          csv = Path('partitions_16mb_ota_4096k_nvs64_boot.csv').read_text(encoding='utf-8')
+          for token in ('0x19000', '0x20000', '0x400000', '0x420000', '0xFE0000'):
+              assert token in csv, f'partition contract missing {token}'
+
+          print(f'OK factory full image: {len(data)} bytes sha256={hashlib.sha256(data).hexdigest()}')
+          print(f'OK OTA image: {len(firmware)} bytes sha256={hashlib.sha256(firmware).hexdigest()}')
+          PY
+
+          {
+            echo "WIFI-NAG V4.4-V13 factory image verification"
+            echo "source_sha=$SOURCE_SHA"
+            echo "flash_size=16MB"
+            echo "bootloader_offset=0x00000"
+            echo "partition_table_offset=0x08000"
+            echo "otadata_offset=0x19000"
+            echo "app_offset=0x20000"
+            echo "app_partition_size=0x400000"
+            echo "factory_size=$(stat -c%s "$FACTORY")"
+            echo "factory_sha256=$(sha256sum "$FACTORY" | awk '{print $1}')"
+            echo "ota_sha256=$(sha256sum "$OTA" | awk '{print $1}')"
+          } > dist/FACTORY-VERIFY.txt
+
           (cd dist && sha256sum *.bin > SHA256SUMS.txt)
 
       - name: Upload firmware bundle
@@ -96,5 +159,6 @@ jobs:
           path: |
             dist/*.bin
             dist/SHA256SUMS.txt
+            dist/FACTORY-VERIFY.txt
           if-no-files-found: error
           retention-days: 30
