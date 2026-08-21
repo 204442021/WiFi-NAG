@@ -73,35 +73,26 @@ struct NagHandler : public CarManagerBase
     Shared<uint32_t> nagOwnEchoSkipCount{0};
     Shared<uint32_t> nagChecksumRejectCount{0};
     Shared<uint32_t> nagInvalidTorqueRejectCount{0};
+    Shared<uint32_t> nagCounterCollisionCount{0};
+    Shared<uint32_t> nagLastCounterCollisionGapUs{0};
+    Shared<uint32_t> nagDasFrameCount{0};
+    Shared<uint32_t> nagOemEpasFrameCount{0};
+    Shared<uint32_t> nagLastOemEpasAtMs{0};
+    Shared<uint8_t> nagLastOemEpasCounter{0};
     Shared<uint8_t> nagMode{MODE_A};
-    Shared<int16_t> handsOn1NegativeMinCentiNm{150};
-    Shared<int16_t> handsOn1NegativeMaxCentiNm{180};
-    Shared<int16_t> handsOn1PositiveMinCentiNm{150};
-    Shared<int16_t> handsOn1PositiveMaxCentiNm{180};
-    Shared<int16_t> handsOn2NegativeMinCentiNm{150};
-    Shared<int16_t> handsOn2NegativeMaxCentiNm{180};
-    Shared<int16_t> handsOn2PositiveMinCentiNm{150};
-    Shared<int16_t> handsOn2PositiveMaxCentiNm{180};
     Shared<int16_t> lastObservedCentiNm{0};
     Shared<int16_t> lastInjectedCentiNm{0};
     Shared<bool> lastInjectedValid{false};
     Shared<uint32_t> lastInjectedAtMs{0};
-    Shared<uint8_t> lastHandsOnRaw{0};
-    Shared<uint8_t> lastHandsOnTier{1};
     NagAdaptiveController adaptiveController;
 
-    static constexpr uint32_t kRangeSweepPeriodMs = 2000;
     static constexpr uint32_t kInjectedFreshMs = 200;
     static constexpr int16_t kTorqueMinCentiNm = -180;
     static constexpr int16_t kTorqueMaxCentiNm = 180;
     static constexpr uint32_t kOwnEchoFingerprintLifetimeMs = 100;
+    static constexpr uint64_t kCounterCollisionWindowUs = 100000;
     static constexpr uint8_t kRecentEchoCount = 4;
 
-    uint32_t modeStartMs = 0;
-    int16_t adaptiveLastMagnitudeCentiNm = 0;
-    int16_t adaptiveTransitionFromCentiNm = 0;
-    uint32_t adaptiveTransitionStartMs = 0;
-    uint8_t adaptiveRangeKey = 0;
     struct RecentEcho
     {
         CanFrame frame;
@@ -110,9 +101,14 @@ struct NagHandler : public CarManagerBase
     };
     RecentEcho recentEchoes[kRecentEchoCount]{};
     uint8_t recentEchoWriteIndex = 0;
+    uint8_t lastSuccessfulEchoCounter = 0;
+    uint64_t lastSuccessfulEchoAtUs = 0;
+    bool lastSuccessfulEchoCounterValid = false;
 #ifdef NATIVE_BUILD
     bool testClockEnabled = false;
     uint32_t testNowMs = 0;
+    bool testUsClockEnabled = false;
+    uint64_t testNowUs = 0;
 #endif
 
     const uint32_t *filterIds() const override
@@ -229,11 +225,31 @@ struct NagHandler : public CarManagerBase
 #endif
     }
 
+    uint64_t nowUs() const
+    {
+#ifdef NATIVE_BUILD
+        return testUsClockEnabled ? testNowUs : static_cast<uint64_t>(nowMs()) * 1000ULL;
+#else
+#ifdef ESP_PLATFORM
+        return static_cast<uint64_t>(esp_timer_get_time());
+#else
+        return static_cast<uint64_t>(micros());
+#endif
+#endif
+    }
+
 #ifdef NATIVE_BUILD
     void setTestNowMs(uint32_t ms)
     {
         testClockEnabled = true;
         testNowMs = ms;
+    }
+
+
+    void setTestNowUs(uint64_t us)
+    {
+        testUsClockEnabled = true;
+        testNowUs = us;
     }
 #endif
 
@@ -249,18 +265,8 @@ struct NagHandler : public CarManagerBase
         if ((uint8_t)nagMode != mode)
         {
             nagMode = mode;
-            modeStartMs = nowMs();
-            adaptiveLastMagnitudeCentiNm = 0;
-            adaptiveTransitionFromCentiNm = 0;
-            adaptiveTransitionStartMs = modeStartMs;
-            adaptiveRangeKey = 0;
             adaptiveController.requestReset();
         }
-    }
-
-    void restartModeTimer()
-    {
-        modeStartMs = nowMs();
     }
 
     static int16_t clampMagnitudeCentiNm(int16_t value)
@@ -282,47 +288,51 @@ struct NagHandler : public CarManagerBase
         maxCentiNm = clampMagnitudeCentiNm(maxCentiNm);
         if (minCentiNm > maxCentiNm)
             std::swap(minCentiNm, maxCentiNm);
+        NagAdaptiveConfig config = adaptiveController.config();
         if (tier == 2)
         {
             if (sign < 0)
             {
-                handsOn2NegativeMinCentiNm = minCentiNm;
-                handsOn2NegativeMaxCentiNm = maxCentiNm;
+                config.correctiveNegativeMinCentiNm = minCentiNm;
+                config.correctiveNegativeMaxCentiNm = maxCentiNm;
             }
             else
             {
-                handsOn2PositiveMinCentiNm = minCentiNm;
-                handsOn2PositiveMaxCentiNm = maxCentiNm;
+                config.correctivePositiveMinCentiNm = minCentiNm;
+                config.correctivePositiveMaxCentiNm = maxCentiNm;
             }
         }
         else if (sign < 0)
         {
-            handsOn1NegativeMinCentiNm = minCentiNm;
-            handsOn1NegativeMaxCentiNm = maxCentiNm;
+            config.preventiveNegativeMinCentiNm = minCentiNm;
+            config.preventiveNegativeMaxCentiNm = maxCentiNm;
         }
         else
         {
-            handsOn1PositiveMinCentiNm = minCentiNm;
-            handsOn1PositiveMaxCentiNm = maxCentiNm;
+            config.preventivePositiveMinCentiNm = minCentiNm;
+            config.preventivePositiveMaxCentiNm = maxCentiNm;
         }
+        adaptiveController.setConfig(config);
     }
 
     int16_t handsOnRangeMinCenti(uint8_t tier, int8_t sign) const
     {
+        const NagAdaptiveConfig config = adaptiveController.config();
         if (tier == 2)
-            return sign < 0 ? static_cast<int16_t>(handsOn2NegativeMinCentiNm)
-                            : static_cast<int16_t>(handsOn2PositiveMinCentiNm);
-        return sign < 0 ? static_cast<int16_t>(handsOn1NegativeMinCentiNm)
-                        : static_cast<int16_t>(handsOn1PositiveMinCentiNm);
+            return sign < 0 ? config.correctiveNegativeMinCentiNm
+                            : config.correctivePositiveMinCentiNm;
+        return sign < 0 ? config.preventiveNegativeMinCentiNm
+                        : config.preventivePositiveMinCentiNm;
     }
 
     int16_t handsOnRangeMaxCenti(uint8_t tier, int8_t sign) const
     {
+        const NagAdaptiveConfig config = adaptiveController.config();
         if (tier == 2)
-            return sign < 0 ? static_cast<int16_t>(handsOn2NegativeMaxCentiNm)
-                            : static_cast<int16_t>(handsOn2PositiveMaxCentiNm);
-        return sign < 0 ? static_cast<int16_t>(handsOn1NegativeMaxCentiNm)
-                        : static_cast<int16_t>(handsOn1PositiveMaxCentiNm);
+            return sign < 0 ? config.correctiveNegativeMaxCentiNm
+                            : config.correctivePositiveMaxCentiNm;
+        return sign < 0 ? config.preventiveNegativeMaxCentiNm
+                        : config.preventivePositiveMaxCentiNm;
     }
 
     int16_t lastObservedCenti() const { return (int16_t)lastObservedCentiNm; }
@@ -341,8 +351,8 @@ struct NagHandler : public CarManagerBase
                static_cast<bool>(nagKillerActive) && nagKillerRuntime &&
                lastInjectedAgeMs() <= kInjectedFreshMs;
     }
-    uint8_t handsOnRaw() const { return static_cast<uint8_t>(lastHandsOnRaw); }
-    uint8_t handsOnTier() const { return static_cast<uint8_t>(lastHandsOnTier); }
+    uint8_t handsOnRaw() const { return adaptiveController.snapshot(nowMs()).dasHos; }
+    uint8_t handsOnTier() const { return handsOnRaw() >= 2 ? 2 : 1; }
 
     void setAdaptiveConfig(const NagAdaptiveConfig &config)
     {
@@ -350,88 +360,15 @@ struct NagHandler : public CarManagerBase
     }
 
     NagAdaptiveConfig adaptiveConfig() const { return adaptiveController.config(); }
-    int16_t adaptiveAngleDeciDeg() const { return adaptiveController.lastAngleDeciDeg(); }
+    int16_t adaptiveAngleDeciDeg() const { return 0; }
     float adaptiveAngleDeg() const { return static_cast<float>(adaptiveAngleDeciDeg()) / 10.0f; }
-    int16_t adaptiveTargetCentiNm() const { return adaptiveController.targetTorqueCentiNm(); }
+    int16_t adaptiveTargetCentiNm() const { return adaptiveController.snapshot(nowMs()).targetTorqueCentiNm; }
     float adaptiveTargetNm() const { return centiNmToNm(adaptiveTargetCentiNm()); }
-    uint32_t adaptivePhaseRemainingMs() const { return adaptiveController.phaseRemainingMs(nowMs()); }
-
-    static uint32_t rangeRandomWord(uint32_t period)
-    {
-        uint32_t x = period + 0x9E3779B9u;
-        x ^= x >> 16;
-        x *= 0x7FEB352Du;
-        x ^= x >> 15;
-        x *= 0x846CA68Bu;
-        x ^= x >> 16;
-        return x;
-    }
-
-    static int16_t rangeRandomEndpointCentiNm(int16_t minNm, int16_t maxNm,
-                                              uint32_t period)
-    {
-        const uint16_t span = static_cast<uint16_t>(maxNm - minNm);
-        if (span == 0)
-            return minNm;
-
-        return static_cast<int16_t>(minNm + static_cast<int16_t>(rangeRandomWord(period) % (static_cast<uint32_t>(span) + 1)));
-    }
-
-    static int16_t smoothRangeMagnitudeCentiNm(int16_t minNm, int16_t maxNm,
-                                               uint32_t elapsedMs)
-    {
-        const uint32_t phase = elapsedMs % kRangeSweepPeriodMs;
-        const uint32_t period = elapsedMs / kRangeSweepPeriodMs;
-        const int16_t start = rangeRandomEndpointCentiNm(minNm, maxNm, period);
-        const int16_t end = rangeRandomEndpointCentiNm(minNm, maxNm, period + 1);
-        const int32_t delta = static_cast<int32_t>(end) - static_cast<int32_t>(start);
-        return clampMagnitudeCentiNm(static_cast<int16_t>(static_cast<int32_t>(start) +
-                                                          (delta * static_cast<int32_t>(phase)) /
-                                                              static_cast<int32_t>(kRangeSweepPeriodMs)));
-    }
+    uint32_t adaptivePhaseRemainingMs() const { return adaptiveController.snapshot(nowMs()).phaseRemainingMs; }
 
     int16_t targetTorqueCentiNm() const
     {
         return kTorqueMaxCentiNm;
-    }
-
-    int16_t adaptiveMagnitudeCentiNm(uint8_t tier, int8_t sign)
-    {
-        const int16_t minValue = handsOnRangeMinCenti(tier, sign);
-        const int16_t maxValue = handsOnRangeMaxCenti(tier, sign);
-        const uint32_t now = nowMs();
-        const int16_t desired = smoothRangeMagnitudeCentiNm(
-            minValue, maxValue, now - modeStartMs);
-        const uint8_t key = static_cast<uint8_t>((tier == 2 ? 2 : 0) | (sign > 0 ? 1 : 0));
-
-        if (adaptiveLastMagnitudeCentiNm == 0)
-        {
-            adaptiveLastMagnitudeCentiNm = desired;
-            adaptiveRangeKey = key;
-            return desired;
-        }
-        if (adaptiveRangeKey != key)
-        {
-            adaptiveRangeKey = key;
-            adaptiveTransitionFromCentiNm = adaptiveLastMagnitudeCentiNm;
-            adaptiveTransitionStartMs = now;
-        }
-
-        const uint32_t transitionElapsed = now - adaptiveTransitionStartMs;
-        int16_t magnitude = desired;
-        if (adaptiveTransitionFromCentiNm > 0 && transitionElapsed < kRangeSweepPeriodMs)
-        {
-            const int32_t delta = static_cast<int32_t>(desired) - adaptiveTransitionFromCentiNm;
-            magnitude = static_cast<int16_t>(adaptiveTransitionFromCentiNm +
-                                             delta * static_cast<int32_t>(transitionElapsed) /
-                                                 static_cast<int32_t>(kRangeSweepPeriodMs));
-        }
-        else
-        {
-            adaptiveTransitionFromCentiNm = 0;
-        }
-        adaptiveLastMagnitudeCentiNm = clampMagnitudeCentiNm(magnitude);
-        return adaptiveLastMagnitudeCentiNm;
     }
 
     bool isOwnEcho(const CanFrame &frame) const
@@ -464,8 +401,25 @@ struct NagHandler : public CarManagerBase
         if (onFrame)
             onFrame(frame);
 
-        if (frame.id != 880 || frame.dlc < 8)
+        const uint32_t now = nowMs();
+        if (frame.id == NagDasFeedbackTracker::kDasCanId)
+        {
+            if (frame.dlc >= 8)
+            {
+                nagDasFrameCount++;
+                adaptiveController.observeDas(frame, now);
+            }
             return;
+        }
+
+        if (frame.id != 0x370 || frame.dlc < 8)
+            return;
+
+        if (isOwnEcho(frame))
+        {
+            nagOwnEchoSkipCount++;
+            return;
+        }
 
         const bool adaptiveMode = static_cast<uint8_t>(nagMode) == MODE_ADAPTIVE;
         if (adaptiveMode && !verifyChecksum(frame))
@@ -474,53 +428,60 @@ struct NagHandler : public CarManagerBase
             return;
         }
 
-        if (isOwnEcho(frame))
+        const uint16_t observedTorqueRaw = readTorqueRaw(frame);
+        if (adaptiveMode && isReservedTorqueRaw(observedTorqueRaw))
         {
-            nagOwnEchoSkipCount++;
+            nagInvalidTorqueRejectCount++;
             return;
         }
 
-        const uint16_t observedTorqueRaw = readTorqueRaw(frame);
+        const uint64_t receivedAtUs = nowUs();
+        const uint8_t oemCounter = static_cast<uint8_t>(frame.data[6] & 0x0F);
+        if (lastSuccessfulEchoCounterValid)
+        {
+            const uint64_t gapUs = receivedAtUs - lastSuccessfulEchoAtUs;
+            if (oemCounter == lastSuccessfulEchoCounter &&
+                gapUs >= 1 && gapUs <= kCounterCollisionWindowUs)
+            {
+                nagCounterCollisionCount++;
+                nagLastCounterCollisionGapUs = static_cast<uint32_t>(gapUs);
+            }
+            lastSuccessfulEchoCounterValid = false;
+        }
+        nagOemEpasFrameCount++;
+        nagLastOemEpasAtMs = now;
+        nagLastOemEpasCounter = oemCounter;
         lastObservedCentiNm = rawToObservedCentiNm(observedTorqueRaw);
-        const uint8_t rawHandsOn = static_cast<uint8_t>((frame.data[4] >> 6) & 0x03);
-        lastHandsOnRaw = rawHandsOn;
-        if (rawHandsOn == 1 || rawHandsOn == 2)
-            lastHandsOnTier = rawHandsOn;
 
         if (!nagKillerActive || !nagKillerRuntime)
         {
-            adaptiveController.disable(nowMs());
+            adaptiveController.disable(now);
             return;
         }
 
         int16_t torqueCentiNm = targetTorqueCentiNm();
+        NagAdaptiveDecision decision;
         if (adaptiveMode)
         {
-            if (isReservedTorqueRaw(observedTorqueRaw))
-            {
-                nagInvalidTorqueRejectCount++;
-                return;
-            }
-            const NagAdaptiveDecision decision = adaptiveController.observe(
-                nowMs(),
+            decision = adaptiveController.observeEpas(
+                now,
                 readSteeringAngleDeciDeg(frame),
                 rawToObservedCentiNm(observedTorqueRaw),
                 frameEntropy(frame));
             if (!decision.shouldSend)
                 return;
-            const int16_t magnitude = adaptiveMagnitudeCentiNm(
-                static_cast<uint8_t>(lastHandsOnTier), decision.injectionSign);
-            torqueCentiNm = static_cast<int16_t>(decision.injectionSign * magnitude);
+            torqueCentiNm = decision.targetTorqueCentiNm;
         }
         else
         {
-            adaptiveController.disable(nowMs());
+            adaptiveController.disable(now);
         }
 
         CanFrame echo = frame;
         echo.id = 880;
         echo.dlc = 8;
 
+        torqueCentiNm = clampTorqueCentiNm(torqueCentiNm);
         const uint16_t torqueRaw = centiNmToRaw(torqueCentiNm);
         writeTorqueRaw(echo, torqueRaw);
 
@@ -534,14 +495,19 @@ struct NagHandler : public CarManagerBase
         echo.data[7] = static_cast<uint8_t>((sum + 0x73) & 0xFF);
 
         nagSendAttemptCount++;
-        if (driver.send(echo))
+        const bool sent = driver.send(echo);
+        adaptiveController.onTransmitResult(now, decision, sent);
+        if (sent)
         {
             framesSent++;
             nagEchoCount++;
             lastInjectedCentiNm = torqueCentiNm;
-            lastInjectedAtMs = nowMs();
+            lastInjectedAtMs = now;
             lastInjectedValid = true;
             rememberSuccessfulEcho(echo);
+            lastSuccessfulEchoCounter = cnt;
+            lastSuccessfulEchoAtUs = nowUs();
+            lastSuccessfulEchoCounterValid = true;
         }
         else
         {

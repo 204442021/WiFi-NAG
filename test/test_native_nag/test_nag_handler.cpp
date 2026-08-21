@@ -81,17 +81,6 @@ void test_nag_das_feedback_is_receive_only()
     TEST_ASSERT_EQUAL(0, mock.sent.size());
 }
 
-void test_adaptive_handson_ranges_default_to_1_50_to_1_80_nm()
-{
-    for (uint8_t tier = 1; tier <= 2; ++tier)
-    {
-        TEST_ASSERT_EQUAL_INT16(150, handler.handsOnRangeMinCenti(tier, -1));
-        TEST_ASSERT_EQUAL_INT16(180, handler.handsOnRangeMaxCenti(tier, -1));
-        TEST_ASSERT_EQUAL_INT16(150, handler.handsOnRangeMinCenti(tier, 1));
-        TEST_ASSERT_EQUAL_INT16(180, handler.handsOnRangeMaxCenti(tier, 1));
-    }
-}
-
 // ============================================================
 // Basic echo behavior
 // ============================================================
@@ -319,13 +308,6 @@ void test_nag_av2_is_not_supported_and_migrates_to_continuous()
     TEST_ASSERT_TRUE(verifyChecksum(mock.sent[0]));
 }
 
-void test_handson_range_clamps_magnitude_and_swaps_bounds()
-{
-    handler.setHandsOnRangeCentiNm(2, -1, 250, -5);
-    TEST_ASSERT_EQUAL_INT16(10, handler.handsOnRangeMinCenti(2, -1));
-    TEST_ASSERT_EQUAL_INT16(180, handler.handsOnRangeMaxCenti(2, -1));
-}
-
 void test_nag_a_skips_own_echo()
 {
     CanFrame f = makeEpasFrame(0, 0.33, 0x03);
@@ -421,6 +403,46 @@ void test_nag_output_dlc_is_8()
     TEST_ASSERT_EQUAL_UINT8(8, mock.sent[0].dlc);
 }
 
+void test_continuous_mode_remains_independent_of_39b()
+{
+    handler.setMode(NagHandler::MODE_A);
+    for (uint8_t counter = 0; counter < 3; ++counter)
+    {
+        handler.setTestNowMs(static_cast<uint32_t>(counter) * 10U);
+        CanFrame frame = makeEpasFrame(0, -0.80, counter);
+        handler.handleMessage(frame, mock);
+    }
+
+    TEST_ASSERT_EQUAL(3, mock.sent.size());
+    for (const CanFrame &frame : mock.sent)
+        TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.80f, decodeTorqueNm(frame));
+}
+
+void test_echo_hands_on_bits_remain_forced_to_one()
+{
+    for (uint8_t handsOn = 0; handsOn < 4; ++handsOn)
+    {
+        mock.reset();
+        CanFrame frame = makeEpasFrame(handsOn, 0.33, handsOn);
+        handler.handleMessage(frame, mock);
+        TEST_ASSERT_EQUAL(1, mock.sent.size());
+        TEST_ASSERT_EQUAL_UINT8(1, (mock.sent[0].data[4] >> 6) & 0x03);
+    }
+}
+
+void test_echo_checksum_and_plus_one_counter_remain_valid()
+{
+    for (uint8_t counter = 0; counter < 16; ++counter)
+    {
+        mock.reset();
+        CanFrame frame = makeEpasFrame(0, 0.33, counter);
+        handler.handleMessage(frame, mock);
+        TEST_ASSERT_EQUAL(1, mock.sent.size());
+        TEST_ASSERT_EQUAL_UINT8((counter + 1U) & 0x0F, mock.sent[0].data[6] & 0x0F);
+        TEST_ASSERT_TRUE(verifyChecksum(mock.sent[0]));
+    }
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -429,7 +451,6 @@ int main()
     RUN_TEST(test_nag_filter_ids_count);
     RUN_TEST(test_nag_filter_ids_value);
     RUN_TEST(test_nag_das_feedback_is_receive_only);
-    RUN_TEST(test_adaptive_handson_ranges_default_to_1_50_to_1_80_nm);
 
     // Basic echo behavior
     RUN_TEST(test_nag_echoes_when_handson_0);
@@ -464,7 +485,6 @@ int main()
 
     // A_V2 is retained only as a migration value.
     RUN_TEST(test_nag_av2_is_not_supported_and_migrates_to_continuous);
-    RUN_TEST(test_handson_range_clamps_magnitude_and_swaps_bounds);
     RUN_TEST(test_nag_a_skips_own_echo);
 
     // Counters
@@ -478,6 +498,9 @@ int main()
     // Output frame
     RUN_TEST(test_nag_output_id_is_880);
     RUN_TEST(test_nag_output_dlc_is_8);
+    RUN_TEST(test_continuous_mode_remains_independent_of_39b);
+    RUN_TEST(test_echo_hands_on_bits_remain_forced_to_one);
+    RUN_TEST(test_echo_checksum_and_plus_one_counter_remain_valid);
 
     return UNITY_END();
 }

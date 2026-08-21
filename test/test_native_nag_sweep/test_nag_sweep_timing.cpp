@@ -51,6 +51,7 @@ void setUp()
     handler = NagHandler();
     nagKillerRuntime = true;
     handler.setTestNowMs(0);
+    handler.setTestNowUs(0);
     enableProductionTimingIfPresent(handler, 0);
 }
 
@@ -102,11 +103,52 @@ void test_a_v2_compatibility_value_falls_back_to_continuous_mode()
         TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.80f, decodeTorqueNm(frame));
 }
 
+void test_counter_collision_is_recorded_on_next_oem_counter_match()
+{
+    handler.setTestNowMs(100);
+    handler.setTestNowUs(100000);
+    CanFrame first = makeEpasFrame(0x0C);
+    handler.handleMessage(first, mock);
+
+    handler.setTestNowMs(120);
+    handler.setTestNowUs(120000);
+    CanFrame collision = makeEpasFrame(0x0D);
+    handler.handleMessage(collision, mock);
+
+    TEST_ASSERT_EQUAL_UINT32(1, handler.nagCounterCollisionCount);
+    TEST_ASSERT_EQUAL_UINT32(20000, handler.nagLastCounterCollisionGapUs);
+
+    handler.setTestNowMs(221);
+    handler.setTestNowUs(220001);
+    CanFrame outsideWindow = makeEpasFrame(0x0E);
+    handler.handleMessage(outsideWindow, mock);
+    TEST_ASSERT_EQUAL_UINT32(1, handler.nagCounterCollisionCount);
+    TEST_ASSERT_EQUAL_UINT32(20000, handler.nagLastCounterCollisionGapUs);
+}
+
+void test_counter_wrap_15_to_0_is_recorded_correctly()
+{
+    handler.setTestNowMs(100);
+    handler.setTestNowUs(100000);
+    CanFrame first = makeEpasFrame(0x0F);
+    handler.handleMessage(first, mock);
+
+    handler.setTestNowMs(120);
+    handler.setTestNowUs(120000);
+    CanFrame collision = makeEpasFrame(0x00);
+    handler.handleMessage(collision, mock);
+
+    TEST_ASSERT_EQUAL_UINT32(1, handler.nagCounterCollisionCount);
+    TEST_ASSERT_EQUAL_UINT32(20000, handler.nagLastCounterCollisionGapUs);
+}
+
 int main()
 {
     UNITY_BEGIN();
     RUN_TEST(test_each_new_real_370_frame_is_echoed_without_a_send_interval);
     RUN_TEST(test_a_mode_keeps_positive_one_point_eight_nm_on_every_echo);
     RUN_TEST(test_a_v2_compatibility_value_falls_back_to_continuous_mode);
+    RUN_TEST(test_counter_collision_is_recorded_on_next_oem_counter_match);
+    RUN_TEST(test_counter_wrap_15_to_0_is_recorded_correctly);
     return UNITY_END();
 }
