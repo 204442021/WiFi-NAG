@@ -14,6 +14,14 @@ static CanFrame makeDasFrame(uint8_t hos)
     return frame;
 }
 
+static void updateHandlerChecksum(CanFrame &frame)
+{
+    uint16_t sum = 0;
+    for (uint8_t index = 0; index < 7; ++index)
+        sum += frame.data[index];
+    frame.data[7] = static_cast<uint8_t>((sum + 0x73) & 0xFF);
+}
+
 static CanFrame makeHandlerEpasFrame(uint8_t counter,
                                      int16_t torqueCentiNm = 20,
                                      int16_t angleDeciDeg = 0)
@@ -25,11 +33,19 @@ static CanFrame makeHandlerEpasFrame(uint8_t counter,
     NagHandler::writeTorqueRaw(frame, NagHandler::centiNmToRaw(torqueCentiNm));
     NagHandler::writeSteeringAngleDeciDeg(frame, angleDeciDeg);
     frame.data[6] = static_cast<uint8_t>(0x40 | (counter & 0x0F));
-    uint16_t sum = 0;
-    for (uint8_t index = 0; index < 7; ++index)
-        sum += frame.data[index];
-    frame.data[7] = static_cast<uint8_t>((sum + 0x73) & 0xFF);
+    updateHandlerChecksum(frame);
     return frame;
+}
+
+static CanFrame makeExpectedEcho(const CanFrame &oem, int16_t torqueCentiNm)
+{
+    CanFrame echo = oem;
+    NagHandler::writeTorqueRaw(echo, NagHandler::centiNmToRaw(torqueCentiNm));
+    echo.data[4] = static_cast<uint8_t>((oem.data[4] & 0x3F) | 0x40);
+    echo.data[6] = static_cast<uint8_t>((oem.data[6] & 0xF0) |
+                                       (((oem.data[6] & 0x0F) + 1U) & 0x0F));
+    updateHandlerChecksum(echo);
+    return echo;
 }
 
 static void handleAt(NagHandler &handler, MockDriver &driver,
@@ -772,16 +788,89 @@ void test_failed_send_does_not_advance_corrective_burst()
     driver.writeEnabled = false;
     handleAt(handler, driver, makeHandlerEpasFrame(0), 0);
     handleAt(handler, driver, makeHandlerEpasFrame(1), 10);
-    handleAt(handler, driver, makeHandlerEpasFrame(2), 20);
+    CanFrame failedInput = makeHandlerEpasFrame(2);
+    handleAt(handler, driver, failedInput, 20);
 
     TEST_ASSERT_EQUAL_UINT32(1, handler.nagSendAttemptCount);
     TEST_ASSERT_EQUAL_UINT32(1, handler.nagSendFailureCount);
+    TEST_ASSERT_EQUAL_UINT32(0, handler.framesSent);
+    TEST_ASSERT_EQUAL_UINT32(0, handler.nagEchoCount);
+    TEST_ASSERT_FALSE(handler.lastInjectedValid);
+    TEST_ASSERT_EQUAL_INT16(0, handler.lastInjectedCenti());
+    TEST_ASSERT_EQUAL_UINT32(0, handler.lastInjectedAtMs);
     TEST_ASSERT_EQUAL_UINT8(0, handler.adaptiveController.snapshot(20).correctiveBurstFrame);
+    const CanFrame failedEcho = makeExpectedEcho(
+        failedInput, handler.adaptiveController.snapshot(20).targetTorqueCentiNm);
+    TEST_ASSERT_FALSE(handler.isOwnEcho(failedEcho));
+    TEST_ASSERT_EQUAL_UINT32(0, handler.nagCounterCollisionCount);
 
     driver.writeEnabled = true;
     handleAt(handler, driver, makeHandlerEpasFrame(3), 30);
     TEST_ASSERT_EQUAL(1, driver.sent.size());
+    TEST_ASSERT_EQUAL_UINT32(0, handler.nagCounterCollisionCount);
     TEST_ASSERT_EQUAL_UINT8(1, handler.adaptiveController.snapshot(30).correctiveBurstFrame);
+}
+
+void test_adaptive_runtime_reenable_rearms_without_mode_change()
+{
+    NagHandler handler;
+    MockDriver driver;
+    nagKillerRuntime = true;
+    handler.setMode(NagHandler::MODE_ADAPTIVE);
+
+    nagKillerRuntime = false;
+    handleAt(handler, driver, makeDasFrame(0), 0);
+    handleAt(handler, driver, makeHandlerEpasFrame(0), 0);
+    handleAt(handler, driver, makeHandlerEpasFrame(1), 10);
+    handleAt(handler, driver, makeHandlerEpasFrame(2), 20);
+    TEST_ASSERT_EQUAL(0, driver.sent.size());
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_DISABLED,
+                            handler.adaptiveController.snapshot(20).phase);
+
+    nagKillerRuntime = true;
+    handleAt(handler, driver, makeDasFrame(0), 100);
+    handleAt(handler, driver, makeHandlerEpasFrame(3), 100);
+    handleAt(handler, driver, makeHandlerEpasFrame(4), 110);
+    handleAt(handler, driver, makeHandlerEpasFrame(5), 120);
+
+    TEST_ASSERT_EQUAL_UINT8(NagHandler::MODE_ADAPTIVE, (uint8_t)handler.nagMode);
+    TEST_ASSERT_EQUAL(1, driver.sent.size());
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_MAINTENANCE,
+                            handler.adaptiveController.snapshot(120).phase);
+}
+
+void test_adaptive_angle_tracks_only_accepted_non_own_oem_epas()
+{
+    NagHandler handler;
+    MockDriver driver;
+    nagKillerRuntime = true;
+    handler.setMode(NagHandler::MODE_ADAPTIVE);
+    handleAt(handler, driver, makeDasFrame(0), 0);
+
+    handleAt(handler, driver, makeHandlerEpasFrame(0, 20, 123), 0);
+    TEST_ASSERT_EQUAL_INT16(123, handler.adaptiveAngleDeciDeg());
+
+    CanFrame badChecksum = makeHandlerEpasFrame(1, 20, 456);
+    badChecksum.data[7] ^= 0x01;
+    handleAt(handler, driver, badChecksum, 1);
+    TEST_ASSERT_EQUAL_INT16(123, handler.adaptiveAngleDeciDeg());
+
+    CanFrame reserved = makeHandlerEpasFrame(1, 20, 789);
+    NagHandler::writeTorqueRaw(reserved, 0);
+    updateHandlerChecksum(reserved);
+    handleAt(handler, driver, reserved, 2);
+    TEST_ASSERT_EQUAL_INT16(123, handler.adaptiveAngleDeciDeg());
+
+    handleAt(handler, driver, makeHandlerEpasFrame(1, 20, 123), 10);
+    handleAt(handler, driver, makeHandlerEpasFrame(2, 20, 123), 20);
+    TEST_ASSERT_EQUAL(1, driver.sent.size());
+    CanFrame earlierOwnEcho = driver.sent[0];
+
+    handleAt(handler, driver, makeHandlerEpasFrame(3, 20, 222), 30);
+    TEST_ASSERT_EQUAL_INT16(222, handler.adaptiveAngleDeciDeg());
+    handleAt(handler, driver, earlierOwnEcho, 40);
+    TEST_ASSERT_EQUAL_INT16(222, handler.adaptiveAngleDeciDeg());
+    TEST_ASSERT_EQUAL_UINT32(1, handler.nagOwnEchoSkipCount);
 }
 
 int main()
@@ -822,5 +911,7 @@ int main()
     RUN_TEST(test_local_send_success_does_not_increment_das_ack_count);
     RUN_TEST(test_das_transition_from_3_to_1_records_ack_after_tx);
     RUN_TEST(test_failed_send_does_not_advance_corrective_burst);
+    RUN_TEST(test_adaptive_runtime_reenable_rearms_without_mode_change);
+    RUN_TEST(test_adaptive_angle_tracks_only_accepted_non_own_oem_epas);
     return UNITY_END();
 }

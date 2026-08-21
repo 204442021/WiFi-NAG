@@ -104,6 +104,10 @@ struct NagHandler : public CarManagerBase
     uint8_t lastSuccessfulEchoCounter = 0;
     uint64_t lastSuccessfulEchoAtUs = 0;
     bool lastSuccessfulEchoCounterValid = false;
+    uint8_t lastOemHandsOnRaw = 0;
+    uint8_t lastOemHandsOnTier = 1;
+    int16_t lastOemSteeringAngleDeciDeg = 0;
+    bool lastEffectiveRuntimeEnabled = true;
 #ifdef NATIVE_BUILD
     bool testClockEnabled = false;
     uint32_t testNowMs = 0;
@@ -351,8 +355,8 @@ struct NagHandler : public CarManagerBase
                static_cast<bool>(nagKillerActive) && nagKillerRuntime &&
                lastInjectedAgeMs() <= kInjectedFreshMs;
     }
-    uint8_t handsOnRaw() const { return adaptiveController.snapshot(nowMs()).dasHos; }
-    uint8_t handsOnTier() const { return handsOnRaw() >= 2 ? 2 : 1; }
+    uint8_t handsOnRaw() const { return lastOemHandsOnRaw; }
+    uint8_t handsOnTier() const { return lastOemHandsOnTier; }
 
     void setAdaptiveConfig(const NagAdaptiveConfig &config)
     {
@@ -360,7 +364,7 @@ struct NagHandler : public CarManagerBase
     }
 
     NagAdaptiveConfig adaptiveConfig() const { return adaptiveController.config(); }
-    int16_t adaptiveAngleDeciDeg() const { return 0; }
+    int16_t adaptiveAngleDeciDeg() const { return lastOemSteeringAngleDeciDeg; }
     float adaptiveAngleDeg() const { return static_cast<float>(adaptiveAngleDeciDeg()) / 10.0f; }
     int16_t adaptiveTargetCentiNm() const { return adaptiveController.snapshot(nowMs()).targetTorqueCentiNm; }
     float adaptiveTargetNm() const { return centiNmToNm(adaptiveTargetCentiNm()); }
@@ -402,6 +406,13 @@ struct NagHandler : public CarManagerBase
             onFrame(frame);
 
         const uint32_t now = nowMs();
+        const bool effectiveRuntimeEnabled = static_cast<bool>(nagKillerActive) &&
+                                             nagKillerRuntime;
+        if (effectiveRuntimeEnabled && !lastEffectiveRuntimeEnabled &&
+            static_cast<uint8_t>(nagMode) == MODE_ADAPTIVE)
+            adaptiveController.requestReset();
+        lastEffectiveRuntimeEnabled = effectiveRuntimeEnabled;
+
         if (frame.id == NagDasFeedbackTracker::kDasCanId)
         {
             if (frame.dlc >= 8)
@@ -452,8 +463,13 @@ struct NagHandler : public CarManagerBase
         nagLastOemEpasAtMs = now;
         nagLastOemEpasCounter = oemCounter;
         lastObservedCentiNm = rawToObservedCentiNm(observedTorqueRaw);
+        const uint8_t rawHandsOn = static_cast<uint8_t>((frame.data[4] >> 6) & 0x03);
+        lastOemHandsOnRaw = rawHandsOn;
+        if (rawHandsOn == 1 || rawHandsOn == 2)
+            lastOemHandsOnTier = rawHandsOn;
+        lastOemSteeringAngleDeciDeg = readSteeringAngleDeciDeg(frame);
 
-        if (!nagKillerActive || !nagKillerRuntime)
+        if (!effectiveRuntimeEnabled)
         {
             adaptiveController.disable(now);
             return;
@@ -465,7 +481,7 @@ struct NagHandler : public CarManagerBase
         {
             decision = adaptiveController.observeEpas(
                 now,
-                readSteeringAngleDeciDeg(frame),
+                lastOemSteeringAngleDeciDeg,
                 rawToObservedCentiNm(observedTorqueRaw),
                 frameEntropy(frame));
             if (!decision.shouldSend)

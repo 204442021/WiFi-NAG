@@ -39,6 +39,38 @@ static CanFrame makeEpasFrame(uint8_t counter, int16_t torqueCentiNm = 0)
     return frame;
 }
 
+static void updateChecksum(CanFrame &frame)
+{
+    uint16_t sum = 0;
+    for (uint8_t index = 0; index < 7; ++index)
+        sum += frame.data[index];
+    frame.data[7] = static_cast<uint8_t>((sum + 0x73) & 0xFF);
+}
+
+static CanFrame makeDasFrame(uint8_t hos)
+{
+    CanFrame frame = {.id = NagDasFeedbackTracker::kDasCanId, .dlc = 8};
+    frame.data[5] = static_cast<uint8_t>((hos & 0x0F) << 2);
+    return frame;
+}
+
+static void primeAdaptiveSuccessfulEcho(uint8_t counter = 0x0C)
+{
+    handler.setMode(NagHandler::MODE_ADAPTIVE);
+    handler.setTestNowMs(80);
+    handler.setTestNowUs(80000);
+    CanFrame das = makeDasFrame(0);
+    handler.handleMessage(das, mock);
+    for (uint8_t index = 0; index < 3; ++index)
+    {
+        handler.setTestNowMs(80U + static_cast<uint32_t>(index) * 10U);
+        handler.setTestNowUs(80000ULL + static_cast<uint64_t>(index) * 10000ULL);
+        CanFrame epas = makeEpasFrame(static_cast<uint8_t>(counter - 2U + index));
+        handler.handleMessage(epas, mock);
+    }
+    TEST_ASSERT_EQUAL(1, mock.sent.size());
+}
+
 static float decodeTorqueNm(const CanFrame &frame)
 {
     return NagHandler::centiNmToNm(
@@ -142,6 +174,76 @@ void test_counter_wrap_15_to_0_is_recorded_correctly()
     TEST_ASSERT_EQUAL_UINT32(20000, handler.nagLastCounterCollisionGapUs);
 }
 
+void test_counter_collision_window_includes_one_us_and_zero_tx_timestamp()
+{
+    handler.setTestNowMs(0);
+    handler.setTestNowUs(0);
+    CanFrame first = makeEpasFrame(0x0C);
+    handler.handleMessage(first, mock);
+
+    handler.setTestNowUs(1);
+    CanFrame collision = makeEpasFrame(0x0D);
+    handler.handleMessage(collision, mock);
+
+    TEST_ASSERT_EQUAL_UINT32(1, handler.nagCounterCollisionCount);
+    TEST_ASSERT_EQUAL_UINT32(1, handler.nagLastCounterCollisionGapUs);
+}
+
+void test_counter_collision_window_includes_100000_us()
+{
+    handler.setTestNowMs(100);
+    handler.setTestNowUs(100000);
+    CanFrame first = makeEpasFrame(0x0C);
+    handler.handleMessage(first, mock);
+
+    handler.setTestNowMs(200);
+    handler.setTestNowUs(200000);
+    CanFrame collision = makeEpasFrame(0x0D);
+    handler.handleMessage(collision, mock);
+
+    TEST_ASSERT_EQUAL_UINT32(1, handler.nagCounterCollisionCount);
+    TEST_ASSERT_EQUAL_UINT32(100000, handler.nagLastCounterCollisionGapUs);
+}
+
+void test_adaptive_bad_checksum_does_not_qualify_or_consume_collision_match()
+{
+    primeAdaptiveSuccessfulEcho();
+
+    handler.setTestNowMs(110);
+    handler.setTestNowUs(110000);
+    CanFrame rejected = makeEpasFrame(0x0D);
+    rejected.data[7] ^= 0x01;
+    handler.handleMessage(rejected, mock);
+    TEST_ASSERT_EQUAL_UINT32(0, handler.nagCounterCollisionCount);
+
+    handler.setTestNowMs(120);
+    handler.setTestNowUs(120000);
+    CanFrame accepted = makeEpasFrame(0x0D);
+    handler.handleMessage(accepted, mock);
+    TEST_ASSERT_EQUAL_UINT32(1, handler.nagCounterCollisionCount);
+    TEST_ASSERT_EQUAL_UINT32(20000, handler.nagLastCounterCollisionGapUs);
+}
+
+void test_adaptive_reserved_torque_does_not_qualify_or_consume_collision_match()
+{
+    primeAdaptiveSuccessfulEcho();
+
+    handler.setTestNowMs(110);
+    handler.setTestNowUs(110000);
+    CanFrame rejected = makeEpasFrame(0x0D);
+    NagHandler::writeTorqueRaw(rejected, 0);
+    updateChecksum(rejected);
+    handler.handleMessage(rejected, mock);
+    TEST_ASSERT_EQUAL_UINT32(0, handler.nagCounterCollisionCount);
+
+    handler.setTestNowMs(120);
+    handler.setTestNowUs(120000);
+    CanFrame accepted = makeEpasFrame(0x0D);
+    handler.handleMessage(accepted, mock);
+    TEST_ASSERT_EQUAL_UINT32(1, handler.nagCounterCollisionCount);
+    TEST_ASSERT_EQUAL_UINT32(20000, handler.nagLastCounterCollisionGapUs);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -150,5 +252,9 @@ int main()
     RUN_TEST(test_a_v2_compatibility_value_falls_back_to_continuous_mode);
     RUN_TEST(test_counter_collision_is_recorded_on_next_oem_counter_match);
     RUN_TEST(test_counter_wrap_15_to_0_is_recorded_correctly);
+    RUN_TEST(test_counter_collision_window_includes_one_us_and_zero_tx_timestamp);
+    RUN_TEST(test_counter_collision_window_includes_100000_us);
+    RUN_TEST(test_adaptive_bad_checksum_does_not_qualify_or_consume_collision_match);
+    RUN_TEST(test_adaptive_reserved_torque_does_not_qualify_or_consume_collision_match);
     return UNITY_END();
 }

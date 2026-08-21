@@ -443,6 +443,20 @@ void test_echo_checksum_and_plus_one_counter_remain_valid()
     }
 }
 
+void test_continuous_mode_legacy_hos_diagnostics_follow_oem_370_without_das()
+{
+    handler.setMode(NagHandler::MODE_A);
+    CanFrame handsOnOne = makeEpasFrame(1, 0.33, 0x01);
+    handler.handleMessage(handsOnOne, mock);
+    TEST_ASSERT_EQUAL_UINT8(1, handler.handsOnRaw());
+    TEST_ASSERT_EQUAL_UINT8(1, handler.handsOnTier());
+
+    CanFrame handsOnTwo = makeEpasFrame(2, 0.33, 0x02);
+    handler.handleMessage(handsOnTwo, mock);
+    TEST_ASSERT_EQUAL_UINT8(2, handler.handsOnRaw());
+    TEST_ASSERT_EQUAL_UINT8(2, handler.handsOnTier());
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -501,6 +515,7 @@ int main()
     RUN_TEST(test_continuous_mode_remains_independent_of_39b);
     RUN_TEST(test_echo_hands_on_bits_remain_forced_to_one);
     RUN_TEST(test_echo_checksum_and_plus_one_counter_remain_valid);
+    RUN_TEST(test_continuous_mode_legacy_hos_diagnostics_follow_oem_370_without_das);
 
     return UNITY_END();
 }
