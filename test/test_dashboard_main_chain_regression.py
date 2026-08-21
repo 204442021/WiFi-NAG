@@ -20,6 +20,16 @@ MINIFY_REQUIREMENTS_FILE = ROOT / "scripts" / "requirements-dashboard.txt"
 RUNTIME_HEADER_FILE = ROOT / "include" / "platform" / "espidf_runtime.h"
 RUNTIME_SOURCE_FILE = ROOT / "src" / "espidf_runtime.cpp"
 
+EXPECTED_CUSTOM_UI_IDS = (
+    "nag-custom-readiness", "nag-custom-readiness-reason",
+    "nag-custom-dirty", "nag-custom-defaults", "nag-custom-save",
+    "nag-pv-neg-min", "nag-pv-neg-max", "nag-pv-pos-min", "nag-pv-pos-max",
+    "nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max",
+    "nag-active-min", "nag-active-max", "nag-release-min", "nag-release-max",
+    "nag-rest-min", "nag-rest-max", "nag-direction-deadband",
+    "nag-custom-hard-cap", "nag-custom-das-timeout",
+)
+
 
 def generated_dashboard_bytes(base_text: str) -> bytes:
     payload = re.search(
@@ -143,14 +153,7 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             "wifi-nag-header",
             "config-card",
             "config-hardware-section",
-            "nag-h1-neg-min",
-            "nag-h1-neg-max",
-            "nag-h1-pos-min",
-            "nag-h1-pos-max",
-            "nag-h2-neg-min",
-            "nag-h2-neg-max",
-            "nag-h2-pos-min",
-            "nag-h2-pos-max",
+            *EXPECTED_CUSTOM_UI_IDS,
             "ble-card",
             "ble-bridge-section",
             "wifi-config-card",
@@ -168,6 +171,32 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             for element_id in core_ids:
                 with self.subTest(file=label, element_id=element_id):
                     self.assert_has_id(html, element_id)
+
+        for label, html in (("source", self.source), ("generated", self.generated_html)):
+            for text in (
+                "预防层", "纠正层", "节奏与休息", "安全边界",
+                "休息期不额外发送 0x370", "本地发送成功不等于 DAS 接受",
+            ):
+                with self.subTest(file=label, text=text):
+                    self.assertIn(text, html)
+            for retired in (
+                "反方向持续注入", "Hands-On 1 扭矩范围", "Hands-On 2 扭矩范围",
+            ):
+                with self.subTest(file=label, retired=retired):
+                    self.assertNotIn(retired, html)
+
+    def test_custom_strategy_layout_and_navigation_ownership_are_preserved(self) -> None:
+        config = extract_element(self.source, "config-card")
+        for element_id in EXPECTED_CUSTOM_UI_IDS:
+            self.assert_has_id(config, element_id)
+        self.assertIn("@media(min-width:900px)", self.source)
+        self.assertIn(".nag-custom-grid", self.source)
+        self.assertIn(".nag-rhythm-grid", self.source)
+        self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))", self.source)
+        self.assertIn("grid-template-columns:repeat(3,minmax(0,1fr))", self.source)
+        self.assertIn(".nag-custom-actionbar", self.source)
+        self.assertIn("setWifiNagPage", self.source)
+        self.assertIn(".bottom-nav", self.source)
 
         retired_shift_ids = (
             "shift-manual-btn",

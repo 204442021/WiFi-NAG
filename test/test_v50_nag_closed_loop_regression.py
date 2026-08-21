@@ -4,6 +4,17 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SOURCE_FILE = ROOT / "include/web/mcp2515_dashboard_ui.src.h"
+
+EXPECTED_CUSTOM_UI_IDS = (
+    "nag-custom-readiness", "nag-custom-readiness-reason",
+    "nag-custom-dirty", "nag-custom-defaults", "nag-custom-save",
+    "nag-pv-neg-min", "nag-pv-neg-max", "nag-pv-pos-min", "nag-pv-pos-max",
+    "nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max",
+    "nag-active-min", "nag-active-max", "nag-release-min", "nag-release-max",
+    "nag-rest-min", "nag-rest-max", "nag-direction-deadband",
+    "nag-custom-hard-cap", "nag-custom-das-timeout",
+)
 
 EXPECTED_NVS_KEYS = (
     "nag_pv_n_min", "nag_pv_n_max", "nag_pv_p_min", "nag_pv_p_max",
@@ -63,6 +74,65 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             encoding="utf-8"
         )
         cls.handler = (ROOT / "include/handlers_base.h").read_text(encoding="utf-8")
+        cls.source = SOURCE_FILE.read_text(encoding="utf-8-sig")
+
+    def test_custom_strategy_ui_has_exact_controls_and_safety_copy(self):
+        for element_id in EXPECTED_CUSTOM_UI_IDS:
+            self.assertRegex(self.source, rf'\bid="{re.escape(element_id)}"')
+
+        for text in (
+            "预防层", "纠正层", "节奏与休息", "安全边界",
+            "休息期不额外发送 0x370", "本地发送成功不等于 DAS 接受",
+        ):
+            self.assertIn(text, self.source)
+        for retired in (
+            "反方向持续注入", "Hands-On 1 扭矩范围", "Hands-On 2 扭矩范围",
+        ):
+            self.assertNotIn(retired, self.source)
+
+        for element_id in ("nag-pv-neg-min", "nag-pv-neg-max", "nag-pv-pos-min", "nag-pv-pos-max"):
+            self.assertRegex(
+                self.source,
+                rf'id="{element_id}"[^>]*min="0\.10"[^>]*max="0\.50"[^>]*step="0\.01"',
+            )
+        for element_id in ("nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max"):
+            self.assertRegex(
+                self.source,
+                rf'id="{element_id}"[^>]*min="0\.50"[^>]*max="1\.80"[^>]*step="0\.01"',
+            )
+
+    def test_custom_strategy_uses_structured_draft_and_explicit_save_contract(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn(
+            "constnagCustomDefaults={preventiveNegative:[0.15,0.18],"
+            "preventivePositive:[0.15,0.18],correctiveNegative:[1.50,1.80],"
+            "correctivePositive:[1.50,1.80],activity:[0.8,1.4],"
+            "release:[0.2,0.4],rest:[1.5,2.5],directionDeadband:0.05,"
+            "dasFreshTimeoutMs:500};",
+            compact,
+        )
+        self.assertIn("letnagCustomDraft=cloneNagCustomDefaults();", compact)
+        self.assertIn("input.addEventListener('input',updateNagCustomDraft);", compact)
+        self.assertIn("setNagCustomDirty(true);", compact)
+        self.assertIn("newURLSearchParams()", compact)
+        for field in EXPECTED_CONFIG_FIELDS:
+            self.assertIn(f"params.set('{field}'", self.source)
+        self.assertIn("normalizeNagCustomDraft", self.source)
+        self.assertIn("applyNagCustomResponse(data)", self.source)
+        self.assertIn("setNagCustomDirty(false)", self.source)
+        self.assertIn("if(!response.ok||!data.ok)thrownewError", compact)
+        self.assertIn("保存失败，未保存修改仍保留", self.source)
+
+    def test_custom_strategy_readiness_mapping_is_fail_closed(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn("state.nagMode!==5", compact)
+        self.assertIn("'DISABLED'", self.source)
+        self.assertIn("!d.nagDasFresh", compact)
+        self.assertIn("'WAIT_DAS'", self.source)
+        self.assertIn("phase==='fault-hold'", compact)
+        self.assertIn("'FAIL_CLOSED'", self.source)
+        self.assertIn("'READY'", self.source)
+        self.assertIn("反馈失效，已停止自适应注入", self.source)
 
     def test_closed_loop_nvs_contract_uses_exact_keys_and_defaults(self):
         for key in EXPECTED_NVS_KEYS:
