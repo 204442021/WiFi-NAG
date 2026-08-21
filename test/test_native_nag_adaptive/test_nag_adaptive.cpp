@@ -1,312 +1,443 @@
 #include <unity.h>
 
-#include "can_helpers.h"
-#include "drivers/mock_driver.h"
-#include "handlers.h"
-#include "nag_das_feedback.h"
+#include "nag_adaptive_controller.h"
 
-static MockDriver mock;
-static NagHandler handler;
+static constexpr uint32_t kEntropy = 0x13579BDFu;
 
-static void updateChecksum(CanFrame &frame)
+static CanFrame makeDasFrame(uint8_t hos)
 {
-    uint16_t sum = 0;
-    for (uint8_t index = 0; index < 7; ++index)
-        sum += frame.data[index];
-    frame.data[7] = static_cast<uint8_t>((sum + 0x73) & 0xFF);
-}
-
-static CanFrame makeFrame(uint8_t counter,
-                          int16_t torqueCentiNm,
-                          int16_t angleDeciDeg,
-                          uint8_t handsOn = 1)
-{
-    CanFrame frame = {.id = 880, .dlc = 8};
-    frame.data[0] = 0x12;
-    frame.data[1] = 0x00;
-    frame.data[2] = 0x80;
-    NagHandler::writeTorqueRaw(frame, static_cast<uint16_t>(2050 + torqueCentiNm));
-    frame.data[4] = static_cast<uint8_t>((handsOn & 0x03) << 6);
-    NagHandler::writeSteeringAngleDeciDeg(frame, angleDeciDeg);
-    frame.data[6] = static_cast<uint8_t>(0x40 | (counter & 0x0F));
-    updateChecksum(frame);
-    return frame;
-}
-
-static int16_t outputTorqueCentiNm(const CanFrame &frame)
-{
-    return NagHandler::rawToObservedCentiNm(NagHandler::readTorqueRaw(frame));
-}
-
-static void observeAt(uint32_t now,
-                      uint8_t counter,
-                      int16_t torqueCentiNm,
-                      int16_t angleDeciDeg,
-                      uint8_t handsOn = 1)
-{
-    handler.setTestNowMs(now);
-    CanFrame frame = makeFrame(counter, torqueCentiNm, angleDeciDeg, handsOn);
-    handler.handleMessage(frame, mock);
-}
-
-static void armAdaptive(int16_t torqueCentiNm = 20,
-                        int16_t angleDeciDeg = 0,
-                        uint8_t handsOn = 1)
-{
-    observeAt(0, 0, torqueCentiNm, angleDeciDeg, handsOn);
-    observeAt(10, 1, torqueCentiNm, angleDeciDeg, handsOn);
-    observeAt(20, 2, torqueCentiNm, angleDeciDeg, handsOn);
-}
-
-void setUp()
-{
-    mock = MockDriver();
-    handler = NagHandler();
-    nagKillerRuntime = true;
-    handler.setTestNowMs(0);
-    handler.setMode(NagHandler::MODE_ADAPTIVE);
-}
-
-void tearDown() {}
-
-void test_angle_decoder_uses_both_directions()
-{
-    CanFrame positive = makeFrame(0, 20, 500);
-    CanFrame negative = makeFrame(1, 20, -500);
-    TEST_ASSERT_EQUAL_INT16(500, NagHandler::readSteeringAngleDeciDeg(positive));
-    TEST_ASSERT_EQUAL_INT16(-500, NagHandler::readSteeringAngleDeciDeg(negative));
-}
-
-void test_adaptive_requires_three_valid_frames_before_first_send()
-{
-    observeAt(0, 0, 20, 0);
-    observeAt(10, 1, 20, 0);
-    TEST_ASSERT_EQUAL(0, mock.sent.size());
-    observeAt(20, 2, 20, 0);
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-}
-
-void test_zero_and_small_torque_still_send_nonzero_after_arming()
-{
-    armAdaptive(0);
-    observeAt(30, 3, 1, 0);
-    observeAt(40, 4, -1, 0);
-    TEST_ASSERT_EQUAL(3, mock.sent.size());
-    for (const CanFrame &frame : mock.sent)
-        TEST_ASSERT_NOT_EQUAL(0, outputTorqueCentiNm(frame));
-}
-
-void test_measured_torque_selects_opposite_injection_direction()
-{
-    armAdaptive(20);
-    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) < 0);
-
-    setUp();
-    armAdaptive(-20);
-    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
-}
-
-void test_opposite_candidate_must_be_stable_for_100ms_before_flip()
-{
-    armAdaptive(20);
-    observeAt(30, 3, -20, 0);
-    observeAt(129, 4, -20, 0);
-    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) < 0);
-    observeAt(130, 5, -20, 0);
-    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
-}
-
-void test_noise_band_holds_previous_direction_and_cancels_candidate()
-{
-    armAdaptive(20);
-    observeAt(30, 3, -20, 0);
-    observeAt(80, 4, 0, 0);
-    observeAt(130, 5, -20, 0);
-    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) < 0);
-    observeAt(229, 6, -20, 0);
-    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) < 0);
-    observeAt(230, 7, -20, 0);
-    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
-}
-
-void test_startup_falls_back_to_opposite_steering_angle()
-{
-    armAdaptive(0, 100);
-    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) < 0);
-
-    setUp();
-    armAdaptive(0, -100);
-    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
-}
-
-void test_startup_near_zero_uses_deterministic_positive_default()
-{
-    armAdaptive(0, 0);
-    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
-    observeAt(30, 3, 0, 0);
-    TEST_ASSERT_TRUE(outputTorqueCentiNm(mock.sent.back()) > 0);
-    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::DIRECTION_HOLD,
-                            handler.adaptiveController.directionSourceValue());
-}
-
-void test_large_angle_and_legacy_pause_time_do_not_stop_sending()
-{
-    NagAdaptiveConfig config = handler.adaptiveConfig();
-    config.sendWindowMs = 1000;
-    config.pauseMinMs = 1000;
-    config.pauseMaxMs = 1000;
-    handler.setAdaptiveConfig(config);
-    armAdaptive(20, 600);
-    observeAt(1020, 3, 20, -600);
-    observeAt(2020, 4, 20, 600);
-    TEST_ASSERT_EQUAL(3, mock.sent.size());
-}
-
-void test_handson_1_and_2_choose_their_direction_ranges()
-{
-    handler.setHandsOnRangeCentiNm(1, -1, 110, 110);
-    handler.setHandsOnRangeCentiNm(2, -1, 140, 140);
-    armAdaptive(20, 0, 1);
-    TEST_ASSERT_EQUAL_INT16(-110, outputTorqueCentiNm(mock.sent.back()));
-
-    setUp();
-    handler.setHandsOnRangeCentiNm(1, -1, 110, 110);
-    handler.setHandsOnRangeCentiNm(2, -1, 140, 140);
-    armAdaptive(20, 0, 2);
-    TEST_ASSERT_EQUAL_INT16(-140, outputTorqueCentiNm(mock.sent.back()));
-}
-
-void test_handson_0_and_3_retain_last_valid_tier_with_h1_boot_fallback()
-{
-    observeAt(0, 0, 20, 0, 0);
-    TEST_ASSERT_EQUAL_UINT8(1, handler.handsOnTier());
-    observeAt(10, 1, 20, 0, 2);
-    TEST_ASSERT_EQUAL_UINT8(2, handler.handsOnTier());
-    observeAt(20, 2, 20, 0, 3);
-    TEST_ASSERT_EQUAL_UINT8(2, handler.handsOnTier());
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-}
-
-void test_input_handson_is_captured_before_output_is_forced_to_one()
-{
-    armAdaptive(20, 0, 2);
-    TEST_ASSERT_EQUAL_UINT8(2, handler.handsOnRaw());
-    TEST_ASSERT_EQUAL_UINT8(2, handler.handsOnTier());
-    TEST_ASSERT_EQUAL_UINT8(1, (mock.sent.back().data[4] >> 6) & 0x03);
-}
-
-void test_bad_checksum_is_rejected_and_does_not_arm()
-{
-    observeAt(0, 0, 20, 0);
-    handler.setTestNowMs(10);
-    CanFrame invalid = makeFrame(1, 20, 0);
-    invalid.data[7]++;
-    handler.handleMessage(invalid, mock);
-    observeAt(20, 2, 20, 0);
-    TEST_ASSERT_EQUAL(0, mock.sent.size());
-    observeAt(30, 3, 20, 0);
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-    TEST_ASSERT_EQUAL_UINT32(1, handler.nagChecksumRejectCount);
-}
-
-void test_failed_send_does_not_update_actual_injection_snapshot()
-{
-    mock.writeEnabled = false;
-    armAdaptive();
-    TEST_ASSERT_EQUAL_UINT32(1, handler.nagSendAttemptCount);
-    TEST_ASSERT_EQUAL_UINT32(1, handler.nagSendFailureCount);
-    TEST_ASSERT_EQUAL_UINT32(0, handler.nagEchoCount);
-    TEST_ASSERT_FALSE(handler.injectedTorqueIsValid());
-}
-
-void test_successful_send_snapshot_expires_after_200ms()
-{
-    armAdaptive();
-    TEST_ASSERT_TRUE(handler.injectedTorqueIsValid());
-    TEST_ASSERT_TRUE(handler.lastInjectedCenti() < 0);
-    handler.setTestNowMs(220);
-    TEST_ASSERT_TRUE(handler.injectedTorqueIsValid());
-    handler.setTestNowMs(221);
-    TEST_ASSERT_FALSE(handler.injectedTorqueIsValid());
-}
-
-void test_reserved_torque_is_rejected()
-{
-    handler.setTestNowMs(0);
-    CanFrame frame = makeFrame(0, 20, 0);
-    NagHandler::writeTorqueRaw(frame, 0);
-    updateChecksum(frame);
-    handler.handleMessage(frame, mock);
-    TEST_ASSERT_EQUAL(0, mock.sent.size());
-    TEST_ASSERT_EQUAL_UINT32(1, handler.nagInvalidTorqueRejectCount);
-}
-
-void test_successful_echo_is_skipped_as_own_echo()
-{
-    armAdaptive();
-    CanFrame ownEcho = mock.sent.back();
-    handler.setTestNowMs(30);
-    handler.handleMessage(ownEcho, mock);
-    TEST_ASSERT_EQUAL(1, mock.sent.size());
-    TEST_ASSERT_EQUAL_UINT32(1, handler.nagOwnEchoSkipCount);
-}
-
-static CanFrame makeDasFrame(uint32_t id, uint8_t hos)
-{
-    CanFrame frame = {.id = id, .dlc = 8};
+    CanFrame frame = {.id = NagDasFeedbackTracker::kDasCanId, .dlc = 8};
     frame.data[5] = static_cast<uint8_t>((hos & 0x0F) << 2);
     return frame;
 }
 
-void test_das_hos_uses_byte5_bits_5_through_2()
+static void resetWithDas(NagAdaptiveController &controller, uint8_t hos = 0, uint32_t nowMs = 0)
 {
-    NagDasFeedbackTracker tracker;
-    CanFrame frame = makeDasFrame(0x39B, 3);
-    TEST_ASSERT_TRUE(tracker.observe(frame, 100));
-    TEST_ASSERT_EQUAL_UINT8(3, tracker.raw());
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(NagDasClass::CORRECTIVE),
-                            static_cast<uint8_t>(tracker.classification()));
+    controller.requestReset();
+    TEST_ASSERT_EQUAL(hos <= 8, controller.observeDas(makeDasFrame(hos), nowMs));
 }
 
-void test_das_feedback_expires_at_501ms()
+static NagAdaptiveDecision epas(NagAdaptiveController &controller,
+                                uint32_t nowMs,
+                                int16_t torqueCentiNm = 20,
+                                int16_t angleDeciDeg = 0,
+                                uint32_t entropy = kEntropy)
 {
-    NagDasFeedbackTracker tracker;
-    TEST_ASSERT_TRUE(tracker.observe(makeDasFrame(0x39B, 0), 100));
-    TEST_ASSERT_TRUE(tracker.fresh(600, 500));
-    TEST_ASSERT_FALSE(tracker.fresh(601, 500));
+    return controller.observeEpas(nowMs, angleDeciDeg, torqueCentiNm, entropy);
 }
 
-void test_unknown_and_sna_hos_fail_closed()
+static NagAdaptiveDecision arm(NagAdaptiveController &controller,
+                               int16_t torqueCentiNm = 20,
+                               int16_t angleDeciDeg = 0)
 {
-    NagDasFeedbackTracker tracker;
-    TEST_ASSERT_FALSE(tracker.observe(makeDasFrame(0x39B, 9), 100));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(NagDasClass::BLOCKED),
-                            static_cast<uint8_t>(tracker.classification()));
-    TEST_ASSERT_FALSE(tracker.observe(makeDasFrame(0x39B, 15), 110));
+    TEST_ASSERT_FALSE(epas(controller, 0, torqueCentiNm, angleDeciDeg).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 10, torqueCentiNm, angleDeciDeg).shouldSend);
+    NagAdaptiveDecision decision = epas(controller, 20, torqueCentiNm, angleDeciDeg);
+    TEST_ASSERT_TRUE(decision.shouldSend);
+    return decision;
+}
+
+static void enterCorrective(NagAdaptiveController &controller, uint32_t nowMs, uint8_t hos = 2)
+{
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), nowMs));
+    const NagAdaptiveDecision decision = epas(controller, nowMs);
+    TEST_ASSERT_TRUE(decision.shouldSend);
+    TEST_ASSERT_TRUE(decision.corrective);
+}
+
+static uint32_t completeCurrentBurst(NagAdaptiveController &controller, uint32_t nowMs)
+{
+    while (controller.snapshot(nowMs).correctiveBurstFrame <
+           controller.snapshot(nowMs).correctiveBurstFrameTarget)
+    {
+        const NagAdaptiveDecision decision = epas(controller, nowMs);
+        TEST_ASSERT_TRUE(decision.shouldSend);
+        TEST_ASSERT_TRUE(decision.corrective);
+        controller.onTransmitResult(nowMs, decision, true);
+        nowMs += 10;
+    }
+    return nowMs;
+}
+
+void setUp() {}
+void tearDown() {}
+
+void test_adaptive_never_sends_without_fresh_das()
+{
+    NagAdaptiveController controller;
+    controller.requestReset();
+    for (uint32_t nowMs = 0; nowMs < 40; nowMs += 10)
+        TEST_ASSERT_FALSE(epas(controller, nowMs).shouldSend);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_WAIT_DAS,
+                            controller.snapshot(40).phase);
+
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 100));
+    TEST_ASSERT_FALSE(epas(controller, 100).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 110).shouldSend);
+    TEST_ASSERT_TRUE(epas(controller, 120).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 601).shouldSend);
+    const NagAdaptiveSnapshot stale = controller.snapshot(601);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_WAIT_DAS, stale.phase);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_DAS_STALE, stale.blockReason);
+}
+
+void test_adaptive_requires_three_valid_oem_epas_frames()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    TEST_ASSERT_FALSE(epas(controller, 0).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 10).shouldSend);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_ARMING,
+                            controller.snapshot(10).phase);
+    TEST_ASSERT_TRUE(epas(controller, 20).shouldSend);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_MAINTENANCE,
+                            controller.snapshot(20).phase);
+}
+
+void test_hos_0_runs_preventive_window_release_and_no_tx_rest()
+{
+    NagAdaptiveController controller;
+    NagAdaptiveConfig config;
+    config.activityMinMs = config.activityMaxMs = 400;
+    config.releaseMinMs = config.releaseMaxMs = 100;
+    config.restMinMs = config.restMaxMs = 500;
+    config.dasFreshTimeoutMs = 2000;
+    controller.setConfig(config);
+    resetWithDas(controller);
+    arm(controller);
+
+    TEST_ASSERT_TRUE(epas(controller, 200).shouldSend);
+    TEST_ASSERT_TRUE(epas(controller, 400).shouldSend);
+    TEST_ASSERT_TRUE(epas(controller, 419).shouldSend);
+    const NagAdaptiveDecision releaseStart = epas(controller, 420);
+    TEST_ASSERT_TRUE(releaseStart.shouldSend);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_RELEASE,
+                            controller.snapshot(420).phase);
+    TEST_ASSERT_TRUE(epas(controller, 470).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 520).shouldSend);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_REST,
+                            controller.snapshot(520).phase);
+    for (uint32_t nowMs = 620; nowMs < 1020; nowMs += 100)
+        TEST_ASSERT_FALSE(epas(controller, nowMs).shouldSend);
+    TEST_ASSERT_TRUE(epas(controller, 1020).shouldSend);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_MAINTENANCE,
+                            controller.snapshot(1020).phase);
+}
+
+void test_hos_1_interrupts_preventive_window_into_release()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    const NagAdaptiveDecision active = arm(controller);
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 30));
+    const NagAdaptiveDecision release = epas(controller, 30);
+    TEST_ASSERT_TRUE(release.shouldSend);
+    TEST_ASSERT_FALSE(release.corrective);
+    TEST_ASSERT_TRUE((release.targetTorqueCentiNm < 0) == (active.targetTorqueCentiNm < 0));
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_RELEASE,
+                            controller.snapshot(30).phase);
+}
+
+void test_rest_duration_uses_1500_to_2500ms_triangular_bounds()
+{
+    NagAdaptiveController controller;
+    NagAdaptiveConfig config;
+    config.activityMinMs = config.activityMaxMs = 400;
+    config.releaseMinMs = config.releaseMaxMs = 100;
+    config.dasFreshTimeoutMs = 2000;
+    controller.setConfig(config);
+    resetWithDas(controller);
+    arm(controller);
+    epas(controller, 200);
+    epas(controller, 400);
+    epas(controller, 420);
+    TEST_ASSERT_FALSE(epas(controller, 520).shouldSend);
+    const uint32_t remaining = controller.snapshot(520).phaseRemainingMs;
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT32(1500, remaining);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(2500, remaining);
+}
+
+void test_preventive_walk_stays_between_15_and_18_centi_nm()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    arm(controller);
+    for (uint32_t nowMs = 30; nowMs < 500; nowMs += 10)
+    {
+        const NagAdaptiveDecision decision = epas(controller, nowMs, 20, 0, nowMs + kEntropy);
+        TEST_ASSERT_TRUE(decision.shouldSend);
+        TEST_ASSERT_GREATER_OR_EQUAL_INT16(15, static_cast<int16_t>(-decision.targetTorqueCentiNm));
+        TEST_ASSERT_LESS_OR_EQUAL_INT16(18, static_cast<int16_t>(-decision.targetTorqueCentiNm));
+    }
+}
+
+void test_preventive_walk_changes_by_at_most_one_centi_nm_per_frame()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    int16_t previous = arm(controller).targetTorqueCentiNm;
+    for (uint32_t nowMs = 30; nowMs < 500; nowMs += 10)
+    {
+        const int16_t current = epas(controller, nowMs, 20, 0, nowMs + kEntropy).targetTorqueCentiNm;
+        const int16_t delta = static_cast<int16_t>(current - previous);
+        TEST_ASSERT_TRUE(delta >= -1 && delta <= 1);
+        previous = current;
+    }
+}
+
+void test_measured_torque_selects_opposite_injection_direction()
+{
+    NagAdaptiveController positive;
+    resetWithDas(positive);
+    TEST_ASSERT_EQUAL_INT8(-1, arm(positive, 20).injectionSign);
+
+    NagAdaptiveController negative;
+    resetWithDas(negative);
+    TEST_ASSERT_EQUAL_INT8(1, arm(negative, -20).injectionSign);
+}
+
+void test_direction_flip_requires_100ms_stability()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    arm(controller, 20);
+    TEST_ASSERT_EQUAL_INT8(-1, epas(controller, 30, -20).injectionSign);
+    TEST_ASSERT_EQUAL_INT8(-1, epas(controller, 129, -20).injectionSign);
+    TEST_ASSERT_EQUAL_INT8(1, epas(controller, 130, -20).injectionSign);
+}
+
+void test_deadband_holds_last_trusted_direction()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    arm(controller, 20);
+    epas(controller, 30, -20);
+    const NagAdaptiveDecision held = epas(controller, 80, 0);
+    TEST_ASSERT_EQUAL_INT8(-1, held.injectionSign);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::DIRECTION_HOLD,
+                            controller.snapshot(80).directionSource);
+    TEST_ASSERT_EQUAL_INT8(-1, epas(controller, 130, -20).injectionSign);
+    TEST_ASSERT_EQUAL_INT8(-1, epas(controller, 229, -20).injectionSign);
+    TEST_ASSERT_EQUAL_INT8(1, epas(controller, 230, -20).injectionSign);
+}
+
+void test_no_torque_and_no_angle_direction_blocks_send()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    TEST_ASSERT_FALSE(epas(controller, 0, 0, 0).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 10, 0, 10).shouldSend);
+    const NagAdaptiveDecision blocked = epas(controller, 20, 0, -10);
+    TEST_ASSERT_FALSE(blocked.shouldSend);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_NO_DIRECTION,
+                            controller.snapshot(20).blockReason);
+}
+
+void test_hos_2_through_7_interrupt_every_nonfault_phase()
+{
+    for (uint8_t hos = 2; hos <= 7; ++hos)
+    {
+        NagAdaptiveController controller;
+        resetWithDas(controller);
+        arm(controller);
+        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), 30));
+        const NagAdaptiveDecision decision = epas(controller, 30);
+        TEST_ASSERT_TRUE(decision.shouldSend);
+        TEST_ASSERT_TRUE(decision.corrective);
+        TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_CORRECTIVE,
+                                controller.snapshot(30).phase);
+    }
+
+    NagAdaptiveController resting;
+    NagAdaptiveConfig config;
+    config.activityMinMs = config.activityMaxMs = 400;
+    config.releaseMinMs = config.releaseMaxMs = 100;
+    config.dasFreshTimeoutMs = 2000;
+    resting.setConfig(config);
+    resetWithDas(resting);
+    arm(resting);
+    epas(resting, 200);
+    epas(resting, 400);
+    epas(resting, 420);
+    epas(resting, 520);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_REST, resting.snapshot(520).phase);
+    TEST_ASSERT_TRUE(resting.observeDas(makeDasFrame(2), 530));
+    TEST_ASSERT_TRUE(epas(resting, 530).corrective);
+}
+
+void test_corrective_burst_has_three_to_five_successful_echoes()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    arm(controller);
+    enterCorrective(controller, 30);
+    const NagAdaptiveSnapshot snapshot = controller.snapshot(30);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT8(3, snapshot.correctiveBurstFrameTarget);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT8(5, snapshot.correctiveBurstFrameTarget);
+
+    NagAdaptiveDecision decision = epas(controller, 40);
+    controller.onTransmitResult(40, decision, false);
+    TEST_ASSERT_EQUAL_UINT8(0, controller.snapshot(40).correctiveBurstFrame);
+
+    uint8_t successes = 0;
+    uint32_t nowMs = 50;
+    while (controller.snapshot(nowMs).phase == NagAdaptiveController::PHASE_CORRECTIVE)
+    {
+        decision = epas(controller, nowMs);
+        controller.onTransmitResult(nowMs, decision, true);
+        ++successes;
+        nowMs += 10;
+    }
+    TEST_ASSERT_EQUAL_UINT8(snapshot.correctiveBurstFrameTarget, successes);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_VERIFY,
+                            controller.snapshot(nowMs).phase);
+}
+
+void test_corrective_walk_stays_between_150_and_180_centi_nm()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    arm(controller);
+    enterCorrective(controller, 30);
+    for (uint32_t nowMs = 40; nowMs < 140; nowMs += 10)
+    {
+        const NagAdaptiveDecision decision = epas(controller, nowMs, 20, 0, kEntropy + nowMs);
+        TEST_ASSERT_TRUE(decision.corrective);
+        TEST_ASSERT_GREATER_OR_EQUAL_INT16(150, static_cast<int16_t>(-decision.targetTorqueCentiNm));
+        TEST_ASSERT_LESS_OR_EQUAL_INT16(180, static_cast<int16_t>(-decision.targetTorqueCentiNm));
+    }
+}
+
+void test_hos_return_to_0_or_1_records_ack_latency()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    arm(controller);
+    enterCorrective(controller, 30);
+    const NagAdaptiveDecision decision = epas(controller, 40);
+    controller.onTransmitResult(40, decision, true);
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(1), 165));
+    const NagAdaptiveSnapshot snapshot = controller.snapshot(165);
+    TEST_ASSERT_EQUAL_UINT32(1, snapshot.acknowledgementCount);
+    TEST_ASSERT_EQUAL_UINT32(125, snapshot.lastAcknowledgementLatencyMs);
+    TEST_ASSERT_EQUAL_UINT32(125, snapshot.maxAcknowledgementLatencyMs);
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(0), 170));
+    TEST_ASSERT_EQUAL_UINT32(1, controller.snapshot(170).acknowledgementCount);
+}
+
+void test_second_failed_corrective_attempt_enters_fault_hold()
+{
+    NagAdaptiveController controller;
+    NagAdaptiveConfig config;
+    config.dasFreshTimeoutMs = 2000;
+    controller.setConfig(config);
+    resetWithDas(controller);
+    arm(controller);
+    enterCorrective(controller, 30);
+    uint32_t nowMs = completeCurrentBurst(controller, 40);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_VERIFY,
+                            controller.snapshot(nowMs).phase);
+    nowMs += 500;
+    TEST_ASSERT_TRUE(epas(controller, nowMs).corrective);
+    TEST_ASSERT_EQUAL_UINT8(2, controller.snapshot(nowMs).correctiveAttempt);
+    nowMs = completeCurrentBurst(controller, nowMs + 10);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_VERIFY,
+                            controller.snapshot(nowMs).phase);
+    TEST_ASSERT_FALSE(epas(controller, nowMs + 999).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, nowMs + 1000).shouldSend);
+    const NagAdaptiveSnapshot fault = controller.snapshot(nowMs + 1000);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_FAULT_HOLD, fault.phase);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_ACK_TIMEOUT, fault.blockReason);
+    TEST_ASSERT_EQUAL_UINT32(1, fault.acknowledgementTimeoutCount);
+}
+
+void test_hos_8_9_and_15_enter_fault_hold_without_send()
+{
+    const uint8_t blockedHos[] = {8, 9, 15};
+    for (uint8_t hos : blockedHos)
+    {
+        NagAdaptiveController controller;
+        resetWithDas(controller);
+        arm(controller);
+        const bool accepted = controller.observeDas(makeDasFrame(hos), 30);
+        TEST_ASSERT_EQUAL(hos == 8, accepted);
+        TEST_ASSERT_FALSE(epas(controller, 30).shouldSend);
+        const NagAdaptiveSnapshot snapshot = controller.snapshot(30);
+        TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_FAULT_HOLD, snapshot.phase);
+        TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_DAS_STATE, snapshot.blockReason);
+        TEST_ASSERT_EQUAL_UINT8(hos, snapshot.dasHos);
+    }
+}
+
+void test_das_stale_during_send_returns_wait_das()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller, 0, 100);
+    TEST_ASSERT_FALSE(epas(controller, 100).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 110).shouldSend);
+    TEST_ASSERT_TRUE(epas(controller, 120).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 601).shouldSend);
+    const NagAdaptiveSnapshot snapshot = controller.snapshot(601);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_WAIT_DAS, snapshot.phase);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_DAS_STALE, snapshot.blockReason);
+}
+
+void test_epas_gap_over_200ms_rearms_three_frame_guard()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller);
+    arm(controller);
+    TEST_ASSERT_FALSE(epas(controller, 221).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 231).shouldSend);
+    TEST_ASSERT_TRUE(epas(controller, 241).shouldSend);
+}
+
+void test_every_decision_is_clamped_to_plus_minus_180_centi_nm()
+{
+    NagAdaptiveController controller;
+    NagAdaptiveConfig config;
+    config.preventiveNegativeMinCentiNm = -300;
+    config.preventiveNegativeMaxCentiNm = 400;
+    config.preventivePositiveMinCentiNm = 400;
+    config.preventivePositiveMaxCentiNm = -300;
+    config.correctiveNegativeMinCentiNm = -500;
+    config.correctiveNegativeMaxCentiNm = 500;
+    config.correctivePositiveMinCentiNm = 500;
+    config.correctivePositiveMaxCentiNm = -500;
+    controller.setConfig(config);
+    resetWithDas(controller);
+    NagAdaptiveDecision decision = arm(controller);
+    TEST_ASSERT_TRUE(decision.targetTorqueCentiNm >= -180 && decision.targetTorqueCentiNm <= 180);
+    enterCorrective(controller, 30);
+    for (uint32_t nowMs = 40; nowMs < 200; nowMs += 10)
+    {
+        decision = epas(controller, nowMs, (nowMs & 0x20) ? 100 : -100, 0, nowMs);
+        TEST_ASSERT_TRUE(decision.targetTorqueCentiNm >= -180 && decision.targetTorqueCentiNm <= 180);
+    }
 }
 
 int main()
 {
     UNITY_BEGIN();
-    RUN_TEST(test_angle_decoder_uses_both_directions);
-    RUN_TEST(test_adaptive_requires_three_valid_frames_before_first_send);
-    RUN_TEST(test_zero_and_small_torque_still_send_nonzero_after_arming);
+    RUN_TEST(test_adaptive_never_sends_without_fresh_das);
+    RUN_TEST(test_adaptive_requires_three_valid_oem_epas_frames);
+    RUN_TEST(test_hos_0_runs_preventive_window_release_and_no_tx_rest);
+    RUN_TEST(test_hos_1_interrupts_preventive_window_into_release);
+    RUN_TEST(test_rest_duration_uses_1500_to_2500ms_triangular_bounds);
+    RUN_TEST(test_preventive_walk_stays_between_15_and_18_centi_nm);
+    RUN_TEST(test_preventive_walk_changes_by_at_most_one_centi_nm_per_frame);
     RUN_TEST(test_measured_torque_selects_opposite_injection_direction);
-    RUN_TEST(test_opposite_candidate_must_be_stable_for_100ms_before_flip);
-    RUN_TEST(test_noise_band_holds_previous_direction_and_cancels_candidate);
-    RUN_TEST(test_startup_falls_back_to_opposite_steering_angle);
-    RUN_TEST(test_startup_near_zero_uses_deterministic_positive_default);
-    RUN_TEST(test_large_angle_and_legacy_pause_time_do_not_stop_sending);
-    RUN_TEST(test_handson_1_and_2_choose_their_direction_ranges);
-    RUN_TEST(test_handson_0_and_3_retain_last_valid_tier_with_h1_boot_fallback);
-    RUN_TEST(test_input_handson_is_captured_before_output_is_forced_to_one);
-    RUN_TEST(test_bad_checksum_is_rejected_and_does_not_arm);
-    RUN_TEST(test_failed_send_does_not_update_actual_injection_snapshot);
-    RUN_TEST(test_successful_send_snapshot_expires_after_200ms);
-    RUN_TEST(test_reserved_torque_is_rejected);
-    RUN_TEST(test_successful_echo_is_skipped_as_own_echo);
-    RUN_TEST(test_das_hos_uses_byte5_bits_5_through_2);
-    RUN_TEST(test_das_feedback_expires_at_501ms);
-    RUN_TEST(test_unknown_and_sna_hos_fail_closed);
+    RUN_TEST(test_direction_flip_requires_100ms_stability);
+    RUN_TEST(test_deadband_holds_last_trusted_direction);
+    RUN_TEST(test_no_torque_and_no_angle_direction_blocks_send);
+    RUN_TEST(test_hos_2_through_7_interrupt_every_nonfault_phase);
+    RUN_TEST(test_corrective_burst_has_three_to_five_successful_echoes);
+    RUN_TEST(test_corrective_walk_stays_between_150_and_180_centi_nm);
+    RUN_TEST(test_hos_return_to_0_or_1_records_ack_latency);
+    RUN_TEST(test_second_failed_corrective_attempt_enters_fault_hold);
+    RUN_TEST(test_hos_8_9_and_15_enter_fault_hold_without_send);
+    RUN_TEST(test_das_stale_during_send_returns_wait_das);
+    RUN_TEST(test_epas_gap_over_200ms_rearms_three_frame_guard);
+    RUN_TEST(test_every_decision_is_clamped_to_plus_minus_180_centi_nm);
     return UNITY_END();
 }
