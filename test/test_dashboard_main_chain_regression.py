@@ -30,6 +30,32 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-custom-hard-cap", "nag-custom-das-timeout",
 )
 
+EXPECTED_DIAGNOSTIC_UI_IDS = (
+    "nag-diag-health", "nag-diag-reason",
+    "nag-diag-epas", "nag-diag-oem-torque", "nag-diag-counter",
+    "nag-diag-das", "nag-diag-hos",
+    "nag-diag-phase", "nag-diag-target", "nag-diag-direction",
+    "nag-diag-timer", "nag-diag-burst",
+    "nag-diag-tx", "nag-diag-last-tx", "nag-diag-collision",
+    "nag-diag-ack", "nag-diag-latency", "nag-diag-timeout",
+    "nag-diag-escalations", "nag-diag-events", "nag-diag-clear-events",
+)
+
+EXISTING_DIAGNOSTIC_IDS = (
+    "s-fps", "s-rx", "s-tx", "s-txerr", "s-up", "btn-can-toggle",
+    "ble-protocol", "ble-peer-id", "ble-radio", "ble-nag-config",
+    "ble-nag-runtime", "ble-nag-sync", "ble-nag-revision", "ble-255",
+    "ble-12b", "ble-summary", "ble-fsd-rx", "ble-counters",
+    "wifi-diag-detail", "ap-diag-detail", "net-perf-status",
+    "gw-diag-ap", "gw-diag-sta", "gw-diag-nat", "gw-diag-radio",
+    "gw-diag-dns", "gw-diag-slow", "gw-diag-pending",
+    "gw-diag-upstream", "gw-diag-clients", "sys-chip", "sys-cpu",
+    "sys-clocks", "sys-board", "sys-reset", "sys-runtime", "sys-tasks",
+    "sys-heap", "sys-internal", "sys-largest", "sys-minheap", "sys-psram",
+    "sys-flash", "sys-spiffs", "sys-rssi", "sys-wifi-mode", "sys-apclients",
+    "sys-ble", "sys-wireless", "sys-fw", "debug-log-section", "log",
+)
+
 
 def generated_dashboard_bytes(base_text: str) -> bytes:
     payload = re.search(
@@ -162,6 +188,7 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             "gateway-section",
             "system-card",
             "status-panel",
+            *EXPECTED_DIAGNOSTIC_UI_IDS,
             "nag-injected-meta",
             "nag-direction-meta",
             "debug-log-section",
@@ -171,6 +198,21 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
             for element_id in core_ids:
                 with self.subTest(file=label, element_id=element_id):
                     self.assert_has_id(html, element_id)
+
+    def test_closed_loop_diagnostics_preserve_existing_groups_in_source_and_gzip(self) -> None:
+        for label, html in (("source", self.source), ("generated", self.generated_html)):
+            for element_id in EXISTING_DIAGNOSTIC_IDS:
+                with self.subTest(file=label, element_id=element_id):
+                    self.assert_has_id(html, element_id)
+            health_match = re.search(r'\bid=(?:"nag-diag-health"|nag-diag-health\b)', html)
+            advanced_match = re.search(r'\bid=(?:"advanced-diagnostics"|advanced-diagnostics\b)', html)
+            self.assertIsNotNone(health_match)
+            self.assertIsNotNone(advanced_match)
+            health_index = health_match.start()
+            advanced_index = advanced_match.start()
+            self.assertLess(health_index, advanced_index)
+            for heading in ("原车输入", "控制器决策", "本地发送", "DAS 响应"):
+                self.assertIn(heading, html[health_index:advanced_index])
 
         for label, html in (("source", self.source), ("generated", self.generated_html)):
             for text in (

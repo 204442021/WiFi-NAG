@@ -16,6 +16,32 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-custom-hard-cap", "nag-custom-das-timeout",
 )
 
+EXPECTED_DIAGNOSTIC_UI_IDS = (
+    "nag-diag-health", "nag-diag-reason",
+    "nag-diag-epas", "nag-diag-oem-torque", "nag-diag-counter",
+    "nag-diag-das", "nag-diag-hos",
+    "nag-diag-phase", "nag-diag-target", "nag-diag-direction",
+    "nag-diag-timer", "nag-diag-burst",
+    "nag-diag-tx", "nag-diag-last-tx", "nag-diag-collision",
+    "nag-diag-ack", "nag-diag-latency", "nag-diag-timeout",
+    "nag-diag-escalations", "nag-diag-events", "nag-diag-clear-events",
+)
+
+EXISTING_DIAGNOSTIC_IDS = (
+    "s-fps", "s-rx", "s-tx", "s-txerr", "s-up", "btn-can-toggle",
+    "ble-protocol", "ble-peer-id", "ble-radio", "ble-nag-config",
+    "ble-nag-runtime", "ble-nag-sync", "ble-nag-revision", "ble-255",
+    "ble-12b", "ble-summary", "ble-fsd-rx", "ble-counters",
+    "wifi-diag-detail", "ap-diag-detail", "net-perf-status",
+    "gw-diag-ap", "gw-diag-sta", "gw-diag-nat", "gw-diag-radio",
+    "gw-diag-dns", "gw-diag-slow", "gw-diag-pending",
+    "gw-diag-upstream", "gw-diag-clients", "sys-chip", "sys-cpu",
+    "sys-clocks", "sys-board", "sys-reset", "sys-runtime", "sys-tasks",
+    "sys-heap", "sys-internal", "sys-largest", "sys-minheap", "sys-psram",
+    "sys-flash", "sys-spiffs", "sys-rssi", "sys-wifi-mode", "sys-apclients",
+    "sys-ble", "sys-wireless", "sys-fw", "debug-log-section", "log",
+)
+
 EXPECTED_NVS_KEYS = (
     "nag_pv_n_min", "nag_pv_n_max", "nag_pv_p_min", "nag_pv_p_max",
     "nag_cr_n_min", "nag_cr_n_max", "nag_cr_p_min", "nag_cr_p_max",
@@ -173,6 +199,107 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "if(!nagCustomDirty)mirrorDashboardText('s-inj','nag-card-meta'",
             compact,
         )
+
+    def test_diagnostic_information_architecture_is_visible_before_advanced_details(self):
+        for element_id in EXPECTED_DIAGNOSTIC_UI_IDS + EXISTING_DIAGNOSTIC_IDS:
+            self.assertRegex(self.source, rf'\bid="{re.escape(element_id)}"')
+
+        health_index = self.source.index('id="nag-diag-health"')
+        advanced_index = self.source.index('id="advanced-diagnostics"')
+        self.assertLess(health_index, advanced_index)
+        advanced_end = self.source.index("</details>", advanced_index)
+        self.assertNotIn("nag-diag-health", self.source[advanced_index:advanced_end])
+        for heading in ("原车输入", "控制器决策", "本地发送", "DAS 响应"):
+            self.assertIn(heading, self.source[health_index:advanced_index])
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn(
+            "constdefaultExpanded=card.id==='config-card'||card.id==='system-card'",
+            compact,
+        )
+
+    def test_diagnostic_phase_names_and_color_semantics_are_exact(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn(
+            "constphaseNames={disabled:'关闭','wait-das':'等待DAS',"
+            "arming:'确认OEM帧',maintenance:'预防扫动',release:'平滑释放',"
+            "rest:'无发送休息',corrective:'纠正脉冲',verify:'等待DAS确认',"
+            "'fault-hold':'故障停发'};",
+            compact,
+        )
+        for selector in (
+            ".nag-tone-fresh", ".nag-tone-ready", ".nag-tone-ack",
+            ".nag-tone-caution", ".nag-tone-error", ".nag-tone-muted",
+        ):
+            self.assertIn(selector, self.source)
+        self.assertIn("release: 'caution'", self.source)
+        self.assertIn("rest: 'caution'", self.source)
+        self.assertIn("verify: 'caution'", self.source)
+        self.assertIn("collision: 'caution'", self.source)
+        self.assertIn("sendFailure: 'error'", self.source)
+        self.assertNotIn("sendSuccess: 'ready'", self.source)
+
+    def test_browser_event_timeline_is_deduplicated_capped_and_local_only(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn("letnagDiagnosticPrevious=null", compact)
+        self.assertIn("letnagDiagnosticEvents=[]", compact)
+        for field in (
+            "nagDasFresh", "nagDasHos", "nagAdaptivePhase",
+            "nagAcknowledgementCount", "nagAcknowledgementTimeouts",
+            "nagCounterCollisions",
+        ):
+            self.assertIn(f"'{field}'", self.source)
+        self.assertIn("if(previous===next)return", compact)
+        self.assertIn("nagDiagnosticEvents.unshift", self.source)
+        self.assertIn("if(nagDiagnosticEvents.length>20)nagDiagnosticEvents.length=20", compact)
+        self.assertIn("new Date().toLocaleTimeString()", self.source)
+        self.assertIn("oldValue+' → '+newValue", self.source)
+        clear_start = self.source.index("function clearNagDiagnosticEvents(")
+        clear_end = self.source.index("\n}", clear_start)
+        clear_body = self.source[clear_start:clear_end]
+        self.assertIn("nagDiagnosticEvents=[]", clear_body)
+        self.assertNotIn("fetch(", clear_body)
+
+    def test_diagnostic_polling_is_page_monitor_visibility_scoped_and_isolated(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn("letnagDiagnosticsTimer=null", compact)
+        self.assertIn("document.querySelector('.ui-screen[data-page=\"diagnostics\"].active')", self.source)
+        self.assertIn("systemStatusEnabled", self.source)
+        self.assertIn("!document.hidden", self.source)
+        self.assertIn("isCarUiActive()||networkPerformanceMode?1000:500", compact)
+        self.assertIn("clearInterval(nagDiagnosticsTimer)", self.source)
+        poll_start = self.source.index("async function pollNagDiagnostics(")
+        poll_end = self.source.index("\n}", poll_start)
+        poll_body = self.source[poll_start:poll_end]
+        self.assertEqual(poll_body.count("fetch("), 1)
+        self.assertIn("fetch('/api/nag-adaptive')", poll_body)
+        self.assertIn("updateNagDiagnostics(data)", poll_body)
+        for forbidden in (
+            "poll()", "loadWifi", "loadAp", "loadGateway", "loadSystemStatus",
+            "updateNagControl", "applyNagCustomResponse",
+        ):
+            self.assertNotIn(forbidden, poll_body)
+        for lifecycle in (
+            "setWifiNagPage", "setUiMode", "setNetworkPerformanceMode",
+            "startSystemMonitor", "stopSystemMonitor", "visibilitychange",
+            "stopDashboardPolling",
+        ):
+            self.assertIn(lifecycle, self.source)
+        self.assertGreaterEqual(self.source.count("syncNagDiagnosticsPolling()"), 7)
+
+    def test_diagnostic_last_tx_preserves_status_age_and_derives_send_success(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertIn("d.nagInjectedAgeMs", self.source)
+        self.assertIn(
+            "if(d.nagInjectedTorqueValid!==undefined||d.nagInjectedTorqueNm!==undefined)",
+            compact,
+        )
+        self.assertIn("constsuccess=Math.max(0,sends-failures)", compact)
+        self.assertNotIn(
+            "success=Math.trunc(nagDiagnosticNumber(d,'nagEcho',0))",
+            compact,
+        )
+        self.assertIn("nagLastCounterCollisionGapUs", self.source)
+        self.assertIn("+' μs'", self.source)
 
     def test_closed_loop_nvs_contract_uses_exact_keys_and_defaults(self):
         for key in EXPECTED_NVS_KEYS:

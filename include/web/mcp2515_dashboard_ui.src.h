@@ -241,6 +241,36 @@ body.ui-shell #firmware-update-card>.firmware-body{margin:0 16px 16px}
 .nag-action-buttons .primary{color:var(--acc);border-color:var(--accBd);background:var(--accBg)}
 .nag-action-buttons .sniff-btn:active{transform:translateY(1px)}
 .nag-action-buttons .sniff-btn:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accBg);border-color:var(--acc)}
+.nag-diag-panel{margin:14px 16px 18px;border:1px solid var(--bd);border-radius:16px;background:var(--card);overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.12)}
+.nag-diag-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:16px 17px 13px;border-bottom:1px solid var(--bd);background:radial-gradient(circle at 100% 0,var(--accBg),transparent 48%)}
+.nag-diag-kicker{font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--tx3)}
+.nag-diag-title{margin-top:3px;font-size:18px;font-weight:800;letter-spacing:-.02em;color:var(--tx)}
+.nag-diag-health{min-width:112px;padding:9px 12px;border:1px solid var(--bd2);border-radius:9px;background:var(--bg2);text-align:center;font-size:13px;font-weight:850;letter-spacing:.07em;font-variant-numeric:tabular-nums}
+.nag-diag-reason{padding:10px 17px;border-bottom:1px solid var(--bd);font-size:11px;line-height:1.55;color:var(--tx2)}
+.nag-diag-groups{display:grid;grid-template-columns:1fr;gap:1px;background:var(--bd)}
+.nag-diag-group{min-width:0;padding:15px 16px 17px;background:var(--bg2)}
+.nag-diag-group h3{margin:0 0 11px;font-size:12px;font-weight:750;letter-spacing:.03em;color:var(--tx)}
+.nag-diag-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.nag-diag-metric{min-width:0;padding:9px 10px;border-radius:9px;background:var(--card)}
+.nag-diag-metric>span{display:block;margin-bottom:3px;font-size:9px;font-weight:650;letter-spacing:.05em;color:var(--tx3)}
+.nag-diag-value{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:700;color:var(--tx);font-variant-numeric:tabular-nums;white-space:nowrap}
+.nag-diag-metric small{display:block;margin-top:3px;overflow:hidden;text-overflow:ellipsis;font-size:9px;color:var(--tx3);white-space:nowrap}
+.nag-tone-fresh,.nag-tone-ready,.nag-tone-ack{color:var(--ok);border-color:rgba(61,186,114,.28);background:var(--okBg)}
+.nag-tone-caution{color:var(--warn);border-color:rgba(245,166,35,.3);background:rgba(245,166,35,.09)}
+.nag-tone-error{color:var(--err);border-color:var(--errBd);background:var(--errBg)}
+.nag-tone-muted{color:var(--tx3);border-color:var(--bd);background:var(--bg2)}
+.nag-tone-active{color:var(--acc);border-color:var(--accBd);background:var(--accBg)}
+.nag-diag-timeline{padding:15px 16px 17px;border-top:1px solid var(--bd);background:var(--card)}
+.nag-diag-timeline-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px}
+.nag-diag-timeline h3{margin:0;font-size:12px;font-weight:750;color:var(--tx)}
+.nag-diag-clear{padding:5px 9px;border:1px solid var(--bd);border-radius:7px;background:transparent;color:var(--tx3);font:650 10px inherit;cursor:pointer;transition:border-color .2s,color .2s,transform .2s}
+.nag-diag-clear:hover{border-color:var(--bd2);color:var(--tx)}
+.nag-diag-clear:active{transform:translateY(1px)}
+.nag-diag-clear:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accBg);border-color:var(--acc)}
+.nag-diag-events{display:grid;gap:6px;max-height:260px;overflow:auto;list-style:none}
+.nag-diag-event{display:grid;grid-template-columns:70px minmax(94px,.7fr) minmax(0,1.3fr);gap:8px;align-items:baseline;padding:8px 9px;border-left:2px solid var(--bd2);background:var(--bg2);font-size:10px}
+.nag-diag-event time{color:var(--tx3);font-variant-numeric:tabular-nums}.nag-diag-event b{color:var(--tx2);font-weight:700}.nag-diag-event span{min-width:0;color:var(--tx);font-family:'SF Mono','Courier New',monospace;overflow-wrap:anywhere}
+.nag-diag-empty{padding:18px 10px;text-align:center;color:var(--tx3);font-size:10px;background:var(--bg2)}
 @media(min-width:900px){
   .nag-custom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .nag-rhythm-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -249,6 +279,8 @@ body.ui-shell #firmware-update-card>.firmware-body{margin:0 16px 16px}
   .nag-safety-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .nag-custom-actionbar{grid-template-columns:minmax(0,1fr) auto;align-items:center}
   .nag-action-buttons{grid-template-columns:auto auto}
+  .nag-diag-groups{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .nag-diag-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 .gateway-profile-btn.active,.gateway-upstream-btn.active{background:var(--accBg);border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 1px var(--accBd) inset}
 /* Buttons */
@@ -809,17 +841,40 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
       <div class="stat"><div class="stat-lbl">温度</div><div class="stat-val v-dim" id="sys-temp">--</div></div>
       <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V4.2 V13</div></div>
     </div>
+    <section class="nag-diag-panel" aria-labelledby="nag-diag-panel-title">
+      <header class="nag-diag-header"><div><div class="nag-diag-kicker">NAG CLOSED LOOP</div><h2 class="nag-diag-title" id="nag-diag-panel-title">闭环健康</h2></div><div class="nag-diag-health nag-tone-muted" id="nag-diag-health" role="status" aria-live="polite" aria-atomic="true">DISABLED</div></header>
+      <div class="nag-diag-reason" id="nag-diag-reason">等待诊断监控</div>
+      <div class="nag-diag-groups">
+        <article class="nag-diag-group"><h3>原车输入</h3><div class="nag-diag-metrics">
+          <div class="nag-diag-metric"><span>OEM EPAS 0x370</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-epas">未见数据</strong><small id="nag-echo-meta">echo: --</small></div>
+          <div class="nag-diag-metric"><span>OEM torque</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-oem-torque">--</strong><small id="nag-live-meta">实时: --</small></div>
+          <div class="nag-diag-metric"><span>OEM counter</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-counter">--</strong></div>
+          <div class="nag-diag-metric"><span>DAS 0x39B</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-das">未见数据</strong></div>
+          <div class="nag-diag-metric"><span>Hands-On state</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-hos">--</strong></div>
+        </div></article>
+        <article class="nag-diag-group"><h3>控制器决策</h3><div class="nag-diag-metrics">
+          <div class="nag-diag-metric"><span>Phase</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-phase">关闭</strong></div>
+          <div class="nag-diag-metric"><span>Target torque</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-target">--</strong></div>
+          <div class="nag-diag-metric"><span>Direction source</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-direction">--</strong><small id="nag-direction-meta">--</small></div>
+          <div class="nag-diag-metric"><span>Phase remaining</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-timer">--</strong></div>
+          <div class="nag-diag-metric"><span>Corrective / burst</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-burst">--</strong></div>
+        </div></article>
+        <article class="nag-diag-group"><h3>本地发送</h3><div class="nag-diag-metrics">
+          <div class="nag-diag-metric"><span>Attempt / success / failure</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-tx">0 / 0 / 0</strong></div>
+          <div class="nag-diag-metric"><span>Last injected torque / age</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-last-tx">--</strong><small id="nag-injected-meta">--（未注入）</small></div>
+          <div class="nag-diag-metric"><span>Counter collision / gap</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-collision">0 / --</strong></div>
+        </div></article>
+        <article class="nag-diag-group"><h3>DAS 响应</h3><div class="nag-diag-metrics">
+          <div class="nag-diag-metric"><span>Acknowledgements</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-ack">0</strong></div>
+          <div class="nag-diag-metric"><span>Last / max latency</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-latency">-- / --</strong></div>
+          <div class="nag-diag-metric"><span>Timeouts</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-timeout">0</strong></div>
+          <div class="nag-diag-metric"><span>HOS escalations</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-escalations">0</strong></div>
+        </div></article>
+      </div>
+      <div class="nag-diag-timeline"><div class="nag-diag-timeline-head"><h3>最近闭环事件</h3><button class="nag-diag-clear" id="nag-diag-clear-events" type="button" onclick="clearNagDiagnosticEvents()">清空事件</button></div><ol class="nag-diag-events" id="nag-diag-events" role="log" aria-live="polite"><li class="nag-diag-empty">等待状态变化</li></ol></div>
+    </section>
     <details id="advanced-diagnostics">
       <summary>高级诊断</summary>
-      <div class="diag-group">
-        <h3>NAG 运行数据</h3>
-        <div class="sys-grid">
-          <div class="sys-item"><div class="sys-lbl">Echo 回显</div><div class="sys-val" id="nag-echo-meta">echo: --</div></div>
-          <div class="sys-item"><div class="sys-lbl">实时扭矩</div><div class="sys-val" id="nag-live-meta">实时: --</div></div>
-          <div class="sys-item"><div class="sys-lbl">实时注入扭矩</div><div class="sys-val" id="nag-injected-meta">--（未注入）</div></div>
-          <div class="sys-item"><div class="sys-lbl">Hands-On / 方向依据</div><div class="sys-val" id="nag-direction-meta">--</div></div>
-        </div>
-      </div>
       <div class="diag-group">
         <h3>CAN 运行数据</h3>
         <div class="stat-grid">
@@ -1097,6 +1152,22 @@ let nagCustomLoading=false;
 let nagCustomSaving=false;
 let nagCustomLoadError='';
 let nagCustomRevision=0;
+const phaseNames={
+  disabled:'关闭', 'wait-das':'等待 DAS', arming:'确认 OEM 帧',
+  maintenance:'预防扫动', release:'平滑释放', rest:'无发送休息',
+  corrective:'纠正脉冲', verify:'等待 DAS 确认',
+  'fault-hold':'故障停发'
+};
+const nagDiagnosticSemanticTones={release: 'caution', rest: 'caution', verify: 'caution', collision: 'caution', sendFailure: 'error'};
+const nagDiagnosticEventFields=[
+  ['nagDasFresh','DAS freshness'],['nagDasHos','DAS HOS'],
+  ['nagAdaptivePhase','Controller phase'],['nagAcknowledgementCount','Acknowledgements'],
+  ['nagAcknowledgementTimeouts','Ack timeouts'],['nagCounterCollisions','Counter collisions']
+];
+let nagDiagnosticPrevious=null;
+let nagDiagnosticEvents=[];
+let nagDiagnosticsTimer=null;
+let nagDiagnosticsLoading=false;
 const nagCustomFieldDefs=[
   ['preventiveNegative',0,'nag-pv-neg-min','preventiveNegativeMinNm',0.10,0.50,2],['preventiveNegative',1,'nag-pv-neg-max','preventiveNegativeMaxNm',0.10,0.50,2],
   ['preventivePositive',0,'nag-pv-pos-min','preventivePositiveMinNm',0.10,0.50,2],['preventivePositive',1,'nag-pv-pos-max','preventivePositiveMaxNm',0.10,0.50,2],
@@ -1203,6 +1274,7 @@ function setUiMode(mode,persist){
   applyUiMode();
   if(isCarUiActive())expandCarEssentials();
   startDashboardPolling();
+  syncNagDiagnosticsPolling();
 }
 function scrollCarSection(id){
   const el=$(id);if(!el)return;
@@ -1218,6 +1290,7 @@ function stopDashboardPolling(){
   dashboardPollTimers.forEach(clearInterval);
   dashboardPollTimers=[];
   if(systemStatusTimer){clearInterval(systemStatusTimer);systemStatusTimer=null;}
+  stopNagDiagnosticsPolling();
   $('dot').className='sdot dot-off';
   $('hdr-desc').textContent=trText('Dashboard disconnected');
   let msg='Connection to '+location.hostname+' lost. Reload after reconnecting.';
@@ -1270,6 +1343,7 @@ function setNetworkPerformanceMode(enabled,persist){
   networkPerformanceMode=!!enabled;
   if(persist)localStorage.setItem('netPerfMode',networkPerformanceMode?'1':'0');
   startDashboardPolling();
+  syncNagDiagnosticsPolling();
   if(dashboardVisible()){
     poll();loadWifiStatus();loadApStatus();loadGatewayStatus();
     if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
@@ -1424,6 +1498,7 @@ function setWifiNagPage(page){
   const meta=WIFI_NAG_PAGE_META[page];
   setText('page-title',meta[0]);setText('page-copy',meta[1]);
   window.scrollTo({top:0,behavior:'smooth'});
+  syncNagDiagnosticsPolling();
 }
 function initWifiNagNavigation(){
   document.querySelectorAll('.bottom-nav-btn').forEach(btn=>btn.addEventListener('click',()=>setWifiNagPage(btn.dataset.pageTarget)));
@@ -1451,7 +1526,7 @@ function initWifiNagAccordion(){
   cards.forEach(card=>{
     const key=wifiNagCardStoragePrefix+card.id;
     const stored=localStorage.getItem(key);
-    const defaultExpanded=card.id==='config-card';
+    const defaultExpanded=card.id==='config-card'||card.id==='system-card';
     setMainCardExpanded(card,stored===null?defaultExpanded:stored==='1');
     const header=card.querySelector(':scope > .card-hdr');
     if(!header||header.dataset.uiAccordion==='1')return;
@@ -1771,18 +1846,98 @@ function updateNagControl(d){
   const injectedValid=d.nagInjectedTorqueValid===undefined?!!d.injectedTorqueValid:!!d.nagInjectedTorqueValid;
   const injected=num('nagInjectedTorqueNm','injectedTorqueNm',0);
   const injectedMeta=$('nag-injected-meta');if(injectedMeta)injectedMeta.textContent=injectedValid?((injected>=0?'+':'')+injected.toFixed(2)+' Nm'):(dashLang==='zh'?'--（未注入）':'-- (not injecting)');
+  const injectedAge=d.nagInjectedAgeMs===undefined?d.injectedAgeMs:d.nagInjectedAgeMs;
+  if(d.nagInjectedTorqueValid!==undefined||d.nagInjectedTorqueNm!==undefined)setNagDiagnosticValue('nag-diag-last-tx',injectedValid?((injected>=0?'+':'')+injected.toFixed(2)+' Nm / '+nagDiagnosticAge(injectedAge)):'--',injectedValid?'active':'muted');
   const handsOn=Math.trunc(num('nagHandsOnRaw','handsOnRaw',0));
   const tier=Math.trunc(num('nagHandsOnTier','handsOnTier',1));
   const source=String(d.nagDirectionSource===undefined?(d.directionSource||'default'):d.nagDirectionSource);
   const sourceNames={torque:dashLang==='zh'?'实测扭矩':'measured torque',angle:dashLang==='zh'?'方向盘角度兜底':'steering-angle fallback',hold:dashLang==='zh'?'保持上一方向':'holding direction',default:dashLang==='zh'?'固定启动方向':'deterministic default'};
   const directionMeta=$('nag-direction-meta');if(directionMeta)directionMeta.textContent='raw '+handsOn+' / H'+tier+' / '+(sourceNames[source]||source);
   const phase=String(d.nagAdaptivePhase===undefined?(d.adaptivePhase||'disabled'):d.nagAdaptivePhase);
-  const phaseNames={disabled:dashLang==='zh'?'关闭':'disabled','wait-das':dashLang==='zh'?'等待 DAS':'waiting DAS',arming:dashLang==='zh'?'确认反馈':'arming',maintenance:dashLang==='zh'?'预防维持':'maintenance',release:dashLang==='zh'?'释放':'release',rest:dashLang==='zh'?'休息':'rest',corrective:dashLang==='zh'?'纠正脉冲':'corrective',verify:dashLang==='zh'?'验证恢复':'verify','fault-hold':dashLang==='zh'?'故障保持':'fault hold'};
   if($('nag-adaptive-phase'))$('nag-adaptive-phase').textContent=(dashLang==='zh'?'阶段：':'phase: ')+(phaseNames[phase]||phase);
   if($('nag-adaptive-torque-live'))$('nag-adaptive-torque-live').textContent=(dashLang==='zh'?'真实扭矩：':'real torque: ')+live.toFixed(2)+' Nm';
   if($('nag-adaptive-handson-live'))$('nag-adaptive-handson-live').textContent='Hands-On：raw '+handsOn+' / H'+tier;
   if($('nag-adaptive-source-live'))$('nag-adaptive-source-live').textContent=(dashLang==='zh'?'方向依据：':'source: ')+(sourceNames[source]||source);
   updateNagCustomReadiness(d);
+}
+
+function setNagDiagnosticValue(id,text,tone){
+  const el=$(id);if(!el)return;el.textContent=text;el.className='nag-diag-value'+(tone?' nag-tone-'+tone:'');
+}
+function nagDiagnosticNumber(data,key,fallback){
+  const value=Number(data[key]);return Number.isFinite(value)?value:fallback;
+}
+function nagDiagnosticAge(value){
+  if(value===undefined||value===null||value==='')return '--';const age=Number(value);return Number.isFinite(age)?Math.max(0,Math.trunc(age))+' ms':'--';
+}
+function renderNagDiagnosticEvents(){
+  const list=$('nag-diag-events');if(!list)return;
+  if(!nagDiagnosticEvents.length){list.innerHTML='<li class="nag-diag-empty">等待状态变化</li>';return;}
+  list.innerHTML=nagDiagnosticEvents.map(event=>'<li class="nag-diag-event"><time>'+escapeHtml(event.time)+'</time><b>'+escapeHtml(event.type)+'</b><span>'+escapeHtml(event.change)+'</span></li>').join('');
+}
+function recordNagDiagnosticEvents(data){
+  const snapshot={};nagDiagnosticEventFields.forEach(def=>{snapshot[def[0]]=data[def[0]];});
+  if(nagDiagnosticPrevious===null){nagDiagnosticPrevious=snapshot;return;}
+  nagDiagnosticEventFields.forEach(def=>{const field=def[0],previous=nagDiagnosticPrevious[field],next=snapshot[field];if(previous===next)return;const oldValue=previous===undefined?'--':String(previous),newValue=next===undefined?'--':String(next);nagDiagnosticEvents.unshift({time:new Date().toLocaleTimeString(),type:def[1],change:oldValue+' → '+newValue});});
+  if(nagDiagnosticEvents.length>20)nagDiagnosticEvents.length=20;nagDiagnosticPrevious=snapshot;renderNagDiagnosticEvents();
+}
+function clearNagDiagnosticEvents(){
+  nagDiagnosticEvents=[];renderNagDiagnosticEvents();
+}
+function updateNagDiagnostics(d){
+  recordNagDiagnosticEvents(d);
+  const mode=Number(d.nagMode===undefined?(d.mode===undefined?state.nagMode:d.mode):d.nagMode)||0;
+  const phase=String(d.nagAdaptivePhase===undefined?'disabled':d.nagAdaptivePhase);
+  const dasSeen=!!d.nagDasSeen,dasFresh=!!d.nagDasFresh,hos=Math.trunc(nagDiagnosticNumber(d,'nagDasHos',0));
+  const block=String(d.nagAdaptiveBlockReason===undefined?'none':d.nagAdaptiveBlockReason);
+  const blockNames={none:'无阻塞',disabled:'自适应模式未启用','das-missing':'尚未收到 DAS 0x39B','das-stale':'DAS 反馈已过期','no-direction':'没有可靠方向依据','das-state':'DAS 状态禁止发送','ack-timeout':'DAS 确认超时'};
+  let health='READY',healthTone='ready';
+  if(mode!==5||phase==='disabled'){health='DISABLED';healthTone='muted';}
+  else if(phase==='fault-hold'){health='FAIL_CLOSED';healthTone='error';}
+  else if(!dasFresh||phase==='wait-das'){health='WAIT_DAS';healthTone=dasSeen?'error':'muted';}
+  else if(phase==='maintenance'||phase==='corrective'){health='ACTIVE';healthTone='active';}
+  else if(nagDiagnosticSemanticTones[phase]){health=phase==='rest'?'READY':'ACTIVE';healthTone=nagDiagnosticSemanticTones[phase];}
+  const healthEl=$('nag-diag-health');if(healthEl){healthEl.textContent=health;healthEl.className='nag-diag-health nag-tone-'+healthTone;}
+  setText('nag-diag-reason',blockNames[block]||block);
+  const epasFrames=nagDiagnosticNumber(d,'nagOemEpasFrames',0),epasAge=nagDiagnosticAge(d.nagLastOemEpasAgeMs);
+  setNagDiagnosticValue('nag-diag-epas',epasFrames+' frames / '+epasAge,epasFrames?'active':'muted');
+  setNagDiagnosticValue('nag-diag-oem-torque',nagDiagnosticNumber(d,'nagObservedTorqueNm',0).toFixed(2)+' Nm',epasFrames?'active':'muted');
+  setNagDiagnosticValue('nag-diag-counter',epasFrames?String(Math.trunc(nagDiagnosticNumber(d,'nagLastOemEpasCounter',0))):'--',epasFrames?'active':'muted');
+  const dasFrames=nagDiagnosticNumber(d,'nagDasFrames',0),dasTone=dasFresh?'fresh':(dasSeen?'error':'muted');
+  setNagDiagnosticValue('nag-diag-das',(dasFrames?dasFrames+' frames':'未见数据')+' / '+nagDiagnosticAge(d.nagDasAgeMs),dasTone);
+  setNagDiagnosticValue('nag-diag-hos',dasSeen?'H'+hos:'--',!dasSeen?'muted':(hos>=8?'error':(hos>=2?'caution':'active')));
+  const phaseTone=phase==='fault-hold'?'error':(nagDiagnosticSemanticTones[phase]||(phase==='disabled'?'muted':(phase==='wait-das'?'error':(phase==='arming'?'ready':'active'))));
+  setNagDiagnosticValue('nag-diag-phase',phaseNames[phase]||phase,phaseTone);
+  setNagDiagnosticValue('nag-diag-target',nagDiagnosticNumber(d,'nagAdaptiveTargetTorqueNm',0).toFixed(2)+' Nm',phase==='disabled'?'muted':'active');
+  const source=String(d.nagDirectionSource===undefined?'--':d.nagDirectionSource),sourceNames={torque:'实测扭矩',angle:'方向盘角度',hold:'保持上一方向'};
+  setNagDiagnosticValue('nag-diag-direction',sourceNames[source]||source,source==='--'?'muted':'active');
+  setNagDiagnosticValue('nag-diag-timer',nagDiagnosticAge(d.nagAdaptivePhaseRemainingMs),phaseTone);
+  const attempt=Math.trunc(nagDiagnosticNumber(d,'nagCorrectiveAttempt',0)),burst=Math.trunc(nagDiagnosticNumber(d,'nagCorrectiveBurstFrame',0)),burstTarget=Math.trunc(nagDiagnosticNumber(d,'nagCorrectiveBurstFrameTarget',0));
+  setNagDiagnosticValue('nag-diag-burst','try '+attempt+' · '+burst+'/'+burstTarget,phase==='corrective'?'active':'muted');
+  const sends=Math.trunc(nagDiagnosticNumber(d,'nagSendAttempts',0)),failures=Math.trunc(nagDiagnosticNumber(d,'nagSendFailures',0));const success=Math.max(0,sends-failures);
+  setNagDiagnosticValue('nag-diag-tx',sends+' / '+success+' / '+failures,failures?'error':(sends?'active':'muted'));
+  if(d.nagInjectedTorqueValid!==undefined||d.nagInjectedTorqueNm!==undefined){const injectedValid=!!d.nagInjectedTorqueValid,injected=nagDiagnosticNumber(d,'nagInjectedTorqueNm',0),injectedAge=d.nagInjectedAgeMs;setNagDiagnosticValue('nag-diag-last-tx',injectedValid?((injected>=0?'+':'')+injected.toFixed(2)+' Nm / '+nagDiagnosticAge(injectedAge)):'--',injectedValid?'active':'muted');}
+  const collisions=Math.trunc(nagDiagnosticNumber(d,'nagCounterCollisions',0));
+  const collisionGap=d.nagLastCounterCollisionGapUs===undefined?'--':Math.max(0,Math.trunc(Number(d.nagLastCounterCollisionGapUs)||0))+' μs';setNagDiagnosticValue('nag-diag-collision',collisions+' / '+collisionGap,collisions?nagDiagnosticSemanticTones.collision:'muted');
+  const acknowledgements=Math.trunc(nagDiagnosticNumber(d,'nagAcknowledgementCount',0)),timeouts=Math.trunc(nagDiagnosticNumber(d,'nagAcknowledgementTimeouts',0));
+  setNagDiagnosticValue('nag-diag-ack',String(acknowledgements),acknowledgements?'ack':'muted');
+  setNagDiagnosticValue('nag-diag-latency',nagDiagnosticAge(d.nagLastAcknowledgementLatencyMs)+' / '+nagDiagnosticAge(d.nagMaxAcknowledgementLatencyMs),acknowledgements?'ack':'muted');
+  setNagDiagnosticValue('nag-diag-timeout',String(timeouts),timeouts?'error':'muted');
+  const escalations=Math.trunc(nagDiagnosticNumber(d,'nagHosEscalations',0));setNagDiagnosticValue('nag-diag-escalations',String(escalations),escalations?'caution':'muted');
+}
+function nagDiagnosticsShouldPoll(){
+  return !!document.querySelector('.ui-screen[data-page="diagnostics"].active')&&systemStatusEnabled&&!document.hidden&&!dashboardPollStopped;
+}
+function stopNagDiagnosticsPolling(){
+  if(nagDiagnosticsTimer!==null){clearInterval(nagDiagnosticsTimer);nagDiagnosticsTimer=null;}
+}
+async function pollNagDiagnostics(){
+  if(!nagDiagnosticsShouldPoll()||nagDiagnosticsLoading)return;nagDiagnosticsLoading=true;
+  try{const response=await fetch('/api/nag-adaptive');if(!response.ok)return;const data=await response.json();if(data.ok!==false&&nagDiagnosticsShouldPoll())updateNagDiagnostics(data);}catch(error){}
+  finally{nagDiagnosticsLoading=false;}
+}
+function syncNagDiagnosticsPolling(){
+  stopNagDiagnosticsPolling();if(!nagDiagnosticsShouldPoll())return;pollNagDiagnostics();const intervalMs=isCarUiActive()||networkPerformanceMode?1000:500;nagDiagnosticsTimer=setInterval(pollNagDiagnostics,intervalMs);
 }
 
 function setNagCustomDirty(dirty){
@@ -1952,12 +2107,14 @@ function startSystemMonitor(){
   const t=$('sys-monitor-tgl');if(t)t.checked=true;
   loadSystemStatus();
   systemStatusTimer=setInterval(loadSystemStatus,1000);
+  syncNagDiagnosticsPolling();
 }
 function stopSystemMonitor(){
   systemStatusEnabled=false;
   const t=$('sys-monitor-tgl');if(t)t.checked=false;
   if(systemStatusTimer){clearInterval(systemStatusTimer);systemStatusTimer=null;}
   resetSystemStatusUi();
+  syncNagDiagnosticsPolling();
 }
 function toggleSystemMonitor(){
   const t=$('sys-monitor-tgl');
@@ -2723,6 +2880,7 @@ initNagCustomUi();
 loadNagAdaptive();
 startDashboardPolling();
 document.addEventListener('visibilitychange',()=>{
+  syncNagDiagnosticsPolling();
   if(!dashboardVisible())return;
   poll();loadFirmwareInfo();loadWifiStatus();loadApStatus();loadGatewayStatus();
   if(!networkPerformanceMode&&!isCarUiActive()){loadWifiNetworks();loadGatewayBlocked();loadGatewayDns(true);}
