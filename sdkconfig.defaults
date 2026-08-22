@@ -17,6 +17,13 @@ CONFIG_LWIP_TCPIP_TASK_AFFINITY_CPU1=y
 CONFIG_LWIP_TCPIP_TASK_AFFINITY=0x1
 CONFIG_FREERTOS_HZ=1000
 
+# ESP32-S3-BOX hardware and the production partition map both use 16 MiB.
+# Keep ESP-IDF's image header and partition selection aligned with PlatformIO;
+# otherwise a clean IDF 6 build silently falls back to a 2 MB/single-app profile.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_16mb_ota_4096k_nvs64_boot.csv"
+
 # Keep the legacy TWAI controller passive and responsive while OTA writes flash.
 CONFIG_TWAI_ISR_IN_IRAM=y
 CONFIG_TWAI_ERRATA_FIX_LISTEN_ONLY_DOM=y

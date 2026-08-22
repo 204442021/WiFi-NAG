@@ -254,7 +254,7 @@ void test_direction_flip_requires_100ms_stability()
     TEST_ASSERT_EQUAL_INT8(1, epas(controller, 130, -20).injectionSign);
 }
 
-void test_deadband_holds_last_trusted_direction()
+void test_zero_torque_holds_last_trusted_direction()
 {
     NagAdaptiveController controller;
     resetWithDas(controller);
@@ -1000,7 +1000,7 @@ void test_epas_gap_clears_direction_reversal_candidate_timer()
     TEST_ASSERT_FALSE(epas(controller, 231, -20).shouldSend);
     TEST_ASSERT_FALSE(epas(controller, 241, -20).shouldSend);
     const NagAdaptiveDecision third = epas(controller, 251, -20);
-    TEST_ASSERT_TRUE(third.shouldSend);
+    TEST_ASSERT_FALSE(third.shouldSend);
     TEST_ASSERT_EQUAL_INT8(-1, third.injectionSign);
     TEST_ASSERT_EQUAL_INT8(-1, epas(controller, 330, -20).injectionSign);
     TEST_ASSERT_EQUAL_INT8(1, epas(controller, 331, -20).injectionSign);
@@ -1379,6 +1379,8 @@ void test_published_das_freshness_handles_wrap_and_never_seen()
 void test_new_continuous_policy_defaults_and_bounds()
 {
     const NagAdaptiveConfig defaults;
+    TEST_ASSERT_TRUE(defaults.maintenanceEnabled);
+    TEST_ASSERT_EQUAL_INT16(0, defaults.torqueDeadbandCentiNm);
     TEST_ASSERT_EQUAL_INT16(150, defaults.preventiveNegativeMinCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, defaults.preventivePositiveMaxCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, defaults.correctiveNegativeMinCentiNm);
@@ -1408,7 +1410,21 @@ void test_new_continuous_policy_defaults_and_bounds()
     TEST_ASSERT_EQUAL_UINT32(2000U, normalized.restMaxMs);
 }
 
-void test_hos_0_to_2_send_ten_seconds_then_stop_for_one_to_three_seconds()
+void test_maintenance_switch_parser_accepts_boolean_form_values()
+{
+    NagAdaptiveConfigInput::Error error = NagAdaptiveConfigInput::Error::NONE;
+    bool enabled = false;
+    TEST_ASSERT_TRUE(NagAdaptiveConfigInput::parseBoolean("1", enabled, error));
+    TEST_ASSERT_TRUE(enabled);
+    TEST_ASSERT_TRUE(NagAdaptiveConfigInput::parseBoolean("off", enabled, error));
+    TEST_ASSERT_FALSE(enabled);
+    TEST_ASSERT_FALSE(NagAdaptiveConfigInput::parseBoolean("maybe", enabled, error));
+    TEST_ASSERT_EQUAL_UINT8(
+        static_cast<uint8_t>(NagAdaptiveConfigInput::Error::INVALID),
+        static_cast<uint8_t>(error));
+}
+
+void test_hos_0_to_2_send_ten_seconds_then_stop_for_one_to_two_seconds()
 {
     for (uint8_t hos = 0; hos <= 2; ++hos)
     {
@@ -1506,18 +1522,136 @@ void test_hos_3_to_5_clear_previous_target_then_send_continuously_until_normal()
     }
 }
 
+void test_maintenance_switch_off_suppresses_hos_0_to_2_but_keeps_correction()
+{
+    NagAdaptiveController controller;
+    NagAdaptiveConfig config;
+    config.maintenanceEnabled = false;
+    controller.setConfig(config);
+    resetWithDas(controller, 0);
+
+    TEST_ASSERT_FALSE(epas(controller, 0).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 10).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 20).shouldSend);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_MONITOR_ONLY,
+                            controller.snapshot(20).phase);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::BLOCK_MAINTENANCE_DISABLED,
+                            controller.snapshot(20).blockReason);
+
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(3), 30));
+    const NagAdaptiveDecision corrective = epas(controller, 30);
+    TEST_ASSERT_TRUE(corrective.shouldSend);
+    TEST_ASSERT_TRUE(corrective.corrective);
+
+    TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(2), 40));
+    const NagAdaptiveDecision recovered = epas(controller, 40);
+    TEST_ASSERT_FALSE(recovered.shouldSend);
+    TEST_ASSERT_FALSE(recovered.corrective);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_MONITOR_ONLY,
+                            controller.snapshot(40).phase);
+}
+
+void test_handler_applies_maintenance_only_config_change()
+{
+    NagHandler handler;
+    MockDriver driver;
+    nagKillerRuntime = true;
+    NagAdaptiveConfig config;
+    config.maintenanceEnabled = false;
+    handler.setAdaptiveConfig(config);
+    handler.setMode(NagHandler::MODE_ADAPTIVE);
+
+    handleAt(handler, driver, makeDasFrame(2), 0);
+    handleAt(handler, driver, makeHandlerEpasFrame(0, 20), 0);
+    handleAt(handler, driver, makeHandlerEpasFrame(1, 20), 10);
+    handleAt(handler, driver, makeHandlerEpasFrame(2, 20), 20);
+
+    TEST_ASSERT_EQUAL(0, driver.sent.size());
+    TEST_ASSERT_FALSE(handler.adaptiveConfig().maintenanceEnabled);
+    TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_MONITOR_ONLY,
+                            handler.adaptiveSnapshot().phase);
+}
+
+void test_corrective_path_reaches_two_nm_without_raising_maintenance_cap()
+{
+    NagHandler handler;
+    MockDriver driver;
+    nagKillerRuntime = true;
+    NagAdaptiveConfig config;
+    config.correctiveNegativeMinCentiNm = 200;
+    config.correctiveNegativeMaxCentiNm = 200;
+    config.correctivePositiveMinCentiNm = 200;
+    config.correctivePositiveMaxCentiNm = 200;
+    handler.setAdaptiveConfig(config);
+    handler.setMode(NagHandler::MODE_ADAPTIVE);
+
+    handleAt(handler, driver, makeDasFrame(3), 0);
+    handleAt(handler, driver, makeHandlerEpasFrame(0, 20), 0);
+    handleAt(handler, driver, makeHandlerEpasFrame(1, 20), 10);
+    handleAt(handler, driver, makeHandlerEpasFrame(2, 20), 20);
+
+    TEST_ASSERT_EQUAL(1, driver.sent.size());
+    TEST_ASSERT_EQUAL_INT16(-200, NagHandler::rawToCentiNm(
+                                      NagHandler::readTorqueRaw(driver.sent[0])));
+
+    TEST_ASSERT_EQUAL_INT16(180, NagHandler::clampTorqueCentiNm(200));
+    TEST_ASSERT_EQUAL_INT16(-180, NagHandler::clampTorqueCentiNm(-200));
+}
+
+void test_default_zero_deadband_uses_first_nonzero_oem_torque()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller, 3);
+
+    TEST_ASSERT_FALSE(epas(controller, 0, 1, 0).shouldSend);
+    TEST_ASSERT_FALSE(epas(controller, 10, 1, 0).shouldSend);
+    const NagAdaptiveDecision decision = epas(controller, 20, 1, 0);
+
+    TEST_ASSERT_TRUE(decision.shouldSend);
+    TEST_ASSERT_TRUE(decision.corrective);
+    TEST_ASSERT_EQUAL_INT8(-1, decision.injectionSign);
+    TEST_ASSERT_EQUAL_INT16(0, controller.config().torqueDeadbandCentiNm);
+}
+
+void test_direction_reversal_wait_never_sends_the_old_direction()
+{
+    NagAdaptiveController controller;
+    resetWithDas(controller, 3);
+    const NagAdaptiveDecision initial = arm(controller, 20);
+    TEST_ASSERT_TRUE(initial.corrective);
+    TEST_ASSERT_EQUAL_INT8(-1, initial.injectionSign);
+
+    const NagAdaptiveDecision candidate = epas(controller, 30, -20);
+    TEST_ASSERT_FALSE(candidate.shouldSend);
+    TEST_ASSERT_EQUAL_INT8(-1, candidate.injectionSign);
+
+    const NagAdaptiveDecision pending = epas(controller, 129, -20);
+    TEST_ASSERT_FALSE(pending.shouldSend);
+
+    const NagAdaptiveDecision confirmed = epas(controller, 130, -20);
+    TEST_ASSERT_TRUE(confirmed.shouldSend);
+    TEST_ASSERT_TRUE(confirmed.corrective);
+    TEST_ASSERT_EQUAL_INT8(1, confirmed.injectionSign);
+}
+
 int main()
 {
     UNITY_BEGIN();
     RUN_TEST(test_adaptive_never_sends_without_fresh_das);
     RUN_TEST(test_adaptive_requires_three_valid_oem_epas_frames);
     RUN_TEST(test_new_continuous_policy_defaults_and_bounds);
-    RUN_TEST(test_hos_0_to_2_send_ten_seconds_then_stop_for_one_to_three_seconds);
+    RUN_TEST(test_maintenance_switch_parser_accepts_boolean_form_values);
+    RUN_TEST(test_hos_0_to_2_send_ten_seconds_then_stop_for_one_to_two_seconds);
     RUN_TEST(test_measured_torque_selects_opposite_injection_direction);
     RUN_TEST(test_direction_flip_requires_100ms_stability);
-    RUN_TEST(test_deadband_holds_last_trusted_direction);
+    RUN_TEST(test_zero_torque_holds_last_trusted_direction);
     RUN_TEST(test_no_torque_and_no_angle_direction_blocks_send);
     RUN_TEST(test_hos_3_to_5_clear_previous_target_then_send_continuously_until_normal);
+    RUN_TEST(test_maintenance_switch_off_suppresses_hos_0_to_2_but_keeps_correction);
+    RUN_TEST(test_handler_applies_maintenance_only_config_change);
+    RUN_TEST(test_corrective_path_reaches_two_nm_without_raising_maintenance_cap);
+    RUN_TEST(test_default_zero_deadband_uses_first_nonzero_oem_torque);
+    RUN_TEST(test_direction_reversal_wait_never_sends_the_old_direction);
     RUN_TEST(test_hos_6_through_15_enter_fault_hold_without_send);
     RUN_TEST(test_das_stale_during_send_returns_wait_das);
     RUN_TEST(test_epas_gap_over_200ms_rearms_three_frame_guard);

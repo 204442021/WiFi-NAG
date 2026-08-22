@@ -6,6 +6,7 @@
 
 struct NagAdaptiveConfig
 {
+    bool maintenanceEnabled = true;
     int16_t preventiveNegativeMinCentiNm = 150;
     int16_t preventiveNegativeMaxCentiNm = 180;
     int16_t preventivePositiveMinCentiNm = 150;
@@ -14,7 +15,7 @@ struct NagAdaptiveConfig
     int16_t correctiveNegativeMaxCentiNm = 200;
     int16_t correctivePositiveMinCentiNm = 180;
     int16_t correctivePositiveMaxCentiNm = 200;
-    int16_t torqueDeadbandCentiNm = 5;
+    int16_t torqueDeadbandCentiNm = 0;
     uint32_t activityMinMs = 10000;
     uint32_t activityMaxMs = 10000;
     uint32_t releaseMinMs = 200;
@@ -98,6 +99,7 @@ public:
         PHASE_CORRECTIVE = 6,
         PHASE_VERIFY = 7,
         PHASE_FAULT_HOLD = 8,
+        PHASE_MONITOR_ONLY = 9,
     };
 
     enum BlockReason : uint8_t
@@ -112,6 +114,8 @@ public:
         BLOCK_VERIFY = 7,
         BLOCK_DAS_STATE = 8,
         BLOCK_ACK_TIMEOUT = 9,
+        BLOCK_DIRECTION_CHANGE = 10,
+        BLOCK_MAINTENANCE_DISABLED = 11,
     };
 
     enum DirectionSource : uint8_t
@@ -132,7 +136,7 @@ public:
                           value.correctiveNegativeMaxCentiNm, 180, 200);
         normalizeI16Range(value.correctivePositiveMinCentiNm,
                           value.correctivePositiveMaxCentiNm, 180, 200);
-        value.torqueDeadbandCentiNm = clampI16(value.torqueDeadbandCentiNm, 0, 50);
+        value.torqueDeadbandCentiNm = 0;
         normalizeU32Range(value.activityMinMs, value.activityMaxMs, 8000, 12000);
         normalizeU32Range(value.releaseMinMs, value.releaseMaxMs, 100, 1000);
         normalizeU32Range(value.restMinMs, value.restMaxMs, 1000, 2000);
@@ -305,6 +309,12 @@ public:
             else
                 beginMaintenance(nowMs, entropy);
         }
+
+        if (phase_ == PHASE_MONITOR_ONLY)
+            return blockedDecision(BLOCK_MAINTENANCE_DISABLED);
+
+        if (candidateSign_ != 0)
+            return blockedDecision(BLOCK_DIRECTION_CHANGE);
 
         if (phase_ == PHASE_MAINTENANCE && phaseExpired(nowMs))
             beginRest(nowMs, entropy);
@@ -502,6 +512,11 @@ private:
 
     void beginMaintenance(uint32_t nowMs, uint32_t entropy)
     {
+        if (!config_.maintenanceEnabled)
+        {
+            beginMonitorOnly();
+            return;
+        }
         phase_ = PHASE_MAINTENANCE;
         blockReason_ = BLOCK_NONE;
         phaseStartedAtMs_ = nowMs;
@@ -511,6 +526,19 @@ private:
         correctiveBurstFrame_ = 0;
         correctiveBurstFrameTarget_ = 0;
         preparePreventive(entropy);
+    }
+
+    void beginMonitorOnly()
+    {
+        phase_ = PHASE_MONITOR_ONLY;
+        blockReason_ = BLOCK_MAINTENANCE_DISABLED;
+        phaseDurationMs_ = 0;
+        targetTorqueCentiNm_ = 0;
+        currentMagnitudeCentiNm_ = 0;
+        outputActive_ = false;
+        correctiveAttempt_ = 0;
+        correctiveBurstFrame_ = 0;
+        correctiveBurstFrameTarget_ = 0;
     }
 
     void beginRelease(uint32_t nowMs)

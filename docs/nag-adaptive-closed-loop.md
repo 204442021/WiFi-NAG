@@ -1,6 +1,6 @@
 # Adaptive NAG closed-loop operation and validation
 
-This document defines the V4.3-V13 adaptive NAG operating boundary for the Waveshare ESP32-S3 WiFi-NAG target. The vehicle baseline is Model Y HW4 on vehicle software `2026.2.11`, using the Party CAN tap pins 2/3 at `500 kbit/s`. Results from that baseline must not be generalized into a cross-vehicle or cross-version guarantee.
+This document defines the V4.4-V13 adaptive NAG operating boundary for the Waveshare ESP32-S3 WiFi-NAG target. The vehicle baseline is Model Y HW4 on vehicle software `2026.2.11`, using the Party CAN tap pins 2/3 at `500 kbit/s`. Results from that baseline must not be generalized into a cross-vehicle or cross-version guarantee.
 
 ## Safety boundary and CAN roles
 
@@ -8,7 +8,7 @@ Start every installation and bus change with NAG disabled and `CAN Write OFF`. I
 
 | CAN ID | Role | Read/write boundary |
 |---|---|---|
-| `0x370 / 880` | OEM EPAS torque, angle, and counter input; source template for the NAG echo | Only checksum-valid, non-own-echo OEM frames update direction/timing and may trigger a counter+1 echo. Outgoing torque is finally clamped to `[-180,+180] cNm` and checksum is recalculated. |
+| `0x370 / 880` | OEM EPAS torque, angle, and counter input; source template for the NAG echo | Only checksum-valid, non-own-echo OEM frames update direction/timing and may trigger a counter+1 echo. Maintenance and legacy output are clamped to `[-180,+180] cNm`; corrective output is independently clamped to `[-200,+200] cNm`. The checksum is recalculated. |
 | `0x39B / 923` | DAS Hands-On State (HOS), from byte 5 bits `[5:2]` | Strictly read-only. It is parsed and observed but never copied, modified, or sent. |
 
 The controller does not treat a successful local `driver.send()` as proof that DAS accepted the action. It also does not transmit when an OEM frame is malformed, reserved, checksum-invalid, or identified as this device's own echo.
@@ -17,9 +17,9 @@ The controller does not treat a successful local `driver.send()` as proof that D
 
 | HOS | Meaning | Adaptive action |
 |---:|---|---|
-| `0` | NOT_REQD | Run the normal cycle: about 10 s at `1.50..1.80 Nm`, then 1..2 s with no injected frame. |
-| `1` | REQD_DETECTED | Run the same continuous normal cycle. |
-| `2` | REQD_NOT_DETECTED | Normal system baseline; run the same continuous normal cycle. |
+| `0` | NOT_REQD | With maintenance enabled, run about 10 s at `1.50..1.80 Nm`, then 1..2 s with no injected frame. With maintenance disabled, monitor only. |
+| `1` | REQD_DETECTED | Same maintenance/monitor-only policy as H0. |
+| `2` | REQD_NOT_DETECTED | Same maintenance/monitor-only policy as H0. |
 | `3` | VISUAL | Clear the previous target and inject `1.80..2.00 Nm` on every OEM frame until HOS `0..2`. |
 | `4` | CHIME_1 | Same continuous corrective action as H3. |
 | `5` | CHIME_2 | Same continuous corrective action as H3. |
@@ -31,17 +31,21 @@ The controller does not treat a successful local `driver.send()` as proof that D
 
 ## State machine
 
-```text
-WAIT_DAS -> ARMING -> MAINTENANCE -> RELEASE -> REST
-                 \                         /
-                  +-> CORRECTIVE -> VERIFY
-                                      | retry once
-                                      +-> CORRECTIVE -- HOS 0..2 --> MAINTENANCE
-
-FAULT_HOLD -> MAINTENANCE after fresh HOS 0..2 remains continuous for 2000 ms
+```mermaid
+flowchart TB
+    W[WAIT_DAS] --> A[ARMING]
+    A -->|H0-H2 + switch on| M[MAINTENANCE / REST]
+    A -->|H0-H2 + switch off| O[MONITOR_ONLY]
+    A -->|H3-H5| C[CORRECTIVE]
+    M -->|H3-H5| C
+    O -->|H3-H5| C
+    C -->|H0-H2 + switch on| M
+    C -->|H0-H2 + switch off| O
+    F[FAULT_HOLD] -->|recovered + switch on| M
+    F -->|recovered + switch off| O
 ```
 
-`WAIT_DAS` requires fresh valid `0x39B`. `ARMING` requires three valid OEM `0x370` frames. `MAINTENANCE` injects a random `1.50..1.80 Nm` target on every valid OEM frame for about 10 seconds. `REST` is a true no-send interval lasting a random 1..2 seconds; it does not emit a `0 Nm` echo. `WAIT_DAS` and `FAULT_HOLD` also do not send.
+`WAIT_DAS` requires fresh valid `0x39B`. `ARMING` requires three valid OEM `0x370` frames. With maintenance enabled, `MAINTENANCE` injects a random `1.50..1.80 Nm` target on every valid OEM frame for about 10 seconds. `REST` is a true no-send interval lasting a random 1..2 seconds; it does not emit a `0 Nm` echo. With maintenance disabled, `MONITOR_ONLY` emits nothing during HOS `0..2`. `WAIT_DAS` and `FAULT_HOLD` also do not send.
 
 HOS `3..5` clears the prior controller target and enters continuous correction. Every valid OEM frame is injected at a random `1.80..2.00 Nm` until fresh DAS feedback returns to HOS `0..2`. There is no burst length, verification wait, attempt limit, or warning-clearance timeout fault.
 
@@ -49,12 +53,13 @@ HOS `3..5` clears the prior controller target and enters continuous correction. 
 
 | Parameter | Default | Configurable boundary | Notes |
 |---|---:|---:|---|
+| H0-H2 maintenance | Enabled | On/off | When off, H0-H2 is monitor-only; H3-H5 correction remains active. |
 | Preventive negative magnitude | `1.50..1.80 Nm` | `1.50..1.80 Nm` | Used opposite trusted positive OEM torque. |
 | Preventive positive magnitude | `1.50..1.80 Nm` | `1.50..1.80 Nm` | Used opposite trusted negative OEM torque. |
 | Corrective negative magnitude | `1.80..2.00 Nm` | `1.80..2.00 Nm` | HOS `3..5`. |
 | Corrective positive magnitude | `1.80..2.00 Nm` | `1.80..2.00 Nm` | HOS `3..5`. |
-| Direction deadband | `0.05 Nm` | `0..0.50 Nm` | Holds the last trusted direction inside the deadband. |
-| Direction reversal confirmation | `100 ms` | Fixed | Opposite measured torque must remain stable before the sign flips. |
+| Direction deadband | `0 Nm` | Fixed | The first nonzero measured torque selects the opposite injection direction. |
+| Direction reversal confirmation | `100 ms` | Fixed | Opposite measured torque must remain stable before the sign flips; no old-direction frame is sent while confirmation is pending. |
 | Angle fallback threshold | `1.0 deg` | Fixed | Used only before a trusted torque direction exists; no direction means no send. |
 | Preventive activity window | `10.0 s` | `8.0..12.0 s` | Every valid OEM frame is injected. |
 | Smooth release | Retained for API compatibility | `0.1..1.0 s` | Not used by the continuous policy. |
@@ -62,7 +67,8 @@ HOS `3..5` clears the prior controller target and enters continuous correction. 
 | DAS freshness timeout | `750 ms` | `100..2000 ms` | Allows margin for the observed ~500 ms DAS broadcast interval; stale feedback immediately returns to `WAIT_DAS`. |
 | EPAS gap rearm | `200 ms` | Fixed | A longer gap requires three valid OEM frames again. |
 | Fault recovery | HOS `0..2` for `2000 ms` | Fixed | Toggling NAG off and on also resets the controller. |
-| Final torque clamp | `+/-2.00 Nm` | Cannot be raised | Applied immediately before encoding every echo. |
+| Maintenance/legacy torque clamp | `+/-1.80 Nm` | Cannot be raised | Applied immediately before encoding non-corrective echoes. |
+| Corrective torque clamp | `+/-2.00 Nm` | Cannot be raised | Applied only to HOS `3..5` corrective echoes. |
 
 Preventive and corrective magnitudes are selected pseudo-randomly for every eligible OEM frame. For API requests, only omitted fields retain their previous values. Every provided field must be finite, fully parsed, inside its business boundary, and preserve min/max ordering; otherwise the entire request returns HTTP 400 without publishing a command or changing NVS.
 
@@ -91,10 +97,10 @@ Counter collision count and last gap are timing evidence only. They do not chang
 
 The custom-policy page has a readiness banner followed by four policy sections:
 
-1. Preventive layer: independent negative/positive min/max magnitude.
+1. Preventive layer: default-on H0-H2 maintenance switch and independent negative/positive min/max magnitude.
 2. Corrective layer: independent negative/positive min/max magnitude.
-3. Timing: nonzero injection duration, no-send rest duration, and direction deadband.
-4. Safety boundary: read-only `+/-2.00 Nm` hard cap, `750 ms` recommended DAS timeout, and the no-extra-frame rest rule.
+3. Timing: nonzero injection duration and no-send rest duration.
+4. Safety boundary: read-only correction-only `+/-2.00 Nm` hard cap, `750 ms` recommended DAS timeout, fixed zero deadband, and the no-extra-frame rest rule.
 
 Editing an input changes only the browser draft and shows an unsaved indicator. Restore recommended values loads the documented defaults into that draft and also remains unsaved. Only Save custom policy POSTs the normalized draft and persists it; success reloads the normalized response and clears dirty state, while failure preserves the unsaved draft.
 
@@ -108,7 +114,7 @@ The dedicated `/api/nag-adaptive` diagnostic poll runs only while the diagnostic
 
 Switching to `MODE_A` is allowed only as a short diagnostic check that the legacy fixed `+1.80 Nm` behavior still exists. `MODE_A` sends on every valid OEM frame and is not a safety downgrade or fail-safe mode.
 
-To stop CAN writes, disable NAG and turn `CAN Write OFF`. Do not use a mode change as a substitute for disabling writes. Older NVS keys are retained for old-firmware rollback, but V4.3-V13 does not read them as adaptive policy.
+To stop CAN writes, disable NAG and turn `CAN Write OFF`. Do not use a mode change as a substitute for disabling writes. Older NVS keys are retained for old-firmware rollback, but V4.4-V13 does not read them as adaptive policy.
 
 ## Late Echo decision gate
 

@@ -92,6 +92,8 @@ struct NagHandler : public CarManagerBase
     static constexpr uint32_t kInjectedFreshMs = 200;
     static constexpr int16_t kTorqueMinCentiNm = -180;
     static constexpr int16_t kTorqueMaxCentiNm = 180;
+    static constexpr int16_t kCorrectiveTorqueMinCentiNm = -200;
+    static constexpr int16_t kCorrectiveTorqueMaxCentiNm = 200;
     static constexpr uint32_t kOwnEchoFingerprintLifetimeMs = 100;
     static constexpr uint64_t kCounterCollisionWindowUs = 100000;
     static constexpr uint8_t kRecentEchoCount = 4;
@@ -135,6 +137,15 @@ struct NagHandler : public CarManagerBase
         return v;
     }
 
+    static int16_t clampCorrectiveTorqueCentiNm(int16_t v)
+    {
+        if (v < kCorrectiveTorqueMinCentiNm)
+            return kCorrectiveTorqueMinCentiNm;
+        if (v > kCorrectiveTorqueMaxCentiNm)
+            return kCorrectiveTorqueMaxCentiNm;
+        return v;
+    }
+
     static int16_t nmToCentiNm(float nm)
     {
         float centi = nm * 100.0f;
@@ -149,13 +160,13 @@ struct NagHandler : public CarManagerBase
 
     static uint16_t centiNmToRaw(int16_t centiNm)
     {
-        centiNm = clampTorqueCentiNm(centiNm);
+        centiNm = clampCorrectiveTorqueCentiNm(centiNm);
         return static_cast<uint16_t>(2050 + centiNm);
     }
 
     static int16_t rawToCentiNm(uint16_t raw)
     {
-        return clampTorqueCentiNm(static_cast<int16_t>(raw) - 2050);
+        return clampCorrectiveTorqueCentiNm(static_cast<int16_t>(raw) - 2050);
     }
 
     static int16_t rawToObservedCentiNm(uint16_t raw)
@@ -362,7 +373,8 @@ struct NagHandler : public CarManagerBase
     static bool adaptiveConfigEqual(const NagAdaptiveConfig &left,
                                     const NagAdaptiveConfig &right)
     {
-        return left.preventiveNegativeMinCentiNm == right.preventiveNegativeMinCentiNm &&
+        return left.maintenanceEnabled == right.maintenanceEnabled &&
+               left.preventiveNegativeMinCentiNm == right.preventiveNegativeMinCentiNm &&
                left.preventiveNegativeMaxCentiNm == right.preventiveNegativeMaxCentiNm &&
                left.preventivePositiveMinCentiNm == right.preventivePositiveMinCentiNm &&
                left.preventivePositiveMaxCentiNm == right.preventivePositiveMaxCentiNm &&
@@ -569,7 +581,9 @@ struct NagHandler : public CarManagerBase
         echo.id = 880;
         echo.dlc = 8;
 
-        torqueCentiNm = clampTorqueCentiNm(torqueCentiNm);
+        torqueCentiNm = adaptiveMode && decision.corrective
+                            ? clampCorrectiveTorqueCentiNm(torqueCentiNm)
+                            : clampTorqueCentiNm(torqueCentiNm);
         const uint16_t torqueRaw = centiNmToRaw(torqueCentiNm);
         writeTorqueRaw(echo, torqueRaw);
 

@@ -85,7 +85,7 @@ class FixRound2RegressionTests(unittest.TestCase):
         self.assertNotIn("snapshot.dasFresh ?", telemetry)
 
     def test_chinese_adaptive_section_matches_hos_closed_loop_contract(self) -> None:
-        start = self.readme_zh.index("### 模式 ADAPTIVE（V4.3-V13）")
+        start = self.readme_zh.index("### 模式 ADAPTIVE（V4.4-V13）")
         end = self.readme_zh.index("## WiFi / DNS 网关", start)
         section = self.readme_zh[start:end]
         for token in (

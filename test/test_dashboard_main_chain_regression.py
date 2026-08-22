@@ -26,7 +26,7 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-pv-neg-min", "nag-pv-neg-max", "nag-pv-pos-min", "nag-pv-pos-max",
     "nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max",
     "nag-active-min", "nag-active-max",
-    "nag-rest-min", "nag-rest-max", "nag-direction-deadband",
+    "nag-rest-min", "nag-rest-max", "nag-maintenance-enabled",
     "nag-custom-hard-cap", "nag-custom-das-timeout",
 )
 

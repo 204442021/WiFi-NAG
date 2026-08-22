@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
 
 #include "nag_adaptive_controller.h"
@@ -196,6 +197,31 @@ inline bool parseMode(const char *value, uint8_t &out, Error &error)
     return true;
 }
 
+inline bool parseBoolean(const char *value, bool &out, Error &error)
+{
+    if (!value || *value == '\0')
+    {
+        error = Error::EMPTY;
+        return false;
+    }
+    if (std::strcmp(value, "1") == 0 || std::strcmp(value, "true") == 0 ||
+        std::strcmp(value, "on") == 0)
+    {
+        out = true;
+        error = Error::NONE;
+        return true;
+    }
+    if (std::strcmp(value, "0") == 0 || std::strcmp(value, "false") == 0 ||
+        std::strcmp(value, "off") == 0)
+    {
+        out = false;
+        error = Error::NONE;
+        return true;
+    }
+    error = Error::INVALID;
+    return false;
+}
+
 inline const char *validate(const NagAdaptiveConfig &config)
 {
     if (config.preventiveNegativeMinCentiNm < 150 ||
@@ -234,7 +260,7 @@ inline const char *validate(const NagAdaptiveConfig &config)
         return "restMinSec";
     if (config.restMaxMs < config.restMinMs || config.restMaxMs > 2000)
         return "restMaxSec";
-    if (config.torqueDeadbandCentiNm < 0 || config.torqueDeadbandCentiNm > 50)
+    if (config.torqueDeadbandCentiNm != 0)
         return "directionDeadbandNm";
     if (config.dasFreshTimeoutMs < 100 || config.dasFreshTimeoutMs > 2000)
         return "dasFreshTimeoutMs";

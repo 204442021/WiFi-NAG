@@ -12,7 +12,7 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-pv-neg-min", "nag-pv-neg-max", "nag-pv-pos-min", "nag-pv-pos-max",
     "nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max",
     "nag-active-min", "nag-active-max",
-    "nag-rest-min", "nag-rest-max", "nag-direction-deadband",
+    "nag-rest-min", "nag-rest-max", "nag-maintenance-enabled",
     "nag-custom-hard-cap", "nag-custom-das-timeout",
 )
 
@@ -64,7 +64,7 @@ EXPECTED_NVS_DEFAULTS = {
     "nag_rel_max": "0.4",
     "nag_rst_min": "1.0",
     "nag_rst_max": "2.0",
-    "nag_dir_db": "0.05",
+    "nag_dir_db": "0.00",
     "nag_das_ms": "750",
 }
 
@@ -73,8 +73,9 @@ EXPECTED_CONFIG_FIELDS = (
     "preventivePositiveMinNm", "preventivePositiveMaxNm",
     "correctiveNegativeMinNm", "correctiveNegativeMaxNm",
     "correctivePositiveMinNm", "correctivePositiveMaxNm",
-    "activityMinSec", "activityMaxSec", "releaseMinSec", "releaseMaxSec",
-    "restMinSec", "restMaxSec", "directionDeadbandNm", "dasFreshTimeoutMs",
+    "maintenanceEnabled", "activityMinSec", "activityMaxSec",
+    "releaseMinSec", "releaseMaxSec", "restMinSec", "restMaxSec",
+    "dasFreshTimeoutMs",
 )
 
 EXPECTED_STATUS_FIELDS = (
@@ -136,11 +137,11 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
     def test_custom_strategy_uses_structured_draft_and_explicit_save_contract(self):
         compact = re.sub(r"\s+", "", self.source)
         self.assertIn(
-            "constnagCustomDefaults={preventiveNegative:[1.50,1.80],"
+            "constnagCustomDefaults={maintenanceEnabled:true,"
+            "preventiveNegative:[1.50,1.80],"
             "preventivePositive:[1.50,1.80],correctiveNegative:[1.80,2.00],"
             "correctivePositive:[1.80,2.00],activity:[10.0,10.0],"
-            "release:[0.2,0.4],rest:[1.0,2.0],directionDeadband:0.05,"
-            "dasFreshTimeoutMs:750};",
+            "release:[0.2,0.4],rest:[1.0,2.0],dasFreshTimeoutMs:750};",
             compact,
         )
         self.assertIn("letnagCustomDraft=cloneNagCustomDefaults();", compact)
@@ -229,7 +230,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "constphaseNames={disabled:'关闭','wait-das':'等待DAS',"
             "arming:'确认OEM帧',maintenance:'连续预防注入',release:'兼容释放阶段',"
             "rest:'停发间隔',corrective:'连续纠偏注入',verify:'兼容确认阶段',"
-            "'fault-hold':'保护停发'};",
+            "'fault-hold':'保护停发','monitor-only':'仅监控纠正区'};",
             compact,
         )
         for selector in (
@@ -248,6 +249,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "disabled: 'muted'", "'wait-das': 'muted'", "arming: 'active'",
             "maintenance: 'active'", "release: 'caution'", "rest: 'caution'",
             "corrective: 'active'", "verify: 'caution'", "'fault-hold': 'error'",
+            "'monitor-only': 'muted'",
         ):
             self.assertIn(mapping, self.source)
         self.assertNotIn("arming: 'ready'", self.source)
@@ -392,6 +394,8 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         self.assertIn("+' μs'", self.source)
 
     def test_closed_loop_nvs_contract_uses_exact_keys_and_defaults(self):
+        self.assertIn('prefs.putBool("nag_maint"', self.dashboard)
+        self.assertIn('prefs.getBool("nag_maint", true)', self.dashboard)
         for key in EXPECTED_NVS_KEYS:
             self.assertIn(f'prefs.putString("{key}"', self.dashboard)
             self.assertIn(
@@ -511,6 +515,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         )
         equality = self.dashboard[equality_start:equality_end]
         for member in (
+            "maintenanceEnabled",
             "preventiveNegativeMinCentiNm", "preventiveNegativeMaxCentiNm",
             "preventivePositiveMinCentiNm", "preventivePositiveMaxCentiNm",
             "correctiveNegativeMinCentiNm", "correctiveNegativeMaxCentiNm",
@@ -555,9 +560,10 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
     def test_phase_block_and_direction_names_match_controller_contract(self):
         for name in (
             "disabled", "wait-das", "arming", "maintenance", "release",
-            "rest", "corrective", "verify", "fault-hold",
+            "rest", "corrective", "verify", "fault-hold", "monitor-only",
             "none", "das-missing", "das-stale", "no-direction", "das-state",
-            "ack-timeout", "torque", "angle", "hold",
+            "ack-timeout", "direction-change", "maintenance-disabled",
+            "torque", "angle", "hold",
         ):
             self.assertIn(f'return "{name}"', self.dashboard)
 

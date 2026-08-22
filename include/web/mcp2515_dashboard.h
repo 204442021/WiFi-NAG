@@ -392,6 +392,7 @@ static const char *dashNagAdaptivePhaseName(NagAdaptiveController::Phase phase)
     case NagAdaptiveController::PHASE_CORRECTIVE: return "corrective";
     case NagAdaptiveController::PHASE_VERIFY: return "verify";
     case NagAdaptiveController::PHASE_FAULT_HOLD: return "fault-hold";
+    case NagAdaptiveController::PHASE_MONITOR_ONLY: return "monitor-only";
     default: return "disabled";
     }
 }
@@ -409,6 +410,8 @@ static const char *dashNagAdaptiveBlockName(NagAdaptiveController::BlockReason r
     case NagAdaptiveController::BLOCK_VERIFY: return "verify";
     case NagAdaptiveController::BLOCK_DAS_STATE: return "das-state";
     case NagAdaptiveController::BLOCK_ACK_TIMEOUT: return "ack-timeout";
+    case NagAdaptiveController::BLOCK_DIRECTION_CHANGE: return "direction-change";
+    case NagAdaptiveController::BLOCK_MAINTENANCE_DISABLED: return "maintenance-disabled";
     default: return "none";
     }
 }
@@ -480,7 +483,8 @@ static String dashNagSecondsString(uint32_t milliseconds)
 static bool dashNagAdaptiveConfigEqual(const NagAdaptiveConfig &left,
                                        const NagAdaptiveConfig &right)
 {
-    return left.preventiveNegativeMinCentiNm == right.preventiveNegativeMinCentiNm &&
+    return left.maintenanceEnabled == right.maintenanceEnabled &&
+           left.preventiveNegativeMinCentiNm == right.preventiveNegativeMinCentiNm &&
            left.preventiveNegativeMaxCentiNm == right.preventiveNegativeMaxCentiNm &&
            left.preventivePositiveMinCentiNm == right.preventivePositiveMinCentiNm &&
            left.preventivePositiveMaxCentiNm == right.preventivePositiveMaxCentiNm &&
@@ -515,6 +519,8 @@ static NagAdaptiveConfigInput::ApplyResult dashApplyNagConfigArgs(
 
 static void dashAppendNagAdaptiveConfigJson(String &j, const NagAdaptiveConfig &config)
 {
+    j += ",\"maintenanceEnabled\":";
+    j += config.maintenanceEnabled ? "true" : "false";
     j += ",\"preventiveNegativeMinNm\":";
     j += dashNagNmString(config.preventiveNegativeMinCentiNm);
     j += ",\"preventiveNegativeMaxNm\":";
@@ -686,6 +692,7 @@ static void dashSavePrefs()
     {
         prefs.putUChar("nag_mode", nag->requestedMode());
         const NagAdaptiveConfig adaptive = nag->adaptiveConfig();
+        prefs.putBool("nag_maint", adaptive.maintenanceEnabled);
         prefs.putString("nag_pv_n_min", dashNagNmString(adaptive.preventiveNegativeMinCentiNm));
         prefs.putString("nag_pv_n_max", dashNagNmString(adaptive.preventiveNegativeMaxCentiNm));
         prefs.putString("nag_pv_p_min", dashNagNmString(adaptive.preventivePositiveMinCentiNm));
@@ -700,9 +707,9 @@ static void dashSavePrefs()
         prefs.putString("nag_rel_max", dashNagSecondsString(adaptive.releaseMaxMs));
         prefs.putString("nag_rst_min", dashNagSecondsString(adaptive.restMinMs));
         prefs.putString("nag_rst_max", dashNagSecondsString(adaptive.restMaxMs));
-        prefs.putString("nag_dir_db", dashNagNmString(adaptive.torqueDeadbandCentiNm));
+        prefs.putString("nag_dir_db", "0.00");
         prefs.putString("nag_das_ms", String(adaptive.dasFreshTimeoutMs));
-        prefs.putUChar("nag_pol_v", 3);
+        prefs.putUChar("nag_pol_v", 4);
     }
 #endif
     prefs.putBool("auto_sleep", false);
@@ -842,6 +849,7 @@ static void dashLoadPrefs()
     if (NagHandler *nag = dashNagActiveHandler())
     {
         NagAdaptiveConfig adaptive;
+        adaptive.maintenanceEnabled = prefs.getBool("nag_maint", true);
         adaptive.preventiveNegativeMinCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_n_min", "1.50"), 150);
         adaptive.preventiveNegativeMaxCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_n_max", "1.80"), 180);
         adaptive.preventivePositiveMinCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_p_min", "1.50"), 150);
@@ -856,7 +864,7 @@ static void dashLoadPrefs()
         adaptive.releaseMaxMs = dashNagParseSecondsMs(prefs.getString("nag_rel_max", "0.4"), 400);
         adaptive.restMinMs = dashNagParseSecondsMs(prefs.getString("nag_rst_min", "1.0"), 1000);
         adaptive.restMaxMs = dashNagParseSecondsMs(prefs.getString("nag_rst_max", "2.0"), 2000);
-        adaptive.torqueDeadbandCentiNm = dashNagParseNmCenti(prefs.getString("nag_dir_db", "0.05"), 5);
+        adaptive.torqueDeadbandCentiNm = dashNagParseNmCenti(prefs.getString("nag_dir_db", "0.00"), 0);
         adaptive.dasFreshTimeoutMs = dashNagParseMilliseconds(prefs.getString("nag_das_ms", "750"), 750);
         if (adaptive.dasFreshTimeoutMs == 500)
         {
@@ -881,6 +889,15 @@ static void dashLoadPrefs()
             prefs.putString("nag_rst_max", "2.0");
             prefs.putUChar("nag_pol_v", 3);
             dashLog("[BOOT] Migrated NAG policy to continuous V3 limits");
+        }
+        if (prefs.getUChar("nag_pol_v", 0) < 4)
+        {
+            adaptive.maintenanceEnabled = true;
+            adaptive.torqueDeadbandCentiNm = 0;
+            prefs.putBool("nag_maint", true);
+            prefs.putString("nag_dir_db", "0.00");
+            prefs.putUChar("nag_pol_v", 4);
+            dashLog("[BOOT] Migrated NAG policy to V4 correction-zone controls");
         }
         adaptive = NagAdaptiveController::normalizeConfig(adaptive);
         uint8_t storedMode = prefs.getUChar("nag_mode", NagHandler::MODE_ADAPTIVE);
@@ -1089,6 +1106,16 @@ static bool dashParseNagConfigRequest(DashNagConfigRequest &request,
             return false;
         }
     }
+    if (server.hasArg("maintenanceEnabled"))
+    {
+        if (!NagAdaptiveConfigInput::parseBoolean(
+                server.arg("maintenanceEnabled").c_str(),
+                request.config.maintenanceEnabled, parseError))
+        {
+            error = {"maintenanceEnabled", parseError};
+            return false;
+        }
+    }
 
 #define DASH_NAG_PARSE_NM_ARG(name, member, minimum, maximum)                    \
     if (server.hasArg(name))                                                      \
@@ -1126,7 +1153,6 @@ static bool dashParseNagConfigRequest(DashNagConfigRequest &request,
     DASH_NAG_PARSE_SEC_ARG("releaseMaxSec", releaseMaxMs, 0.1, 1.0)
     DASH_NAG_PARSE_SEC_ARG("restMinSec", restMinMs, 1.0, 2.0)
     DASH_NAG_PARSE_SEC_ARG("restMaxSec", restMaxMs, 1.0, 2.0)
-    DASH_NAG_PARSE_NM_ARG("directionDeadbandNm", torqueDeadbandCentiNm, 0.0, 0.50)
 #undef DASH_NAG_PARSE_SEC_ARG
 #undef DASH_NAG_PARSE_NM_ARG
     if (server.hasArg("dasFreshTimeoutMs"))
