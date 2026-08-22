@@ -248,20 +248,18 @@ inline const char *validate(const NagAdaptiveConfig &config)
     if (config.correctivePositiveMaxCentiNm < config.correctivePositiveMinCentiNm ||
         config.correctivePositiveMaxCentiNm > 200)
         return "correctivePositiveMaxNm";
-    if (config.activityMinMs < 8000 || config.activityMinMs > 12000)
+    if (config.activityMinMs < 1000 || config.activityMinMs > 2000)
         return "activityMinSec";
-    if (config.activityMaxMs < config.activityMinMs || config.activityMaxMs > 12000)
+    if (config.activityMaxMs < config.activityMinMs || config.activityMaxMs > 2000)
         return "activityMaxSec";
     if (config.releaseMinMs < 100 || config.releaseMinMs > 1000)
         return "releaseMinSec";
     if (config.releaseMaxMs < config.releaseMinMs || config.releaseMaxMs > 1000)
         return "releaseMaxSec";
-    if (config.restMinMs < 1000 || config.restMinMs > 2000)
+    if (config.restMinMs < 3000 || config.restMinMs > 5000)
         return "restMinSec";
-    if (config.restMaxMs < config.restMinMs || config.restMaxMs > 2000)
+    if (config.restMaxMs < config.restMinMs || config.restMaxMs > 5000)
         return "restMaxSec";
-    if (config.torqueDeadbandCentiNm != 0)
-        return "directionDeadbandNm";
     if (config.dasFreshTimeoutMs < 100 || config.dasFreshTimeoutMs > 2000)
         return "dasFreshTimeoutMs";
     return nullptr;

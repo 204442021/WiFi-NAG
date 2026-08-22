@@ -46,7 +46,7 @@ EXPECTED_NVS_KEYS = (
     "nag_pv_n_min", "nag_pv_n_max", "nag_pv_p_min", "nag_pv_p_max",
     "nag_cr_n_min", "nag_cr_n_max", "nag_cr_p_min", "nag_cr_p_max",
     "nag_act_min", "nag_act_max", "nag_rel_min", "nag_rel_max",
-    "nag_rst_min", "nag_rst_max", "nag_dir_db", "nag_das_ms",
+    "nag_rst_min", "nag_rst_max", "nag_das_ms",
 )
 
 EXPECTED_NVS_DEFAULTS = {
@@ -58,13 +58,12 @@ EXPECTED_NVS_DEFAULTS = {
     "nag_cr_n_max": "2.00",
     "nag_cr_p_min": "1.80",
     "nag_cr_p_max": "2.00",
-    "nag_act_min": "10.0",
-    "nag_act_max": "10.0",
+    "nag_act_min": "1.0",
+    "nag_act_max": "2.0",
     "nag_rel_min": "0.2",
     "nag_rel_max": "0.4",
-    "nag_rst_min": "1.0",
-    "nag_rst_max": "2.0",
-    "nag_dir_db": "0.00",
+    "nag_rst_min": "3.0",
+    "nag_rst_max": "5.0",
     "nag_das_ms": "750",
 }
 
@@ -140,8 +139,8 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "constnagCustomDefaults={maintenanceEnabled:true,"
             "preventiveNegative:[1.50,1.80],"
             "preventivePositive:[1.50,1.80],correctiveNegative:[1.80,2.00],"
-            "correctivePositive:[1.80,2.00],activity:[10.0,10.0],"
-            "release:[0.2,0.4],rest:[1.0,2.0],dasFreshTimeoutMs:750};",
+            "correctivePositive:[1.80,2.00],activity:[1.0,2.0],"
+            "release:[0.2,0.4],rest:[3.0,5.0],dasFreshTimeoutMs:750};",
             compact,
         )
         self.assertIn("letnagCustomDraft=cloneNagCustomDefaults();", compact)
@@ -228,8 +227,8 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         compact = re.sub(r"\s+", "", self.source)
         self.assertIn(
             "constphaseNames={disabled:'关闭','wait-das':'等待DAS',"
-            "arming:'确认OEM帧',maintenance:'连续预防注入',release:'兼容释放阶段',"
-            "rest:'停发间隔',corrective:'连续纠偏注入',verify:'兼容确认阶段',"
+            "arming:'确认OEM帧',maintenance:'预防注入窗口',release:'兼容释放阶段',"
+            "rest:'预防停发间隔',corrective:'纠正发送窗口',verify:'纠正停发500ms',"
             "'fault-hold':'保护停发','monitor-only':'仅监控纠正区'};",
             compact,
         )
@@ -366,7 +365,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         for label in (
             "NAG 自适应闭环", "原车 EPAS 0x370", "原车扭矩", "原车计数器",
             "手握状态", "控制阶段", "目标扭矩", "方向来源", "阶段剩余时间",
-            "连续纠偏帧", "尝试 / 成功 / 失败", "DAS 确认次数",
+            "当前纠正窗口帧", "尝试 / 成功 / 失败", "DAS 确认次数",
         ):
             self.assertIn(label, panel)
         for english in (
@@ -521,7 +520,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "correctiveNegativeMinCentiNm", "correctiveNegativeMaxCentiNm",
             "correctivePositiveMinCentiNm", "correctivePositiveMaxCentiNm",
             "activityMinMs", "activityMaxMs", "releaseMinMs", "releaseMaxMs",
-            "restMinMs", "restMaxMs", "torqueDeadbandCentiNm",
+            "restMinMs", "restMaxMs",
             "dasFreshTimeoutMs",
         ):
             self.assertIn(member, equality)

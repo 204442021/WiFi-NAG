@@ -1,6 +1,6 @@
 # Adaptive NAG closed-loop operation and validation
 
-This document defines the V4.4-V13 adaptive NAG operating boundary for the Waveshare ESP32-S3 WiFi-NAG target. The vehicle baseline is Model Y HW4 on vehicle software `2026.2.11`, using the Party CAN tap pins 2/3 at `500 kbit/s`. Results from that baseline must not be generalized into a cross-vehicle or cross-version guarantee.
+This document defines the V4.5-V13 adaptive NAG operating boundary for the Waveshare ESP32-S3 WiFi-NAG target. The vehicle baseline is Model Y HW4 on vehicle software `2026.2.11`, using the Party CAN tap pins 2/3 at `500 kbit/s`. Results from that baseline must not be generalized into a cross-vehicle or cross-version guarantee.
 
 ## Safety boundary and CAN roles
 
@@ -17,12 +17,12 @@ The controller does not treat a successful local `driver.send()` as proof that D
 
 | HOS | Meaning | Adaptive action |
 |---:|---|---|
-| `0` | NOT_REQD | With maintenance enabled, run about 10 s at `1.50..1.80 Nm`, then 1..2 s with no injected frame. With maintenance disabled, monitor only. |
+| `0` | NOT_REQD | With maintenance enabled, inject `1.50..1.80 Nm` for 1..2 s, then send no additional frame for 3..5 s. With maintenance disabled, monitor only. |
 | `1` | REQD_DETECTED | Same maintenance/monitor-only policy as H0. |
 | `2` | REQD_NOT_DETECTED | Same maintenance/monitor-only policy as H0. |
-| `3` | VISUAL | Clear the previous target and inject `1.80..2.00 Nm` on every OEM frame until HOS `0..2`. |
-| `4` | CHIME_1 | Same continuous corrective action as H3. |
-| `5` | CHIME_2 | Same continuous corrective action as H3. |
+| `3` | VISUAL | Immediately inject `1.80..2.00 Nm` for 1 s; if still H3..H5, send no additional frame for 500 ms and repeat. |
+| `4` | CHIME_1 | Same pulsed corrective action as H3. |
+| `5` | CHIME_2 | Same pulsed corrective action as H3. |
 | `6` | SLOWING | Stop sending and enter fail-closed protection hold. |
 | `7` | STRUCK_OUT | Stop sending and enter fail-closed protection hold. |
 | `8` | SUSPENDED | Stop sending and enter fail-closed fault hold. |
@@ -34,20 +34,27 @@ The controller does not treat a successful local `driver.send()` as proof that D
 ```mermaid
 flowchart TB
     W[WAIT_DAS] --> A[ARMING]
-    A -->|H0-H2 + switch on| M[MAINTENANCE / REST]
+    A -->|H0-H2 + switch on| M[MAINTENANCE]
     A -->|H0-H2 + switch off| O[MONITOR_ONLY]
     A -->|H3-H5| C[CORRECTIVE]
+    M -->|1-2 s| R[REST]
+    R -->|3-5 s| M
     M -->|H3-H5| C
+    R -->|H3-H5| C
     O -->|H3-H5| C
-    C -->|H0-H2 + switch on| M
+    C -->|still H3-H5 after 1 s| P[VERIFY / PAUSE]
+    P -->|still H3-H5 after 500 ms| C
+    C -->|H0-H2 + switch on| R
+    P -->|H0-H2 + switch on| R
     C -->|H0-H2 + switch off| O
+    P -->|H0-H2 + switch off| O
     F[FAULT_HOLD] -->|recovered + switch on| M
     F -->|recovered + switch off| O
 ```
 
-`WAIT_DAS` requires fresh valid `0x39B`. `ARMING` requires three valid OEM `0x370` frames. With maintenance enabled, `MAINTENANCE` injects a random `1.50..1.80 Nm` target on every valid OEM frame for about 10 seconds. `REST` is a true no-send interval lasting a random 1..2 seconds; it does not emit a `0 Nm` echo. With maintenance disabled, `MONITOR_ONLY` emits nothing during HOS `0..2`. `WAIT_DAS` and `FAULT_HOLD` also do not send.
+`WAIT_DAS` requires fresh valid `0x39B`. `ARMING` requires three valid OEM `0x370` frames. With maintenance enabled, `MAINTENANCE` injects a random `1.50..1.80 Nm` target on every valid OEM frame for a random 1..2 seconds. `REST` is a true no-send interval lasting a random 3..5 seconds; it does not emit a `0 Nm` echo. With maintenance disabled, `MONITOR_ONLY` emits nothing during HOS `0..2`. `WAIT_DAS` and `FAULT_HOLD` also do not send.
 
-HOS `3..5` clears the prior controller target and enters continuous correction. Every valid OEM frame is injected at a random `1.80..2.00 Nm` until fresh DAS feedback returns to HOS `0..2`. There is no burst length, verification wait, attempt limit, or warning-clearance timeout fault.
+HOS `3..5` clears the prior controller target and immediately enters a 1-second correction window. Every valid OEM frame in that window is injected at a random `1.80..2.00 Nm`. If fresh feedback is still H3..H5 at the end of the window, `VERIFY` sends no additional `0x370` for 500 ms before the next 1-second correction window. This cycle has no attempt limit and ends immediately when fresh feedback returns to HOS `0..2`; with maintenance enabled, the controller begins the 3..5-second preventive rest interval before any new preventive injection.
 
 ## Defaults and configuration limits
 
@@ -58,12 +65,14 @@ HOS `3..5` clears the prior controller target and enters continuous correction. 
 | Preventive positive magnitude | `1.50..1.80 Nm` | `1.50..1.80 Nm` | Used opposite trusted negative OEM torque. |
 | Corrective negative magnitude | `1.80..2.00 Nm` | `1.80..2.00 Nm` | HOS `3..5`. |
 | Corrective positive magnitude | `1.80..2.00 Nm` | `1.80..2.00 Nm` | HOS `3..5`. |
-| Direction deadband | `0 Nm` | Fixed | The first nonzero measured torque selects the opposite injection direction. |
+| Direction threshold | None | Fixed | The deadband setting is removed; the first nonzero measured torque selects the opposite injection direction. |
 | Direction reversal confirmation | `100 ms` | Fixed | Opposite measured torque must remain stable before the sign flips; no old-direction frame is sent while confirmation is pending. |
 | Angle fallback threshold | `1.0 deg` | Fixed | Used only before a trusted torque direction exists; no direction means no send. |
-| Preventive activity window | `10.0 s` | `8.0..12.0 s` | Every valid OEM frame is injected. |
-| Smooth release | Retained for API compatibility | `0.1..1.0 s` | Not used by the continuous policy. |
-| No-send rest interval | `1.0..2.0 s` | `1.0..2.0 s` | No additional `0x370` is emitted. |
+| Preventive activity window | `1.0..2.0 s` | `1.0..2.0 s` | Every valid OEM frame is injected. |
+| Smooth release | Retained for API compatibility | `0.1..1.0 s` | Not used by the pulsed policy. |
+| Preventive no-send interval | `3.0..5.0 s` | `3.0..5.0 s` | No additional `0x370` is emitted. |
+| Corrective send window | `1.0 s` | Fixed | H3..H5 only; every valid OEM frame is injected. |
+| Corrective no-send interval | `500 ms` | Fixed | Used between corrective send windows while H3..H5 remains active. |
 | DAS freshness timeout | `750 ms` | `100..2000 ms` | Allows margin for the observed ~500 ms DAS broadcast interval; stale feedback immediately returns to `WAIT_DAS`. |
 | EPAS gap rearm | `200 ms` | Fixed | A longer gap requires three valid OEM frames again. |
 | Fault recovery | HOS `0..2` for `2000 ms` | Fixed | Toggling NAG off and on also resets the controller. |
@@ -87,7 +96,7 @@ The controller may recover from fault hold only after fresh HOS `0..2` remains c
 | Layer | Fields | Interpretation |
 |---|---|---|
 | Local attempt | `nagSendAttempts` | The handler called the CAN driver for an eligible echo. This is not evidence of bus delivery or DAS acceptance. |
-| Local failure | `nagSendFailures` | The driver rejected/failed an attempted send. Continuous correction remains active while HOS is `3..5`. |
+| Local failure | `nagSendFailures` | The driver rejected/failed an attempted send. The current correction window continues while HOS is `3..5`; scheduled 500 ms no-send intervals still occur. |
 | Local success | `nagEcho` and last injected torque/age | The driver accepted the echo locally. It is still not a DAS acknowledgement. |
 | DAS response | `nagAcknowledgementCount`, last/max latency | HOS actually returned from a corrective state to `0..2`; timeout counting is retained only for telemetry compatibility. |
 
@@ -99,8 +108,8 @@ The custom-policy page has a readiness banner followed by four policy sections:
 
 1. Preventive layer: default-on H0-H2 maintenance switch and independent negative/positive min/max magnitude.
 2. Corrective layer: independent negative/positive min/max magnitude.
-3. Timing: nonzero injection duration and no-send rest duration.
-4. Safety boundary: read-only correction-only `+/-2.00 Nm` hard cap, `750 ms` recommended DAS timeout, fixed zero deadband, and the no-extra-frame rest rule.
+3. Timing: 1..2-second preventive injection duration and 3..5-second preventive no-send duration.
+4. Safety boundary: read-only correction-only `+/-2.00 Nm` hard cap, `750 ms` recommended DAS timeout, no direction-deadband setting, and the no-extra-frame rest rule.
 
 Editing an input changes only the browser draft and shows an unsaved indicator. Restore recommended values loads the documented defaults into that draft and also remains unsaved. Only Save custom policy POSTs the normalized draft and persists it; success reloads the normalized response and clears dirty state, while failure preserves the unsaved draft.
 
@@ -114,7 +123,7 @@ The dedicated `/api/nag-adaptive` diagnostic poll runs only while the diagnostic
 
 Switching to `MODE_A` is allowed only as a short diagnostic check that the legacy fixed `+1.80 Nm` behavior still exists. `MODE_A` sends on every valid OEM frame and is not a safety downgrade or fail-safe mode.
 
-To stop CAN writes, disable NAG and turn `CAN Write OFF`. Do not use a mode change as a substitute for disabling writes. Older NVS keys are retained for old-firmware rollback, but V4.4-V13 does not read them as adaptive policy.
+To stop CAN writes, disable NAG and turn `CAN Write OFF`. Do not use a mode change as a substitute for disabling writes. The obsolete direction-deadband NVS key is removed during migration; V4.5-V13 does not read it as adaptive policy.
 
 ## Late Echo decision gate
 
@@ -132,7 +141,7 @@ Any later design must use a non-blocking timer/queue, re-evaluate counter and ch
 
 ## Validation ladder
 
-Gate A is the automated delivery-candidate gate: full Python discovery, generated-UI check, all seven native environments, the deterministic 100,000-sequence safety matrix, both static scans, and the ESP32-S3 OTA build must pass. The OTA artifact is `.pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin`.
+Gate A is the automated delivery-candidate gate: full Python discovery, generated-UI check, all seven native environments including the deterministic 100,000-sequence safety matrix, and the ESP32-S3 OTA build plus image-integrity checks must pass. The OTA artifact is `.pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin`.
 
 Gate B is not automated and must not be claimed from a build. It requires at least 10 minutes of listen-only data from the exact vehicle/tap/software combination, both CAN IDs, interval statistics, and a manually observed HOS mapping.
 

@@ -382,7 +382,6 @@ struct NagHandler : public CarManagerBase
                left.correctiveNegativeMaxCentiNm == right.correctiveNegativeMaxCentiNm &&
                left.correctivePositiveMinCentiNm == right.correctivePositiveMinCentiNm &&
                left.correctivePositiveMaxCentiNm == right.correctivePositiveMaxCentiNm &&
-               left.torqueDeadbandCentiNm == right.torqueDeadbandCentiNm &&
                left.activityMinMs == right.activityMinMs &&
                left.activityMaxMs == right.activityMaxMs &&
                left.releaseMinMs == right.releaseMinMs &&

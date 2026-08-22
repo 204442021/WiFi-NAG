@@ -15,13 +15,12 @@ struct NagAdaptiveConfig
     int16_t correctiveNegativeMaxCentiNm = 200;
     int16_t correctivePositiveMinCentiNm = 180;
     int16_t correctivePositiveMaxCentiNm = 200;
-    int16_t torqueDeadbandCentiNm = 0;
-    uint32_t activityMinMs = 10000;
-    uint32_t activityMaxMs = 10000;
+    uint32_t activityMinMs = 1000;
+    uint32_t activityMaxMs = 2000;
     uint32_t releaseMinMs = 200;
     uint32_t releaseMaxMs = 400;
-    uint32_t restMinMs = 1000;
-    uint32_t restMaxMs = 2000;
+    uint32_t restMinMs = 3000;
+    uint32_t restMaxMs = 5000;
     uint32_t dasFreshTimeoutMs = 750;
 };
 
@@ -126,6 +125,9 @@ public:
         DIRECTION_HOLD = 3,
     };
 
+    static constexpr uint32_t kCorrectiveSendMs = 1000;
+    static constexpr uint32_t kCorrectivePauseMs = 500;
+
     static NagAdaptiveConfig normalizeConfig(NagAdaptiveConfig value)
     {
         normalizeI16Range(value.preventiveNegativeMinCentiNm,
@@ -136,10 +138,9 @@ public:
                           value.correctiveNegativeMaxCentiNm, 180, 200);
         normalizeI16Range(value.correctivePositiveMinCentiNm,
                           value.correctivePositiveMaxCentiNm, 180, 200);
-        value.torqueDeadbandCentiNm = 0;
-        normalizeU32Range(value.activityMinMs, value.activityMaxMs, 8000, 12000);
+        normalizeU32Range(value.activityMinMs, value.activityMaxMs, 1000, 2000);
         normalizeU32Range(value.releaseMinMs, value.releaseMaxMs, 100, 1000);
-        normalizeU32Range(value.restMinMs, value.restMaxMs, 1000, 2000);
+        normalizeU32Range(value.restMinMs, value.restMaxMs, 3000, 5000);
         value.dasFreshTimeoutMs = clampU32(value.dasFreshTimeoutMs, 100, 2000);
         return value;
     }
@@ -247,7 +248,7 @@ public:
             }
             correctiveActive_ = false;
             acknowledgementStarted_ = false;
-            beginMaintenance(nowMs, rngState_);
+            beginPostCorrectionRest(nowMs);
         }
         else if (phase_ == PHASE_WAIT_DAS)
         {
@@ -312,6 +313,19 @@ public:
 
         if (phase_ == PHASE_MONITOR_ONLY)
             return blockedDecision(BLOCK_MAINTENANCE_DISABLED);
+
+        if (phase_ == PHASE_CORRECTIVE && phaseExpired(nowMs))
+        {
+            beginCorrectivePause(nowMs);
+            return blockedDecision(BLOCK_VERIFY);
+        }
+
+        if (phase_ == PHASE_VERIFY)
+        {
+            if (!phaseExpired(nowMs))
+                return blockedDecision(BLOCK_VERIFY);
+            beginCorrective(nowMs);
+        }
 
         if (candidateSign_ != 0)
             return blockedDecision(BLOCK_DIRECTION_CHANGE);
@@ -566,20 +580,41 @@ private:
         outputActive_ = false;
     }
 
+    void beginPostCorrectionRest(uint32_t nowMs)
+    {
+        if (!config_.maintenanceEnabled)
+        {
+            beginMonitorOnly();
+            return;
+        }
+        beginRest(nowMs, rngState_);
+    }
+
     void beginCorrective(uint32_t nowMs)
     {
         phase_ = PHASE_CORRECTIVE;
         blockReason_ = BLOCK_NONE;
         phaseStartedAtMs_ = nowMs;
-        phaseDurationMs_ = 0;
-        correctiveAttempt_ = 1;
+        phaseDurationMs_ = kCorrectiveSendMs;
+        if (correctiveAttempt_ < 0xFFU)
+            correctiveAttempt_++;
         correctiveBurstFrame_ = 0;
         correctiveBurstFrameTarget_ = 0;
         currentMagnitudeCentiNm_ = 0;
         targetTorqueCentiNm_ = 0;
         lastSuccessfullyTransmittedTorqueCentiNm_ = 0;
         outputActive_ = false;
-        acknowledgementStarted_ = false;
+    }
+
+    void beginCorrectivePause(uint32_t nowMs)
+    {
+        phase_ = PHASE_VERIFY;
+        blockReason_ = BLOCK_VERIFY;
+        phaseStartedAtMs_ = nowMs;
+        phaseDurationMs_ = kCorrectivePauseMs;
+        targetTorqueCentiNm_ = 0;
+        currentMagnitudeCentiNm_ = 0;
+        outputActive_ = false;
     }
 
     void enterFault(BlockReason reason)
@@ -596,9 +631,9 @@ private:
     void updateDirection(uint32_t nowMs, int16_t angleDeciDeg, int16_t torqueCentiNm)
     {
         int8_t desiredSign = 0;
-        if (torqueCentiNm > config_.torqueDeadbandCentiNm)
+        if (torqueCentiNm > 0)
             desiredSign = -1;
-        else if (torqueCentiNm < -config_.torqueDeadbandCentiNm)
+        else if (torqueCentiNm < 0)
             desiredSign = 1;
 
         if (injectionSign_ == 0)
