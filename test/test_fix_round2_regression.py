@@ -85,7 +85,7 @@ class FixRound2RegressionTests(unittest.TestCase):
         self.assertNotIn("snapshot.dasFresh ?", telemetry)
 
     def test_chinese_adaptive_section_matches_hos_closed_loop_contract(self) -> None:
-        start = self.readme_zh.index("### 模式 ADAPTIVE（V4.6-V13）")
+        start = self.readme_zh.index("### 模式 ADAPTIVE（V4.7-V13）")
         end = self.readme_zh.index("## WiFi / DNS 网关", start)
         section = self.readme_zh[start:end]
         for token in (
@@ -95,11 +95,14 @@ class FixRound2RegressionTests(unittest.TestCase):
             "ARMING",
             "MAINTENANCE",
             "CORRECTIVE",
-            "REST",
+            "H2_PENDING",
+            "PRE_CORRECTIVE_PAUSE",
+            "STABILITY_VERIFY",
             "FAULT_HOLD",
             "±2.00 Nm",
-            "2～3 秒",
-            "4～5 秒",
+            "3 秒",
+            "500 ms",
+            "5 秒",
             "1～2 秒",
             "1 ms",
             "VERIFY",

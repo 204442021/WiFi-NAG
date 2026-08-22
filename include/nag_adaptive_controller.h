@@ -19,13 +19,16 @@ struct NagAdaptiveConfig
     uint32_t activityMaxMs = 3000;
     uint32_t releaseMinMs = 200;
     uint32_t releaseMaxMs = 400;
-    uint32_t restMinMs = 4000;
-    uint32_t restMaxMs = 5000;
+    uint32_t restMinMs = 0;
+    uint32_t restMaxMs = 0;
+    uint32_t h2PersistenceMs = 3000;
+    uint32_t preCorrectionPauseMs = 500;
     uint32_t correctiveSendMinMs = 3000;
     uint32_t correctiveSendMaxMs = 3000;
     uint32_t correctivePauseMinMs = 1000;
     uint32_t correctivePauseMaxMs = 2000;
     uint32_t correctiveFrameIntervalMs = 1;
+    uint32_t stabilityVerifyMs = 5000;
     uint32_t dasFreshTimeoutMs = 750;
 };
 
@@ -104,6 +107,9 @@ public:
         PHASE_VERIFY = 7,
         PHASE_FAULT_HOLD = 8,
         PHASE_MONITOR_ONLY = 9,
+        PHASE_H2_PENDING = 10,
+        PHASE_PRE_CORRECTIVE_PAUSE = 11,
+        PHASE_STABILITY_VERIFY = 12,
     };
 
     enum BlockReason : uint8_t
@@ -143,11 +149,12 @@ public:
                           value.correctivePositiveMaxCentiNm, 180, 200);
         normalizeU32Range(value.activityMinMs, value.activityMaxMs, 100, UINT32_MAX);
         normalizeU32Range(value.releaseMinMs, value.releaseMaxMs, 100, 1000);
-        normalizeU32Range(value.restMinMs, value.restMaxMs, 100, UINT32_MAX);
+        normalizeOptionalU32Range(value.restMinMs, value.restMaxMs, 100, UINT32_MAX);
         normalizeU32Range(value.correctiveSendMinMs, value.correctiveSendMaxMs,
                           100, UINT32_MAX);
-        normalizeU32Range(value.correctivePauseMinMs, value.correctivePauseMaxMs,
-                          100, UINT32_MAX);
+        normalizeOptionalU32Range(value.correctivePauseMinMs,
+                                  value.correctivePauseMaxMs,
+                                  100, UINT32_MAX);
         value.correctiveFrameIntervalMs =
             clampU32(value.correctiveFrameIntervalMs, 1, UINT32_MAX);
         value.dasFreshTimeoutMs = clampU32(value.dasFreshTimeoutMs, 100, 2000);
@@ -185,6 +192,9 @@ public:
         armingFrames_ = 0;
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
+        normalHosConsecutive_ = 0;
+        h2ReturnsToStability_ = false;
+        stabilityVerifyActive_ = false;
     }
 
     bool observeDas(const CanFrame &frame, uint32_t nowMs)
@@ -232,37 +242,57 @@ public:
 
         if (hos >= 3 && hos <= 5)
         {
+            normalHosConsecutive_ = 0;
             if (!correctiveActive_)
-            {
-                correctiveActive_ = true;
-                hosEscalationCount_++;
-                beginCorrective(nowMs);
-            }
-            else if (phase_ != PHASE_CORRECTIVE && phase_ != PHASE_VERIFY)
-            {
-                beginCorrective(nowMs);
-            }
+                beginRecovery(nowMs);
             return accepted;
         }
 
         if (correctiveActive_)
         {
-            if (acknowledgementStarted_)
+            if (phase_ == PHASE_PRE_CORRECTIVE_PAUSE)
             {
-                const uint32_t latency = static_cast<uint32_t>(nowMs - acknowledgementStartedAtMs_);
-                acknowledgementCount_++;
-                lastAcknowledgementLatencyMs_ = latency;
-                if (latency > maxAcknowledgementLatencyMs_)
-                    maxAcknowledgementLatencyMs_ = latency;
+                normalHosConsecutive_ = 0;
+                return accepted;
             }
-            correctiveActive_ = false;
-            acknowledgementStarted_ = false;
-            beginPostCorrectionRest(nowMs);
+            if (hos == 2)
+            {
+                normalHosConsecutive_ = 0;
+                return accepted;
+            }
+            if (normalHosConsecutive_ < 2U)
+                normalHosConsecutive_++;
+            if (normalHosConsecutive_ >= 2U)
+                finishCorrection(nowMs);
+            return accepted;
         }
-        else if (phase_ == PHASE_WAIT_DAS)
-        {
+
+        if (phase_ == PHASE_WAIT_DAS)
             beginArming();
+
+        if (!config_.maintenanceEnabled)
+            return accepted;
+
+        if (hos == 2)
+        {
+            if (phase_ != PHASE_H2_PENDING)
+                beginH2Pending(nowMs, stabilityVerifyActive_);
+            else if (phaseExpired(nowMs))
+                beginRecovery(nowMs);
+            return accepted;
         }
+
+        if (phase_ == PHASE_H2_PENDING)
+        {
+            if (h2ReturnsToStability_)
+                beginStabilityVerify(nowMs);
+            else
+                beginMaintenance(nowMs, rngState_);
+            return accepted;
+        }
+
+        if (phase_ == PHASE_STABILITY_VERIFY && phaseExpired(nowMs))
+            beginMaintenance(nowMs, rngState_);
         return accepted;
     }
 
@@ -315,7 +345,9 @@ public:
         if (phase_ == PHASE_ARMING)
         {
             if (das_.raw() >= 3 && das_.raw() <= 5)
-                beginCorrective(nowMs);
+                beginRecovery(nowMs);
+            else if (das_.raw() == 2 && config_.maintenanceEnabled)
+                beginH2Pending(nowMs, false);
             else
                 beginMaintenance(nowMs, entropy);
         }
@@ -323,10 +355,21 @@ public:
         if (phase_ == PHASE_MONITOR_ONLY)
             return blockedDecision(BLOCK_MAINTENANCE_DISABLED);
 
+        if (phase_ == PHASE_H2_PENDING && phaseExpired(nowMs))
+            beginRecovery(nowMs);
+
+        if (phase_ == PHASE_PRE_CORRECTIVE_PAUSE)
+        {
+            if (!phaseExpired(nowMs))
+                return blockedDecision(BLOCK_VERIFY);
+            beginCorrective(nowMs);
+        }
+
         if (phase_ == PHASE_CORRECTIVE && phaseExpired(nowMs))
         {
             beginCorrectivePause(nowMs);
-            return blockedDecision(BLOCK_VERIFY);
+            if (phase_ == PHASE_VERIFY)
+                return blockedDecision(BLOCK_VERIFY);
         }
 
         if (phase_ == PHASE_VERIFY)
@@ -335,6 +378,9 @@ public:
                 return blockedDecision(BLOCK_VERIFY);
             beginCorrective(nowMs);
         }
+
+        if (phase_ == PHASE_STABILITY_VERIFY && phaseExpired(nowMs))
+            beginMaintenance(nowMs, entropy);
 
         if (candidateSign_ != 0)
             return blockedDecision(BLOCK_DIRECTION_CHANGE);
@@ -365,9 +411,11 @@ public:
             return sendDecision(true);
         }
 
-        if (phase_ == PHASE_MAINTENANCE)
+        if (phase_ == PHASE_MAINTENANCE ||
+            phase_ == PHASE_H2_PENDING ||
+            phase_ == PHASE_STABILITY_VERIFY)
         {
-            selectRandomMagnitude(false, entropy);
+            preparePreventive(entropy);
             return sendDecision(false);
         }
 
@@ -479,6 +527,14 @@ private:
         maxValue = clampU32(maxValue, floor, ceiling);
     }
 
+    static void normalizeOptionalU32Range(uint32_t &minValue, uint32_t &maxValue,
+                                          uint32_t floor, uint32_t ceiling)
+    {
+        if (minValue == 0 && maxValue == 0)
+            return;
+        normalizeU32Range(minValue, maxValue, floor, ceiling);
+    }
+
     void applyReset(uint32_t nowMs)
     {
         if (!resetRequested_)
@@ -510,6 +566,9 @@ private:
         correctiveSendSeen_ = false;
         correctiveLastSendAtMs_ = 0;
         acknowledgementStarted_ = false;
+        normalHosConsecutive_ = 0;
+        h2ReturnsToStability_ = false;
+        stabilityVerifyActive_ = false;
         rngState_ = 0;
         hosEscalationCount_ = 0;
         acknowledgementCount_ = 0;
@@ -527,6 +586,9 @@ private:
         epasSeen_ = false;
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
+        normalHosConsecutive_ = 0;
+        h2ReturnsToStability_ = false;
+        stabilityVerifyActive_ = false;
         faultRecoveryActive_ = false;
         outputActive_ = false;
     }
@@ -551,8 +613,15 @@ private:
         phase_ = PHASE_MAINTENANCE;
         blockReason_ = BLOCK_NONE;
         phaseStartedAtMs_ = nowMs;
-        phaseDurationMs_ = triangularDuration(config_.activityMinMs, config_.activityMaxMs, entropy);
+        phaseDurationMs_ = preventiveRestDisabled()
+                               ? 0U
+                               : triangularDuration(config_.activityMinMs,
+                                                    config_.activityMaxMs,
+                                                    entropy);
         currentMagnitudeCentiNm_ = 0;
+        stabilityVerifyActive_ = false;
+        h2ReturnsToStability_ = false;
+        normalHosConsecutive_ = 0;
         correctiveAttempt_ = 0;
         correctiveBurstFrame_ = 0;
         correctiveBurstFrameTarget_ = 0;
@@ -570,6 +639,9 @@ private:
         correctiveAttempt_ = 0;
         correctiveBurstFrame_ = 0;
         correctiveBurstFrameTarget_ = 0;
+        stabilityVerifyActive_ = false;
+        h2ReturnsToStability_ = false;
+        normalHosConsecutive_ = 0;
     }
 
     void beginRelease(uint32_t nowMs)
@@ -588,6 +660,11 @@ private:
 
     void beginRest(uint32_t nowMs, uint32_t entropy)
     {
+        if (preventiveRestDisabled())
+        {
+            beginMaintenance(nowMs, entropy);
+            return;
+        }
         phase_ = PHASE_REST;
         blockReason_ = BLOCK_REST;
         phaseStartedAtMs_ = nowMs;
@@ -597,18 +674,92 @@ private:
         outputActive_ = false;
     }
 
-    void beginPostCorrectionRest(uint32_t nowMs)
+    void beginH2Pending(uint32_t nowMs, bool returnToStability)
     {
         if (!config_.maintenanceEnabled)
         {
             beginMonitorOnly();
             return;
         }
-        beginRest(nowMs, rngState_);
+        h2ReturnsToStability_ = returnToStability;
+        phase_ = PHASE_H2_PENDING;
+        blockReason_ = BLOCK_NONE;
+        phaseStartedAtMs_ = nowMs;
+        phaseDurationMs_ = config_.h2PersistenceMs;
+        currentMagnitudeCentiNm_ = 0;
+        preparePreventive(rngState_);
+        if (config_.h2PersistenceMs == 0U)
+            beginRecovery(nowMs);
+    }
+
+    void beginRecovery(uint32_t nowMs)
+    {
+        if (correctiveActive_)
+            return;
+        correctiveActive_ = true;
+        stabilityVerifyActive_ = false;
+        h2ReturnsToStability_ = false;
+        normalHosConsecutive_ = 0;
+        hosEscalationCount_++;
+        targetTorqueCentiNm_ = 0;
+        currentMagnitudeCentiNm_ = 0;
+        outputActive_ = false;
+        if (config_.preCorrectionPauseMs == 0U)
+        {
+            beginCorrective(nowMs);
+            return;
+        }
+        phase_ = PHASE_PRE_CORRECTIVE_PAUSE;
+        blockReason_ = BLOCK_VERIFY;
+        phaseStartedAtMs_ = nowMs;
+        phaseDurationMs_ = config_.preCorrectionPauseMs;
+    }
+
+    void finishCorrection(uint32_t nowMs)
+    {
+        if (acknowledgementStarted_)
+        {
+            const uint32_t latency = static_cast<uint32_t>(nowMs - acknowledgementStartedAtMs_);
+            acknowledgementCount_++;
+            lastAcknowledgementLatencyMs_ = latency;
+            if (latency > maxAcknowledgementLatencyMs_)
+                maxAcknowledgementLatencyMs_ = latency;
+        }
+        correctiveActive_ = false;
+        acknowledgementStarted_ = false;
+        normalHosConsecutive_ = 0;
+        h2ReturnsToStability_ = false;
+        stabilityVerifyActive_ = false;
+        if (!config_.maintenanceEnabled)
+        {
+            beginMonitorOnly();
+            return;
+        }
+        beginStabilityVerify(nowMs);
+    }
+
+    void beginStabilityVerify(uint32_t nowMs)
+    {
+        if (config_.stabilityVerifyMs == 0U)
+        {
+            beginMaintenance(nowMs, rngState_);
+            return;
+        }
+        phase_ = PHASE_STABILITY_VERIFY;
+        blockReason_ = BLOCK_NONE;
+        phaseStartedAtMs_ = nowMs;
+        phaseDurationMs_ = config_.stabilityVerifyMs;
+        stabilityVerifyActive_ = true;
+        h2ReturnsToStability_ = false;
+        currentMagnitudeCentiNm_ = 0;
+        targetTorqueCentiNm_ = 0;
+        outputActive_ = false;
+        preparePreventive(rngState_);
     }
 
     void beginCorrective(uint32_t nowMs)
     {
+        correctiveActive_ = true;
         phase_ = PHASE_CORRECTIVE;
         blockReason_ = BLOCK_NONE;
         phaseStartedAtMs_ = nowMs;
@@ -629,6 +780,11 @@ private:
 
     void beginCorrectivePause(uint32_t nowMs)
     {
+        if (correctivePauseDisabled())
+        {
+            beginCorrective(nowMs);
+            return;
+        }
         phase_ = PHASE_VERIFY;
         blockReason_ = BLOCK_VERIFY;
         phaseStartedAtMs_ = nowMs;
@@ -640,6 +796,17 @@ private:
         outputActive_ = false;
     }
 
+    bool preventiveRestDisabled() const
+    {
+        return config_.restMinMs == 0U && config_.restMaxMs == 0U;
+    }
+
+    bool correctivePauseDisabled() const
+    {
+        return config_.correctivePauseMinMs == 0U &&
+               config_.correctivePauseMaxMs == 0U;
+    }
+
     void enterFault(BlockReason reason)
     {
         phase_ = PHASE_FAULT_HOLD;
@@ -647,6 +814,9 @@ private:
         targetTorqueCentiNm_ = 0;
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
+        normalHosConsecutive_ = 0;
+        h2ReturnsToStability_ = false;
+        stabilityVerifyActive_ = false;
         faultRecoveryActive_ = false;
         outputActive_ = false;
     }
@@ -910,4 +1080,7 @@ private:
     uint32_t maxAcknowledgementLatencyMs_ = 0;
     bool faultRecoveryActive_ = false;
     uint32_t faultRecoveryStartedAtMs_ = 0;
+    uint8_t normalHosConsecutive_ = 0;
+    bool h2ReturnsToStability_ = false;
+    bool stabilityVerifyActive_ = false;
 };

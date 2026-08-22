@@ -21,10 +21,10 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
 
-    def test_internal_and_runtime_version_advance_to_v4_6_v13(self):
-        self.assertEqual(self.version, "V4.6 V13")
+    def test_internal_and_runtime_version_advance_to_v4_7_v13(self):
+        self.assertEqual(self.version, "V4.7 V13")
         self.assertNotIn("V4.5 V13", self.ui)
-        self.assertGreaterEqual(self.ui.count("V4.6 V13"), 3)
+        self.assertGreaterEqual(self.ui.count("V4.7 V13"), 3)
 
     def test_maintenance_switch_is_default_on_and_crosses_every_config_boundary(self):
         self.assertIn("bool maintenanceEnabled = true;", self.controller)
@@ -42,7 +42,7 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
             self.ui,
             r'id="nag-maintenance-enabled"[^>]*type="checkbox"[^>]*checked',
         )
-        self.assertIn('aria-label="H0-H2 维持区"', self.ui)
+        self.assertIn('aria-label="H0-H1 维持区"', self.ui)
         compact = re.sub(r"\s+", "", self.ui)
         self.assertIn("maintenanceEnabled:true", compact)
         self.assertIn("params.set('maintenanceEnabled'", self.ui)
@@ -58,8 +58,8 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
     def test_prevention_and_correction_use_confirmed_pulse_windows(self):
         self.assertIn("uint32_t activityMinMs = 2000;", self.controller)
         self.assertIn("uint32_t activityMaxMs = 3000;", self.controller)
-        self.assertIn("uint32_t restMinMs = 4000;", self.controller)
-        self.assertIn("uint32_t restMaxMs = 5000;", self.controller)
+        self.assertIn("uint32_t restMinMs = 0;", self.controller)
+        self.assertIn("uint32_t restMaxMs = 0;", self.controller)
         self.assertIn("uint32_t correctiveSendMinMs = 3000;", self.controller)
         self.assertIn("uint32_t correctiveSendMaxMs = 3000;", self.controller)
         self.assertIn("uint32_t correctivePauseMinMs = 1000;", self.controller)
@@ -79,10 +79,7 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
             "normalizeU32Range(value.activityMinMs, value.activityMaxMs, 100, UINT32_MAX)",
             self.controller,
         )
-        self.assertIn(
-            "normalizeU32Range(value.restMinMs, value.restMaxMs, 100, UINT32_MAX)",
-            self.controller,
-        )
+        self.assertIn("normalizeOptionalU32Range(value.restMinMs, value.restMaxMs", self.controller)
         self.assertNotIn(
             'DASH_NAG_PARSE_SEC_ARG("activityMinSec", activityMinMs, 1.0, 2.0)',
             self.dashboard,
@@ -91,7 +88,7 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
             'DASH_NAG_PARSE_SEC_ARG("restMinSec", restMinMs, 3.0, 5.0)',
             self.dashboard,
         )
-        for field_id in ("nag-active-min", "nag-active-max", "nag-rest-min", "nag-rest-max"):
+        for field_id in ("nag-active-min", "nag-active-max"):
             markup = re.search(
                 rf'<input[^>]+id="{re.escape(field_id)}"[^>]*>', self.ui
             )
@@ -99,6 +96,10 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
             self.assertIn('min="0.1"', markup.group(0))
             self.assertNotIn('max="2.0"', markup.group(0))
             self.assertNotIn('max="5.0"', markup.group(0))
+        for field_id in ("nag-rest-min", "nag-rest-max"):
+            markup = re.search(rf'<input[^>]+id="{re.escape(field_id)}"[^>]*>', self.ui)
+            self.assertIsNotNone(markup, field_id)
+            self.assertIn('min="0"', markup.group(0))
 
     def test_two_nm_torque_cap_is_unchanged_while_timing_is_unlocked(self):
         self.assertIn(

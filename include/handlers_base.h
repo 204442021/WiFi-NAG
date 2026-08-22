@@ -388,11 +388,14 @@ struct NagHandler : public CarManagerBase
                left.releaseMaxMs == right.releaseMaxMs &&
                left.restMinMs == right.restMinMs &&
                left.restMaxMs == right.restMaxMs &&
+               left.h2PersistenceMs == right.h2PersistenceMs &&
+               left.preCorrectionPauseMs == right.preCorrectionPauseMs &&
                left.correctiveSendMinMs == right.correctiveSendMinMs &&
                left.correctiveSendMaxMs == right.correctiveSendMaxMs &&
                left.correctivePauseMinMs == right.correctivePauseMinMs &&
                left.correctivePauseMaxMs == right.correctivePauseMaxMs &&
                left.correctiveFrameIntervalMs == right.correctiveFrameIntervalMs &&
+               left.stabilityVerifyMs == right.stabilityVerifyMs &&
                left.dasFreshTimeoutMs == right.dasFreshTimeoutMs;
     }
 

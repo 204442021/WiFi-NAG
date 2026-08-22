@@ -16,6 +16,8 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-corrective-send-min", "nag-corrective-send-max",
     "nag-corrective-pause-min", "nag-corrective-pause-max",
     "nag-corrective-interval-ms",
+    "nag-h2-persistence-sec", "nag-pre-correction-pause-sec",
+    "nag-stability-verify-sec",
     "nag-custom-hard-cap", "nag-custom-das-timeout",
 )
 
@@ -51,6 +53,7 @@ EXPECTED_NVS_KEYS = (
     "nag_act_min", "nag_act_max", "nag_rel_min", "nag_rel_max",
     "nag_rst_min", "nag_rst_max", "nag_das_ms",
     "nag_cs_min", "nag_cs_max", "nag_cp_min", "nag_cp_max", "nag_ci_ms",
+    "nag_h2_ms", "nag_pre_ms", "nag_stab_ms",
 )
 
 EXPECTED_NVS_DEFAULTS = {
@@ -66,14 +69,17 @@ EXPECTED_NVS_DEFAULTS = {
     "nag_act_max": "3.0",
     "nag_rel_min": "0.2",
     "nag_rel_max": "0.4",
-    "nag_rst_min": "4.0",
-    "nag_rst_max": "5.0",
+    "nag_rst_min": "0.0",
+    "nag_rst_max": "0.0",
     "nag_cs_min": "3.0",
     "nag_cs_max": "3.0",
     "nag_cp_min": "1.0",
     "nag_cp_max": "2.0",
     "nag_ci_ms": "1",
     "nag_das_ms": "750",
+    "nag_h2_ms": "3000",
+    "nag_pre_ms": "500",
+    "nag_stab_ms": "5000",
 }
 
 EXPECTED_CONFIG_FIELDS = (
@@ -86,6 +92,7 @@ EXPECTED_CONFIG_FIELDS = (
     "correctiveSendMinSec", "correctiveSendMaxSec",
     "correctivePauseMinSec", "correctivePauseMaxSec",
     "correctiveFrameIntervalMs",
+    "h2PersistenceSec", "preCorrectionPauseSec", "stabilityVerifySec",
     "dasFreshTimeoutMs",
 )
 
@@ -152,8 +159,10 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "preventiveNegative:[1.70,1.80],"
             "preventivePositive:[1.70,1.80],correctiveNegative:[1.80,2.00],"
             "correctivePositive:[1.80,2.00],activity:[2.0,3.0],"
-            "release:[0.2,0.4],rest:[4.0,5.0],correctiveSend:[3.0,3.0],"
-            "correctivePause:[1.0,2.0],correctiveFrameIntervalMs:1,dasFreshTimeoutMs:750};",
+            "release:[0.2,0.4],rest:[0.0,0.0],h2PersistenceSec:3.0,"
+            "preCorrectionPauseSec:0.5,correctiveSend:[3.0,3.0],"
+            "correctivePause:[1.0,2.0],correctiveFrameIntervalMs:1,"
+            "stabilityVerifySec:5.0,dasFreshTimeoutMs:750};",
             compact,
         )
         self.assertIn("letnagCustomDraft=cloneNagCustomDefaults();", compact)
@@ -242,7 +251,9 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "constphaseNames={disabled:'关闭','wait-das':'等待DAS',"
             "arming:'确认OEM帧',maintenance:'预防注入窗口',release:'兼容释放阶段',"
             "rest:'预防停发间隔',corrective:'纠正发送窗口',verify:'纠正停发窗口',"
-            "'fault-hold':'保护停发','monitor-only':'仅监控纠正区'};",
+            "'fault-hold':'保护停发','monitor-only':'仅监控纠正区',"
+            "'h2-pending':'H2持续检测','pre-corrective-pause':'纠正前停发',"
+            "'stability-verify':'H1稳定确认'};",
             compact,
         )
         for selector in (
@@ -261,7 +272,8 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "disabled: 'muted'", "'wait-das': 'muted'", "arming: 'active'",
             "maintenance: 'active'", "release: 'caution'", "rest: 'caution'",
             "corrective: 'active'", "verify: 'caution'", "'fault-hold': 'error'",
-            "'monitor-only': 'muted'",
+            "'monitor-only': 'muted'", "'h2-pending': 'caution'",
+            "'pre-corrective-pause': 'caution'", "'stability-verify': 'active'",
         ):
             self.assertIn(mapping, self.source)
         self.assertNotIn("arming: 'ready'", self.source)
@@ -415,7 +427,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
                 self.dashboard,
             )
 
-        for retired_prefix in ("nag_h1_", "nag_h2_", "nag_ad_"):
+        for retired_prefix in ("nag_h1_n", "nag_h2_n", "nag_ad_"):
             self.assertNotIn(f'prefs.getString("{retired_prefix}', self.dashboard)
 
     def test_adaptive_api_uses_exact_v50_config_fields(self):
@@ -534,6 +546,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "correctivePositiveMinCentiNm", "correctivePositiveMaxCentiNm",
             "activityMinMs", "activityMaxMs", "releaseMinMs", "releaseMaxMs",
             "restMinMs", "restMaxMs",
+            "h2PersistenceMs", "preCorrectionPauseMs", "stabilityVerifyMs",
             "dasFreshTimeoutMs",
         ):
             self.assertIn(member, equality)
@@ -566,6 +579,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         for member in (
             "activityMinMs", "activityMaxMs", "releaseMinMs", "releaseMaxMs",
             "restMinMs", "restMaxMs",
+            "h2PersistenceMs", "preCorrectionPauseMs", "stabilityVerifyMs",
         ):
             self.assertIn(f"dashNagSecondsString(config.{member})", self.dashboard)
 
@@ -573,6 +587,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         for name in (
             "disabled", "wait-das", "arming", "maintenance", "release",
             "rest", "corrective", "verify", "fault-hold", "monitor-only",
+            "h2-pending", "pre-corrective-pause", "stability-verify",
             "none", "das-missing", "das-stale", "no-direction", "das-state",
             "ack-timeout", "direction-change", "maintenance-disabled",
             "torque", "angle", "hold",
