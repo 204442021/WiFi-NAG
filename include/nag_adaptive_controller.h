@@ -7,17 +7,16 @@
 struct NagAdaptiveConfig
 {
     bool maintenanceEnabled = true;
-    bool lateEchoEnabled = false;
-    int16_t preventiveNegativeMinCentiNm = 170;
+    int16_t preventiveNegativeMinCentiNm = 150;
     int16_t preventiveNegativeMaxCentiNm = 180;
-    int16_t preventivePositiveMinCentiNm = 170;
+    int16_t preventivePositiveMinCentiNm = 150;
     int16_t preventivePositiveMaxCentiNm = 180;
     int16_t correctiveNegativeMinCentiNm = 180;
-    int16_t correctiveNegativeMaxCentiNm = 200;
+    int16_t correctiveNegativeMaxCentiNm = 240;
     int16_t correctivePositiveMinCentiNm = 180;
-    int16_t correctivePositiveMaxCentiNm = 200;
-    uint16_t correctivePositiveFrames = 50;
-    uint16_t correctiveNegativeFrames = 50;
+    int16_t correctivePositiveMaxCentiNm = 240;
+    uint16_t correctivePositiveFrames = 100;
+    uint16_t correctiveNegativeFrames = 100;
     uint32_t activityMinMs = 2000;
     uint32_t activityMaxMs = 3000;
     uint32_t releaseMinMs = 200;
@@ -25,12 +24,11 @@ struct NagAdaptiveConfig
     uint32_t restMinMs = 0;
     uint32_t restMaxMs = 0;
     uint32_t h2PersistenceMs = 3000;
-    uint32_t preCorrectionPauseMs = 500;
+    uint32_t preCorrectionPauseMs = 1000;
     uint32_t correctiveSendMinMs = 3000;
     uint32_t correctiveSendMaxMs = 3000;
     uint32_t correctivePauseMinMs = 1000;
     uint32_t correctivePauseMaxMs = 2000;
-    uint32_t correctiveFrameIntervalMs = 1;
     uint32_t stabilityVerifyMs = 5000;
     uint32_t dasFreshTimeoutMs = 750;
 };
@@ -42,7 +40,7 @@ struct NagAdaptiveDecision
     int8_t injectionSign = 0;
     bool corrective = false;
     uint8_t attempt = 0;
-    uint8_t burstFrame = 0;
+    uint32_t burstFrame = 0;
 };
 
 struct NagAdaptiveSnapshot
@@ -57,15 +55,15 @@ struct NagAdaptiveSnapshot
     uint32_t dasAgeMs = 0xFFFFFFFFu;
     uint32_t lastDasFrameMs = 0;
     uint32_t dasFreshnessLimitMs = 0;
+    int16_t steeringAngleDeciDeg = 0;
     int16_t observedTorqueCentiNm = 0;
     int16_t targetTorqueCentiNm = 0;
     int8_t injectionSign = 0;
     bool outputActive = false;
     int16_t lastSuccessfullyTransmittedTorqueCentiNm = 0;
-    int8_t candidateInjectionSign = 0;
     uint8_t correctiveAttempt = 0;
-    uint8_t correctiveBurstFrame = 0;
-    uint8_t correctiveBurstFrameTarget = 0;
+    uint32_t correctiveBurstFrame = 0;
+    uint32_t correctiveBurstFrameTarget = 0;
     int8_t correctiveSweepSign = 0;
     uint16_t correctiveSweepFrame = 0;
     uint16_t correctiveSweepFrameTarget = 0;
@@ -73,7 +71,6 @@ struct NagAdaptiveSnapshot
     uint32_t phaseRemainingMs = 0;
     uint32_t hosEscalationCount = 0;
     uint32_t acknowledgementCount = 0;
-    uint32_t acknowledgementTimeoutCount = 0;
     uint32_t lastAcknowledgementLatencyMs = 0;
     uint32_t maxAcknowledgementLatencyMs = 0;
 };
@@ -130,18 +127,16 @@ public:
         BLOCK_NO_DIRECTION = 6,
         BLOCK_VERIFY = 7,
         BLOCK_DAS_STATE = 8,
-        BLOCK_ACK_TIMEOUT = 9,
-        BLOCK_DIRECTION_CHANGE = 10,
         BLOCK_MAINTENANCE_DISABLED = 11,
-        BLOCK_CORRECTIVE_INTERVAL = 12,
+        BLOCK_STEERING_ANGLE_LIMIT = 13,
     };
 
     enum DirectionSource : uint8_t
     {
         DIRECTION_NONE = 0,
-        DIRECTION_TORQUE = 1,
-        DIRECTION_ANGLE = 2,
-        DIRECTION_HOLD = 3,
+        DIRECTION_ANGLE = 1,
+        DIRECTION_HOLD = 2,
+        DIRECTION_CORRECTIVE_SWEEP = 3,
     };
 
     static NagAdaptiveConfig normalizeConfig(NagAdaptiveConfig value)
@@ -166,8 +161,6 @@ public:
         normalizeOptionalU32Range(value.correctivePauseMinMs,
                                   value.correctivePauseMaxMs,
                                   100, UINT32_MAX);
-        value.correctiveFrameIntervalMs =
-            clampU32(value.correctiveFrameIntervalMs, 1, UINT32_MAX);
         value.dasFreshTimeoutMs = clampU32(value.dasFreshTimeoutMs, 100, 2000);
         return value;
     }
@@ -199,7 +192,6 @@ public:
         targetTorqueCentiNm_ = 0;
         injectionSign_ = 0;
         outputActive_ = false;
-        candidateSign_ = 0;
         armingFrames_ = 0;
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
@@ -315,6 +307,7 @@ public:
     {
         applyReset(nowMs);
         observedTorqueCentiNm_ = observedTorqueCentiNm;
+        steeringAngleDeciDeg_ = steeringAngleDeciDeg;
 
         if (!enabled_)
             return blockedDecision(BLOCK_DISABLED);
@@ -338,8 +331,6 @@ public:
         if (epasSeen_ && static_cast<uint32_t>(nowMs - lastEpasAtMs_) > 200U)
         {
             armingFrames_ = 0;
-            candidateSign_ = 0;
-            candidateStartedAtMs_ = 0;
             if (!correctiveActive_)
                 beginArming();
         }
@@ -348,7 +339,7 @@ public:
         epasSeen_ = true;
         lastEpasAtMs_ = nowMs;
         if (phase_ != PHASE_CORRECTIVE || correctiveSweepSign_ == 0)
-            updateDirection(nowMs, steeringAngleDeciDeg, observedTorqueCentiNm);
+            updateDirection(steeringAngleDeciDeg);
 
         if (armingFrames_ < 3)
             armingFrames_++;
@@ -395,9 +386,6 @@ public:
         if (phase_ == PHASE_STABILITY_VERIFY && phaseExpired(nowMs))
             beginMaintenance(nowMs, entropy);
 
-        if (phase_ != PHASE_CORRECTIVE && candidateSign_ != 0)
-            return blockedDecision(BLOCK_DIRECTION_CHANGE);
-
         if (phase_ == PHASE_MAINTENANCE && phaseExpired(nowMs))
             beginRest(nowMs, entropy);
 
@@ -409,7 +397,12 @@ public:
         }
 
         if (phase_ == PHASE_RELEASE)
-            return releaseDecision(nowMs, entropy);
+        {
+            const NagAdaptiveDecision decision = releaseDecision(nowMs, entropy);
+            if (steeringAngleOutOfRange(steeringAngleDeciDeg))
+                return blockedDecision(BLOCK_STEERING_ANGLE_LIMIT);
+            return decision;
+        }
 
         if (phase_ == PHASE_CORRECTIVE && correctiveSweepSign_ == 0 &&
             injectionSign_ != 0)
@@ -418,20 +411,18 @@ public:
             correctiveSweepFrame_ = 0;
             correctiveSweepFrameTarget_ = correctiveFramesForSign(correctiveSweepSign_);
             correctiveSweepPeakCentiNm_ = 0;
-            correctiveBurstFrameTarget_ = static_cast<uint8_t>(correctiveSweepFrameTarget_);
+            correctiveBurstFrameTarget_ = correctiveSweepFrameTarget_;
+            directionSource_ = DIRECTION_CORRECTIVE_SWEEP;
         }
+
+        if (steeringAngleOutOfRange(steeringAngleDeciDeg))
+            return blockedDecision(BLOCK_STEERING_ANGLE_LIMIT);
 
         if (injectionSign_ == 0)
             return blockedDecision(BLOCK_NO_DIRECTION);
 
         if (phase_ == PHASE_CORRECTIVE)
-        {
-            if (correctiveSendSeen_ &&
-                static_cast<uint32_t>(nowMs - correctiveLastSendAtMs_) <
-                    config_.correctiveFrameIntervalMs)
-                return blockedDecision(BLOCK_CORRECTIVE_INTERVAL);
             return prepareCorrectiveSweepDecision(entropy);
-        }
 
         if (phase_ == PHASE_MAINTENANCE ||
             phase_ == PHASE_H2_PENDING ||
@@ -468,8 +459,7 @@ public:
             acknowledgementStarted_ = true;
             acknowledgementStartedAtMs_ = nowMs;
         }
-        if (correctiveBurstFrame_ < 0xFFU)
-            correctiveBurstFrame_++;
+        correctiveBurstFrame_++;
         if (correctiveSweepFrame_ < correctiveSweepFrameTarget_)
             correctiveSweepFrame_++;
         if (correctiveSweepFrame_ >= correctiveSweepFrameTarget_)
@@ -478,11 +468,9 @@ public:
             correctiveSweepFrame_ = 0;
             correctiveSweepFrameTarget_ = correctiveFramesForSign(correctiveSweepSign_);
             correctiveSweepPeakCentiNm_ = 0;
-            correctiveBurstFrameTarget_ = static_cast<uint8_t>(correctiveSweepFrameTarget_);
+            correctiveBurstFrameTarget_ = correctiveSweepFrameTarget_;
             currentMagnitudeCentiNm_ = 0;
         }
-        correctiveSendSeen_ = true;
-        correctiveLastSendAtMs_ = nowMs;
     }
 
     NagAdaptiveSnapshot snapshot(uint32_t nowMs) const
@@ -500,6 +488,7 @@ public:
                                    ? static_cast<uint32_t>(nowMs - value.dasAgeMs)
                                    : 0U;
         value.dasFreshnessLimitMs = config_.dasFreshTimeoutMs;
+        value.steeringAngleDeciDeg = steeringAngleDeciDeg_;
         value.observedTorqueCentiNm = observedTorqueCentiNm_;
         value.targetTorqueCentiNm = targetTorqueCentiNm_;
         value.injectionSign = outputActive_ && lastSuccessfullyTransmittedTorqueCentiNm_ != 0
@@ -510,7 +499,6 @@ public:
         value.outputActive = outputActive_;
         value.lastSuccessfullyTransmittedTorqueCentiNm =
             lastSuccessfullyTransmittedTorqueCentiNm_;
-        value.candidateInjectionSign = injectionSign_;
         value.correctiveAttempt = correctiveAttempt_;
         value.correctiveBurstFrame = correctiveBurstFrame_;
         value.correctiveBurstFrameTarget = correctiveBurstFrameTarget_;
@@ -521,7 +509,6 @@ public:
         value.phaseRemainingMs = phaseRemainingMs(nowMs);
         value.hosEscalationCount = hosEscalationCount_;
         value.acknowledgementCount = acknowledgementCount_;
-        value.acknowledgementTimeoutCount = acknowledgementTimeoutCount_;
         value.lastAcknowledgementLatencyMs = lastAcknowledgementLatencyMs_;
         value.maxAcknowledgementLatencyMs = maxAcknowledgementLatencyMs_;
         return value;
@@ -601,9 +588,8 @@ private:
         directionSource_ = DIRECTION_NONE;
         targetTorqueCentiNm_ = 0;
         observedTorqueCentiNm_ = 0;
+        steeringAngleDeciDeg_ = 0;
         injectionSign_ = 0;
-        candidateSign_ = 0;
-        candidateStartedAtMs_ = 0;
         armingFrames_ = 0;
         epasSeen_ = false;
         lastEpasAtMs_ = nowMs;
@@ -622,8 +608,6 @@ private:
         correctiveAttempt_ = 0;
         correctiveBurstFrame_ = 0;
         correctiveBurstFrameTarget_ = 0;
-        correctiveSendSeen_ = false;
-        correctiveLastSendAtMs_ = 0;
         acknowledgementStarted_ = false;
         normalHosConsecutive_ = 0;
         h2ReturnsToStability_ = false;
@@ -631,7 +615,6 @@ private:
         rngState_ = 0;
         hosEscalationCount_ = 0;
         acknowledgementCount_ = 0;
-        acknowledgementTimeoutCount_ = 0;
         lastAcknowledgementLatencyMs_ = 0;
         maxAcknowledgementLatencyMs_ = 0;
     }
@@ -659,8 +642,6 @@ private:
         blockReason_ = BLOCK_ARMING;
         targetTorqueCentiNm_ = 0;
         armingFrames_ = 0;
-        candidateSign_ = 0;
-        candidateStartedAtMs_ = 0;
     }
 
     void beginMaintenance(uint32_t nowMs, uint32_t entropy)
@@ -835,15 +816,13 @@ private:
         correctiveSweepFrame_ = 0;
         correctiveSweepFrameTarget_ = correctiveFramesForSign(correctiveSweepSign_);
         correctiveSweepPeakCentiNm_ = 0;
-        correctiveBurstFrameTarget_ = static_cast<uint8_t>(correctiveSweepFrameTarget_);
-        candidateSign_ = 0;
-        candidateStartedAtMs_ = 0;
+        correctiveBurstFrameTarget_ = correctiveSweepFrameTarget_;
+        if (correctiveSweepSign_ != 0)
+            directionSource_ = DIRECTION_CORRECTIVE_SWEEP;
         currentMagnitudeCentiNm_ = 0;
         targetTorqueCentiNm_ = 0;
         lastSuccessfullyTransmittedTorqueCentiNm_ = 0;
         outputActive_ = false;
-        correctiveSendSeen_ = false;
-        correctiveLastSendAtMs_ = 0;
     }
 
     void beginCorrectivePause(uint32_t nowMs)
@@ -891,64 +870,26 @@ private:
         clearSweepState();
     }
 
-    void updateDirection(uint32_t nowMs, int16_t angleDeciDeg, int16_t torqueCentiNm)
+    static bool steeringAngleOutOfRange(int16_t angleDeciDeg)
     {
-        int8_t desiredSign = 0;
-        if (torqueCentiNm > 0)
-            desiredSign = -1;
-        else if (torqueCentiNm < 0)
-            desiredSign = 1;
+        return angleDeciDeg > 500 || angleDeciDeg < -500;
+    }
 
-        if (injectionSign_ == 0)
+    void updateDirection(int16_t angleDeciDeg)
+    {
+        if (angleDeciDeg > 10)
         {
-            if (desiredSign != 0)
-            {
-                injectionSign_ = desiredSign;
-                directionSource_ = DIRECTION_TORQUE;
-            }
-            else if (angleDeciDeg > 10)
-            {
-                injectionSign_ = -1;
-                directionSource_ = DIRECTION_ANGLE;
-            }
-            else if (angleDeciDeg < -10)
-            {
-                injectionSign_ = 1;
-                directionSource_ = DIRECTION_ANGLE;
-            }
-            else
-            {
-                directionSource_ = DIRECTION_NONE;
-            }
+            injectionSign_ = -1;
+            directionSource_ = DIRECTION_ANGLE;
             return;
         }
-
-        if (desiredSign == 0)
+        if (angleDeciDeg < -10)
         {
-            candidateSign_ = 0;
-            directionSource_ = DIRECTION_HOLD;
+            injectionSign_ = 1;
+            directionSource_ = DIRECTION_ANGLE;
+            return;
         }
-        else if (desiredSign == injectionSign_)
-        {
-            candidateSign_ = 0;
-            directionSource_ = DIRECTION_TORQUE;
-        }
-        else if (candidateSign_ != desiredSign)
-        {
-            candidateSign_ = desiredSign;
-            candidateStartedAtMs_ = nowMs;
-            directionSource_ = DIRECTION_HOLD;
-        }
-        else if (static_cast<uint32_t>(nowMs - candidateStartedAtMs_) >= 100U)
-        {
-            injectionSign_ = desiredSign;
-            candidateSign_ = 0;
-            directionSource_ = DIRECTION_TORQUE;
-        }
-        else
-        {
-            directionSource_ = DIRECTION_HOLD;
-        }
+        directionSource_ = injectionSign_ == 0 ? DIRECTION_NONE : DIRECTION_HOLD;
     }
 
     NagAdaptiveDecision releaseDecision(uint32_t nowMs, uint32_t entropy)
@@ -1075,7 +1016,7 @@ private:
             int16_t maxValue;
             correctiveRangeForSign(correctiveSweepSign_, minValue, maxValue);
             correctiveSweepPeakCentiNm_ = triangularMagnitude(minValue, maxValue, entropy);
-            correctiveBurstFrameTarget_ = static_cast<uint8_t>(correctiveSweepFrameTarget_);
+            correctiveBurstFrameTarget_ = correctiveSweepFrameTarget_;
         }
 
         const uint16_t lastFrame = static_cast<uint16_t>(correctiveSweepFrameTarget_ - 1U);
@@ -1202,6 +1143,7 @@ private:
     uint8_t phase_ = PHASE_DISABLED;
     uint8_t blockReason_ = BLOCK_DISABLED;
     uint8_t directionSource_ = DIRECTION_NONE;
+    int16_t steeringAngleDeciDeg_ = 0;
     int16_t observedTorqueCentiNm_ = 0;
     int16_t targetTorqueCentiNm_ = 0;
     int16_t releaseStartTorqueCentiNm_ = 0;
@@ -1210,29 +1152,24 @@ private:
     int8_t preventiveMagnitudeStep_ = 1;
     bool outputActive_ = false;
     int8_t injectionSign_ = 0;
-    int8_t candidateSign_ = 0;
     uint8_t armingFrames_ = 0;
     bool epasSeen_ = false;
     uint32_t lastEpasAtMs_ = 0;
-    uint32_t candidateStartedAtMs_ = 0;
     uint32_t phaseStartedAtMs_ = 0;
     uint32_t phaseDurationMs_ = 0;
     uint32_t rngState_ = 0;
     bool correctiveActive_ = false;
     uint8_t correctiveAttempt_ = 0;
-    uint8_t correctiveBurstFrame_ = 0;
-    uint8_t correctiveBurstFrameTarget_ = 0;
+    uint32_t correctiveBurstFrame_ = 0;
+    uint32_t correctiveBurstFrameTarget_ = 0;
     int8_t correctiveSweepSign_ = 0;
     uint16_t correctiveSweepFrame_ = 0;
     uint16_t correctiveSweepFrameTarget_ = 0;
     int16_t correctiveSweepPeakCentiNm_ = 0;
-    bool correctiveSendSeen_ = false;
-    uint32_t correctiveLastSendAtMs_ = 0;
     bool acknowledgementStarted_ = false;
     uint32_t acknowledgementStartedAtMs_ = 0;
     uint32_t hosEscalationCount_ = 0;
     uint32_t acknowledgementCount_ = 0;
-    uint32_t acknowledgementTimeoutCount_ = 0;
     uint32_t lastAcknowledgementLatencyMs_ = 0;
     uint32_t maxAcknowledgementLatencyMs_ = 0;
     bool faultRecoveryActive_ = false;

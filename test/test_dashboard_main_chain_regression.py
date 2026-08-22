@@ -21,7 +21,6 @@ RUNTIME_HEADER_FILE = ROOT / "include" / "platform" / "espidf_runtime.h"
 RUNTIME_SOURCE_FILE = ROOT / "src" / "espidf_runtime.cpp"
 
 EXPECTED_CUSTOM_UI_IDS = (
-    "nag-custom-readiness", "nag-custom-readiness-reason",
     "nag-custom-dirty", "nag-custom-defaults", "nag-custom-save",
     "nag-pv-neg-min", "nag-pv-neg-max", "nag-pv-pos-min", "nag-pv-pos-max",
     "nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max",
@@ -29,18 +28,19 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-rest-min", "nag-rest-max", "nag-maintenance-enabled",
     "nag-corrective-send-min", "nag-corrective-send-max",
     "nag-corrective-pause-min", "nag-corrective-pause-max",
-    "nag-corrective-interval-ms",
+    "nag-corrective-negative-frames", "nag-corrective-positive-frames",
+    "nag-activity-hint", "nag-steering-angle",
     "nag-custom-hard-cap", "nag-custom-das-timeout",
 )
 
 EXPECTED_DIAGNOSTIC_UI_IDS = (
     "nag-diag-health", "nag-diag-reason",
-    "nag-diag-epas", "nag-diag-oem-torque", "nag-diag-counter",
+    "nag-diag-epas", "nag-diag-oem-torque", "nag-diag-angle", "nag-diag-counter",
     "nag-diag-das", "nag-diag-hos",
     "nag-diag-phase", "nag-diag-target", "nag-diag-direction",
     "nag-diag-timer", "nag-diag-burst",
     "nag-diag-tx", "nag-diag-last-tx", "nag-diag-collision",
-    "nag-diag-ack", "nag-diag-latency", "nag-diag-timeout",
+    "nag-diag-ack", "nag-diag-latency",
     "nag-diag-escalations", "nag-diag-events", "nag-diag-clear-events",
 )
 
@@ -232,7 +232,7 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         for label, html in (("source", self.source), ("generated", self.generated_html)):
             for text in (
                 "预防层", "纠正层", "注入与停发间隔", "安全边界",
-                "间隔期不额外发送 0x370", "本地发送成功不等于 DAS 接受",
+                "每帧 OEM 最多 1 帧 Echo", "本地发送成功不等于 DAS 接受",
             ):
                 with self.subTest(file=label, text=text):
                     self.assertIn(text, html)
@@ -263,10 +263,7 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         self.assertNotIn(".nag-custom-actionbar{position:fixed", compact)
         self.assertIn(".nag-custom-shell{", compact)
         self.assertNotRegex(compact, r"\.nag-custom-shell\{[^}]*padding-bottom:")
-        for element_id in (
-            "nag-custom-readiness", "nag-custom-readiness-reason",
-            "nag-custom-dirty", "nag-adaptive-msg",
-        ):
+        for element_id in ("nag-custom-dirty", "nag-adaptive-msg"):
             element = re.search(
                 rf'<[^>]+\bid="{re.escape(element_id)}"[^>]*>', self.source
             )

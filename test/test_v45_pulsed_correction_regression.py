@@ -21,10 +21,10 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
 
-    def test_internal_and_runtime_version_advance_to_v4_7_v13(self):
-        self.assertEqual(self.version, "V4.8 V13")
+    def test_internal_and_runtime_version_advance_to_v49_v13(self):
+        self.assertEqual(self.version, "V4.9 V13")
         self.assertNotIn("V4.5 V13", self.ui)
-        self.assertGreaterEqual(self.ui.count("V4.8 V13"), 3)
+        self.assertGreaterEqual(self.ui.count("V4.9 V13"), 3)
 
     def test_maintenance_switch_is_default_on_and_crosses_every_config_boundary(self):
         self.assertIn("bool maintenanceEnabled = true;", self.controller)
@@ -64,7 +64,8 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
         self.assertIn("uint32_t correctiveSendMaxMs = 3000;", self.controller)
         self.assertIn("uint32_t correctivePauseMinMs = 1000;", self.controller)
         self.assertIn("uint32_t correctivePauseMaxMs = 2000;", self.controller)
-        self.assertIn("uint32_t correctiveFrameIntervalMs = 1;", self.controller)
+        self.assertNotIn("correctiveFrameIntervalMs", self.controller)
+        self.assertNotIn("BLOCK_CORRECTIVE_INTERVAL", self.controller)
 
     def test_prevention_timing_uses_recommended_defaults_without_business_clamps(self):
         self.assertNotIn(
@@ -110,13 +111,13 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
             ROOT / "include/nag_adaptive_config_input.h"
         ).read_text(encoding="utf-8"))
 
-    def test_monitor_only_and_direction_change_are_visible_in_diagnostics(self):
+    def test_monitor_only_and_angle_limit_are_visible_in_diagnostics(self):
         self.assertIn(
             'case NagAdaptiveController::PHASE_MONITOR_ONLY: return "monitor-only";',
             self.dashboard,
         )
         self.assertIn(
-            'case NagAdaptiveController::BLOCK_DIRECTION_CHANGE: return "direction-change";',
+            'case NagAdaptiveController::BLOCK_STEERING_ANGLE_LIMIT: return "steering-angle-limit";',
             self.dashboard,
         )
         self.assertIn(

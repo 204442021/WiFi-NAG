@@ -9,7 +9,6 @@
 #include "log_buffer.h"
 #include "nag_adaptive_controller.h"
 #include "nag_adaptive_exchange.h"
-#include "nag_late_echo_scheduler.h"
 #include "shared_types.h"
 
 #ifndef NATIVE_BUILD
@@ -45,12 +44,6 @@ struct CarManagerBase
     void (*onFrame)(const CanFrame &) = nullptr;
 
     virtual void handleMessage(CanFrame &frame, CanDriver &driver) = 0;
-    virtual bool serviceTimedSend(CanDriver &driver, bool writeAllowed = true)
-    {
-        (void)driver;
-        (void)writeAllowed;
-        return false;
-    }
     virtual const uint32_t *filterIds() const = 0;
     virtual uint8_t filterIdCount() const = 0;
     virtual ~CarManagerBase() = default;
@@ -83,10 +76,6 @@ struct NagHandler : public CarManagerBase
     Shared<uint32_t> nagInvalidTorqueRejectCount{0};
     Shared<uint32_t> nagCounterCollisionCount{0};
     Shared<uint32_t> nagLastCounterCollisionGapUs{0};
-    Shared<uint32_t> nagLateEchoScheduledCount{0};
-    Shared<uint32_t> nagLateEchoSentCount{0};
-    Shared<uint32_t> nagLateEchoEarlyCancelCount{0};
-    Shared<uint32_t> nagLateEchoExpiredCount{0};
     Shared<uint32_t> nagDasFrameCount{0};
     Shared<uint32_t> nagOemEpasFrameCount{0};
     Shared<uint32_t> nagLastOemEpasAtMs{0};
@@ -98,7 +87,6 @@ struct NagHandler : public CarManagerBase
     Shared<uint32_t> lastInjectedAtMs{0};
     NagAdaptiveController adaptiveController;
     NagAdaptiveExchange adaptiveExchange;
-    NagLateEchoScheduler lateEchoScheduler;
     uint32_t lastAppliedAdaptiveCommandGeneration = 0;
 
     static constexpr uint32_t kInjectedFreshMs = 200;
@@ -116,15 +104,7 @@ struct NagHandler : public CarManagerBase
         uint32_t sentAtMs = 0;
         bool valid = false;
     };
-    struct PendingLateEcho
-    {
-        CanFrame frame;
-        NagAdaptiveDecision decision;
-        int16_t torqueCentiNm = 0;
-        bool valid = false;
-    };
     RecentEcho recentEchoes[kRecentEchoCount]{};
-    PendingLateEcho pendingLateEcho{};
     uint8_t recentEchoWriteIndex = 0;
     uint8_t lastSuccessfulEchoCounter = 0;
     uint64_t lastSuccessfulEchoAtUs = 0;
@@ -408,7 +388,6 @@ struct NagHandler : public CarManagerBase
                                     const NagAdaptiveConfig &right)
     {
         return left.maintenanceEnabled == right.maintenanceEnabled &&
-               left.lateEchoEnabled == right.lateEchoEnabled &&
                left.preventiveNegativeMinCentiNm == right.preventiveNegativeMinCentiNm &&
                left.preventiveNegativeMaxCentiNm == right.preventiveNegativeMaxCentiNm &&
                left.preventivePositiveMinCentiNm == right.preventivePositiveMinCentiNm &&
@@ -431,7 +410,6 @@ struct NagHandler : public CarManagerBase
                left.correctiveSendMaxMs == right.correctiveSendMaxMs &&
                left.correctivePauseMinMs == right.correctivePauseMinMs &&
                left.correctivePauseMaxMs == right.correctivePauseMaxMs &&
-               left.correctiveFrameIntervalMs == right.correctiveFrameIntervalMs &&
                left.stabilityVerifyMs == right.stabilityVerifyMs &&
                left.dasFreshTimeoutMs == right.dasFreshTimeoutMs;
     }
@@ -462,7 +440,6 @@ struct NagHandler : public CarManagerBase
             return;
         const bool configChanged = !adaptiveConfigEqual(adaptiveController.config(), command.config);
         const bool modeChanged = static_cast<uint8_t>(nagMode) != command.mode;
-        const bool resetTiming = configChanged || modeChanged || command.resetRequested;
         if (configChanged)
             adaptiveController.setConfig(command.config);
         if (modeChanged)
@@ -471,13 +448,6 @@ struct NagHandler : public CarManagerBase
             adaptiveController.requestReset();
         else if (modeChanged)
             adaptiveController.requestReset();
-        if (resetTiming)
-        {
-            lateEchoScheduler.setEnabled(command.config.lateEchoEnabled);
-            lateEchoScheduler.restartTiming();
-            pendingLateEcho.valid = false;
-            syncLateEchoDiagnostics();
-        }
     }
 
     void publishAdaptiveSnapshot(uint32_t now)
@@ -529,35 +499,9 @@ struct NagHandler : public CarManagerBase
         recentEchoWriteIndex = static_cast<uint8_t>((recentEchoWriteIndex + 1U) % kRecentEchoCount);
     }
 
-    bool lateEchoReady() const { return lateEchoScheduler.ready(); }
-    bool lateEchoPending() const
-    {
-        return lateEchoScheduler.pending() && pendingLateEcho.valid;
-    }
-    bool lateEchoEnabled() const { return lateEchoScheduler.enabled(); }
-    uint32_t lateEchoEstimatedPeriodUs() const
-    {
-        return lateEchoScheduler.estimatedPeriodUs();
-    }
-    uint32_t lateEchoLastLeadUs() const { return lateEchoScheduler.lastLeadUs(); }
-
-    void syncLateEchoDiagnostics()
-    {
-        nagLateEchoScheduledCount = lateEchoScheduler.scheduledCount();
-        nagLateEchoEarlyCancelCount = lateEchoScheduler.earlyCancelCount();
-        nagLateEchoExpiredCount = lateEchoScheduler.expiredCount();
-    }
-
-    void clearLateEchoTiming()
-    {
-        lateEchoScheduler.restartTiming();
-        pendingLateEcho.valid = false;
-        syncLateEchoDiagnostics();
-    }
-
     bool sendPreparedEcho(CanDriver &driver, const CanFrame &echo,
                           const NagAdaptiveDecision &decision,
-                          int16_t torqueCentiNm, bool late)
+                          int16_t torqueCentiNm)
     {
         const uint32_t now = nowMs();
         nagSendAttemptCount++;
@@ -567,8 +511,6 @@ struct NagHandler : public CarManagerBase
         {
             framesSent++;
             nagEchoCount++;
-            if (late)
-                nagLateEchoSentCount++;
             lastInjectedCentiNm = torqueCentiNm;
             lastInjectedAtMs = now;
             lastInjectedValid = true;
@@ -601,48 +543,6 @@ struct NagHandler : public CarManagerBase
         return sent;
     }
 
-    bool serviceTimedSend(CanDriver &driver, bool writeAllowed = true) override
-    {
-        consumePendingAdaptiveCommandAtFrameBoundary();
-        const bool runtimeEnabled = writeAllowed &&
-                                    static_cast<bool>(nagKillerActive) &&
-                                    static_cast<bool>(nagKillerRuntime);
-        if (!runtimeEnabled)
-        {
-            clearLateEchoTiming();
-            return false;
-        }
-        if (!lateEchoScheduler.enabled())
-            return false;
-
-        if (static_cast<uint8_t>(nagMode) == MODE_ADAPTIVE)
-        {
-            const NagAdaptiveSnapshot state = adaptiveController.snapshot(nowMs());
-            if (!state.dasFresh || state.dasHos >= 6U)
-            {
-                clearLateEchoTiming();
-                return false;
-            }
-        }
-        if (!pendingLateEcho.valid)
-            return false;
-
-        const NagLateEchoScheduler::PollResult poll = lateEchoScheduler.poll(nowUs());
-        syncLateEchoDiagnostics();
-        if (poll == NagLateEchoScheduler::POLL_EXPIRED)
-        {
-            pendingLateEcho.valid = false;
-            return false;
-        }
-        if (poll != NagLateEchoScheduler::POLL_DUE)
-            return false;
-
-        const PendingLateEcho prepared = pendingLateEcho;
-        pendingLateEcho.valid = false;
-        return sendPreparedEcho(driver, prepared.frame, prepared.decision,
-                                prepared.torqueCentiNm, true);
-    }
-
     void handleMessage(CanFrame &frame, CanDriver &driver) override
     {
         const uint32_t now = nowMs();
@@ -661,8 +561,6 @@ struct NagHandler : public CarManagerBase
         if (effectiveRuntimeEnabled && !lastEffectiveRuntimeEnabled &&
             static_cast<uint8_t>(nagMode) == MODE_ADAPTIVE)
             adaptiveController.requestReset();
-        if (!effectiveRuntimeEnabled)
-            clearLateEchoTiming();
         lastEffectiveRuntimeEnabled = effectiveRuntimeEnabled;
 
         if (frame.id == NagDasFeedbackTracker::kDasCanId)
@@ -671,9 +569,6 @@ struct NagHandler : public CarManagerBase
             {
                 nagDasFrameCount++;
                 adaptiveController.observeDas(frame, now);
-                const uint8_t hos = static_cast<uint8_t>((frame.data[5] >> 2) & 0x0F);
-                if (hos >= 6U)
-                    clearLateEchoTiming();
             }
             return;
         }
@@ -702,12 +597,6 @@ struct NagHandler : public CarManagerBase
         }
 
         const uint64_t receivedAtUs = nowUs();
-        if (lateEchoScheduler.enabled())
-        {
-            pendingLateEcho.valid = false;
-            lateEchoScheduler.observeOem(receivedAtUs);
-            syncLateEchoDiagnostics();
-        }
         const uint8_t oemCounter = static_cast<uint8_t>(frame.data[6] & 0x0F);
         if (lastSuccessfulEchoCounterValid)
         {
@@ -773,15 +662,6 @@ struct NagHandler : public CarManagerBase
         uint16_t sum = echo.data[0] + echo.data[1] + echo.data[2] + echo.data[3] + echo.data[4] + echo.data[5] + echo.data[6];
         echo.data[7] = static_cast<uint8_t>((sum + 0x73) & 0xFF);
 
-        if (lateEchoScheduler.enabled() && lateEchoScheduler.ready())
-        {
-            pendingLateEcho.frame = echo;
-            pendingLateEcho.decision = decision;
-            pendingLateEcho.torqueCentiNm = torqueCentiNm;
-            pendingLateEcho.valid = lateEchoScheduler.arm(receivedAtUs);
-            syncLateEchoDiagnostics();
-            return;
-        }
-        sendPreparedEcho(driver, echo, decision, torqueCentiNm, false);
+        sendPreparedEcho(driver, echo, decision, torqueCentiNm);
     }
 };

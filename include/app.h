@@ -239,14 +239,12 @@ template <typename Driver>
 static bool appLoop()
 {
     CarManagerBase *h = appActiveHandler ? appActiveHandler : appHandler.get();
-    bool processedTimedSend = false;
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD) && defined(DASH_RGB_STATUS_LED)
     appRefreshStatusLed(false);
 #endif
 #if defined(ESP32_DASHBOARD) && !defined(NATIVE_BUILD)
     const bool desiredWriteEnabled = canActive && !Update.isRunning() && !appCanRestartPreparing;
     appSyncCanWriteMode(desiredWriteEnabled);
-    processedTimedSend = h->serviceTimedSend(*appDriver, desiredWriteEnabled);
 #if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)
     BrakeStateView brakeView;
     if (!brakeStateMailbox.read(brakeView))
@@ -262,7 +260,7 @@ static bool appLoop()
     if (Update.isRunning())
     {
         delay(1);
-        return processedTimedSend;
+        return false;
     }
 
 #if defined(DASH_INJECTION_TOGGLE_PIN)
@@ -270,19 +268,18 @@ static bool appLoop()
 #endif
 #else
     appSyncCanWriteMode(true);
-    processedTimedSend = h->serviceTimedSend(*appDriver, true);
 #endif
 
     if constexpr (Driver::kSupportsISR)
     {
         if (!frameReady)
-            return processedTimedSend;
+            return false;
         frameReady = false;
     }
 
     CanFrame frame;
     uint8_t framesThisLoop = 0;
-    bool processedFrame = processedTimedSend;
+    bool processedFrame = false;
     for (;;)
     {
 #if defined(ESP_PLATFORM) && defined(BLE_BRIDGE)

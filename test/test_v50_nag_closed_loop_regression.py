@@ -7,7 +7,6 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_FILE = ROOT / "include/web/mcp2515_dashboard_ui.src.h"
 
 EXPECTED_CUSTOM_UI_IDS = (
-    "nag-custom-readiness", "nag-custom-readiness-reason",
     "nag-custom-dirty", "nag-custom-defaults", "nag-custom-save",
     "nag-pv-neg-min", "nag-pv-neg-max", "nag-pv-pos-min", "nag-pv-pos-max",
     "nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max",
@@ -15,9 +14,8 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-rest-min", "nag-rest-max", "nag-maintenance-enabled",
     "nag-corrective-send-min", "nag-corrective-send-max",
     "nag-corrective-pause-min", "nag-corrective-pause-max",
-    "nag-corrective-interval-ms",
     "nag-corrective-negative-frames", "nag-corrective-positive-frames",
-    "nag-late-echo-enabled",
+    "nag-activity-hint", "nag-steering-angle",
     "nag-h2-persistence-sec", "nag-pre-correction-pause-sec",
     "nag-stability-verify-sec",
     "nag-custom-hard-cap", "nag-custom-das-timeout",
@@ -25,12 +23,12 @@ EXPECTED_CUSTOM_UI_IDS = (
 
 EXPECTED_DIAGNOSTIC_UI_IDS = (
     "nag-diag-health", "nag-diag-reason",
-    "nag-diag-epas", "nag-diag-oem-torque", "nag-diag-counter",
+    "nag-diag-epas", "nag-diag-oem-torque", "nag-diag-angle", "nag-diag-counter",
     "nag-diag-das", "nag-diag-hos",
     "nag-diag-phase", "nag-diag-target", "nag-diag-direction",
     "nag-diag-timer", "nag-diag-burst",
     "nag-diag-tx", "nag-diag-last-tx", "nag-diag-collision",
-    "nag-diag-ack", "nag-diag-latency", "nag-diag-timeout",
+    "nag-diag-ack", "nag-diag-latency",
     "nag-diag-escalations", "nag-diag-events", "nag-diag-clear-events",
 )
 
@@ -54,19 +52,19 @@ EXPECTED_NVS_KEYS = (
     "nag_cr_n_min", "nag_cr_n_max", "nag_cr_p_min", "nag_cr_p_max",
     "nag_act_min", "nag_act_max", "nag_rel_min", "nag_rel_max",
     "nag_rst_min", "nag_rst_max", "nag_das_ms",
-    "nag_cs_min", "nag_cs_max", "nag_cp_min", "nag_cp_max", "nag_ci_ms",
+    "nag_cs_min", "nag_cs_max", "nag_cp_min", "nag_cp_max",
     "nag_h2_ms", "nag_pre_ms", "nag_stab_ms",
 )
 
 EXPECTED_NVS_DEFAULTS = {
-    "nag_pv_n_min": "1.70",
+    "nag_pv_n_min": "1.50",
     "nag_pv_n_max": "1.80",
-    "nag_pv_p_min": "1.70",
+    "nag_pv_p_min": "1.50",
     "nag_pv_p_max": "1.80",
     "nag_cr_n_min": "1.80",
-    "nag_cr_n_max": "2.00",
+    "nag_cr_n_max": "2.40",
     "nag_cr_p_min": "1.80",
-    "nag_cr_p_max": "2.00",
+    "nag_cr_p_max": "2.40",
     "nag_act_min": "2.0",
     "nag_act_max": "3.0",
     "nag_rel_min": "0.2",
@@ -77,10 +75,9 @@ EXPECTED_NVS_DEFAULTS = {
     "nag_cs_max": "3.0",
     "nag_cp_min": "1.0",
     "nag_cp_max": "2.0",
-    "nag_ci_ms": "1",
     "nag_das_ms": "750",
     "nag_h2_ms": "3000",
-    "nag_pre_ms": "500",
+    "nag_pre_ms": "1000",
     "nag_stab_ms": "5000",
 }
 
@@ -93,8 +90,7 @@ EXPECTED_CONFIG_FIELDS = (
     "releaseMinSec", "releaseMaxSec", "restMinSec", "restMaxSec",
     "correctiveSendMinSec", "correctiveSendMaxSec",
     "correctivePauseMinSec", "correctivePauseMaxSec",
-    "correctiveFrameIntervalMs",
-    "correctiveNegativeFrames", "correctivePositiveFrames", "lateEchoEnabled",
+    "correctiveNegativeFrames", "correctivePositiveFrames",
     "h2PersistenceSec", "preCorrectionPauseSec", "stabilityVerifySec",
     "dasFreshTimeoutMs",
 )
@@ -102,13 +98,15 @@ EXPECTED_CONFIG_FIELDS = (
 EXPECTED_STATUS_FIELDS = (
     "nagDasSeen", "nagDasFresh", "nagDasAgeMs", "nagDasHos",
     "nagDasFrames", "nagOemEpasFrames", "nagLastOemEpasAgeMs",
-    "nagLastOemEpasCounter", "nagObservedTorqueNm",
+    "nagLastOemEpasCounter", "nagSteeringAngleDeg", "nagObservedTorqueNm",
     "nagDirectionSource",
     "nagAdaptivePhase", "nagAdaptiveBlockReason",
     "nagAdaptiveTargetTorqueNm", "nagAdaptivePhaseRemainingMs",
     "nagCorrectiveAttempt", "nagCorrectiveBurstFrame",
-    "nagCorrectiveBurstFrameTarget", "nagHosEscalations",
-    "nagAcknowledgementCount", "nagAcknowledgementTimeouts",
+    "nagCorrectiveBurstFrameTarget", "nagCorrectiveSweepSign",
+    "nagCorrectiveSweepFrame", "nagCorrectiveSweepFrameTarget",
+    "nagCorrectiveSweepPeakNm", "nagHosEscalations",
+    "nagAcknowledgementCount",
     "nagLastAcknowledgementLatencyMs", "nagMaxAcknowledgementLatencyMs",
     "nagSendAttempts", "nagSendFailures", "nagEcho",
     "nagCounterCollisions", "nagLastCounterCollisionGapUs",
@@ -136,7 +134,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
 
         for text in (
             "预防层", "纠正层", "注入与停发间隔", "安全边界",
-            "间隔期不额外发送 0x370", "本地发送成功不等于 DAS 接受",
+            "每帧 OEM 最多 1 帧 Echo", "本地发送成功不等于 DAS 接受",
         ):
             self.assertIn(text, self.source)
         for retired in (
@@ -158,14 +156,14 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
     def test_custom_strategy_uses_structured_draft_and_explicit_save_contract(self):
         compact = re.sub(r"\s+", "", self.source)
         self.assertIn(
-            "constnagCustomDefaults={maintenanceEnabled:true,lateEchoEnabled:false,"
-            "preventiveNegative:[1.70,1.80],"
-            "preventivePositive:[1.70,1.80],correctiveNegative:[1.80,2.00],"
-            "correctivePositive:[1.80,2.00],correctiveNegativeFrames:50,"
-            "correctivePositiveFrames:50,activity:[2.0,3.0],"
+            "constnagCustomDefaults={maintenanceEnabled:true,"
+            "preventiveNegative:[1.50,1.80],"
+            "preventivePositive:[1.50,1.80],correctiveNegative:[1.80,2.40],"
+            "correctivePositive:[1.80,2.40],correctiveNegativeFrames:100,"
+            "correctivePositiveFrames:100,activity:[2.0,3.0],"
             "release:[0.2,0.4],rest:[0.0,0.0],h2PersistenceSec:3.0,"
-            "preCorrectionPauseSec:0.5,correctiveSend:[3.0,3.0],"
-            "correctivePause:[1.0,2.0],correctiveFrameIntervalMs:1,"
+            "preCorrectionPauseSec:1.0,correctiveSend:[3.0,3.0],"
+            "correctivePause:[1.0,2.0],"
             "stabilityVerifySec:5.0,dasFreshTimeoutMs:750};",
             compact,
         )
@@ -174,23 +172,21 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         self.assertIn("setNagCustomDirty(true);", compact)
         self.assertIn("newURLSearchParams()", compact)
         for field in EXPECTED_CONFIG_FIELDS:
-            self.assertIn(f"params.set('{field}'", self.source)
+            if field not in ("releaseMinSec", "releaseMaxSec"):
+                self.assertIn(f"params.set('{field}'", self.source)
+        self.assertNotIn("params.set('releaseMinSec'", self.source)
+        self.assertNotIn("params.set('releaseMaxSec'", self.source)
         self.assertIn("normalizeNagCustomDraft", self.source)
         self.assertIn("applyNagCustomResponse(data)", self.source)
         self.assertIn("setNagCustomDirty(false)", self.source)
         self.assertIn("if(!response.ok||!data.ok)thrownewError", compact)
         self.assertIn("保存失败，未保存修改仍保留", self.source)
 
-    def test_custom_strategy_readiness_mapping_is_fail_closed(self):
-        compact = re.sub(r"\s+", "", self.source)
-        self.assertIn("state.nagMode!==5", compact)
-        self.assertIn("'已关闭'", self.source)
-        self.assertIn("!d.nagDasFresh", compact)
-        self.assertIn("'等待 DAS'", self.source)
-        self.assertIn("phase==='fault-hold'", compact)
-        self.assertIn("'保护停发'", self.source)
-        self.assertIn("'就绪'", self.source)
-        self.assertIn("反馈失效，已停止自适应注入", self.source)
+    def test_redundant_custom_strategy_readiness_card_is_removed(self):
+        self.assertNotIn('id="nag-custom-readiness"', self.source)
+        self.assertNotIn('id="nag-custom-readiness-reason"', self.source)
+        self.assertNotIn("updateNagCustomReadiness", self.source)
+        self.assertIn('id="nag-diag-health"', self.source)
 
     def test_custom_strategy_blocks_unhydrated_defaults_and_exposes_retry(self):
         compact = re.sub(r"\s+", "", self.source)
@@ -257,7 +253,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "rest:'预防停发间隔',corrective:'纠正发送窗口',verify:'纠正停发窗口',"
             "'fault-hold':'保护停发','monitor-only':'仅监控纠正区',"
             "'h2-pending':'H2持续检测','pre-corrective-pause':'纠正前停发',"
-            "'stability-verify':'H1稳定确认'};",
+            "'stability-verify':'H0/H1稳定确认'};",
             compact,
         )
         for selector in (
@@ -290,7 +286,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         self.assertIn("letnagDiagnosticEvents=[]", compact)
         for field in (
             "nagDasFresh", "nagDasHos", "nagAdaptivePhase",
-            "nagAcknowledgementCount", "nagAcknowledgementTimeouts",
+            "nagAcknowledgementCount",
             "nagCounterCollisions",
         ):
             self.assertIn(f"'{field}'", self.source)
@@ -394,7 +390,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         for label in (
             "NAG 自适应闭环", "原车 EPAS 0x370", "原车扭矩", "原车计数器",
             "手握状态", "控制阶段", "目标扭矩", "方向来源", "阶段剩余时间",
-            "当前纠正窗口帧", "尝试 / 成功 / 失败", "DAS 确认次数",
+            "本窗口成功发送帧数", "尝试 / 成功 / 失败", "DAS 确认次数",
         ):
             self.assertIn(label, panel)
         for english in (
@@ -544,7 +540,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         equality = self.dashboard[equality_start:equality_end]
         for member in (
             "maintenanceEnabled",
-            "lateEchoEnabled", "correctivePositiveFrames", "correctiveNegativeFrames",
+            "correctivePositiveFrames", "correctiveNegativeFrames",
             "preventiveNegativeMinCentiNm", "preventiveNegativeMaxCentiNm",
             "preventivePositiveMinCentiNm", "preventivePositiveMaxCentiNm",
             "correctiveNegativeMinCentiNm", "correctiveNegativeMaxCentiNm",
@@ -594,8 +590,8 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "rest", "corrective", "verify", "fault-hold", "monitor-only",
             "h2-pending", "pre-corrective-pause", "stability-verify",
             "none", "das-missing", "das-stale", "no-direction", "das-state",
-            "ack-timeout", "direction-change", "maintenance-disabled",
-            "torque", "angle", "hold",
+            "steering-angle-limit", "maintenance-disabled",
+            "angle", "hold", "corrective-sweep",
         ):
             self.assertIn(f'return "{name}"', self.dashboard)
 

@@ -85,7 +85,7 @@ class FixRound2RegressionTests(unittest.TestCase):
         self.assertNotIn("snapshot.dasFresh ?", telemetry)
 
     def test_chinese_adaptive_section_matches_hos_closed_loop_contract(self) -> None:
-        start = self.readme_zh.index("### 模式 ADAPTIVE（V4.8-V13）")
+        start = self.readme_zh.index("### 模式 ADAPTIVE（V4.9-V13）")
         end = self.readme_zh.index("## WiFi / DNS 网关", start)
         section = self.readme_zh[start:end]
         for token in (
@@ -101,10 +101,10 @@ class FixRound2RegressionTests(unittest.TestCase):
             "FAULT_HOLD",
             "±2.50 Nm",
             "3 秒",
-            "500 ms",
+            "1 秒",
             "5 秒",
             "1～2 秒",
-            "1 ms",
+            "每个有效、非本机回显的 OEM `0x370` 最多立即发送一个 Counter+1 Echo",
             "VERIFY",
             "Gate B/C",
             "docs/nag-adaptive-closed-loop.md",
@@ -113,9 +113,10 @@ class FixRound2RegressionTests(unittest.TestCase):
         self.assertIn("HOS 6..15", section)
         self.assertIn("9..14 为未定义", section)
         self.assertIn("保护停发", section)
+        self.assertIn("角度绝对值大于 `50.0°` 停发", section)
+        self.assertIn("恰好 `±50.0°` 允许发送", section)
         self.assertNotIn("HOS 8..15", section)
         for obsolete in (
-            "50.0°",
             "45.0°",
             "默认预防幅值约为 `0.15 .. 0.18 Nm`",
             "执行 3..5 个成功发送帧",

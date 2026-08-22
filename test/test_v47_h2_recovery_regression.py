@@ -15,18 +15,18 @@ class V47H2RecoveryRegressionTests(unittest.TestCase):
         cls.version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
     def test_version_and_defaults_match_v47_contract(self):
-        self.assertEqual(self.version, "V4.8 V13")
+        self.assertEqual(self.version, "V4.9 V13")
         for declaration in (
             "uint32_t restMinMs = 0;", "uint32_t restMaxMs = 0;",
             "uint32_t h2PersistenceMs = 3000;",
-            "uint32_t preCorrectionPauseMs = 500;",
+            "uint32_t preCorrectionPauseMs = 1000;",
             "uint32_t stabilityVerifyMs = 5000;",
         ):
             self.assertIn(declaration, self.controller)
 
     def test_backend_persists_and_migrates_every_v47_timer(self):
         for key, default in (
-            ("nag_h2_ms", "3000"), ("nag_pre_ms", "500"),
+            ("nag_h2_ms", "3000"), ("nag_pre_ms", "1000"),
             ("nag_stab_ms", "5000"), ("nag_rst_min", "0.0"),
             ("nag_rst_max", "0.0"),
         ):
@@ -53,7 +53,7 @@ class V47H2RecoveryRegressionTests(unittest.TestCase):
             "nag-corrective-pause-max",
         ):
             self.assertRegex(self.source, rf'id="{element_id}"[^>]*min="0"')
-        for text in ("0 为关闭停发", "H2 连续检测", "纠正前停发", "H1 稳定确认"):
+        for text in ("0 为关闭停发", "H2 连续检测", "纠正前停发", "H0/H1 稳定确认"):
             self.assertIn(text, self.source)
 
     def test_action_bar_stays_in_page_flow_and_firmware_section_follows_it(self):
