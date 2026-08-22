@@ -54,9 +54,9 @@ EXPECTED_NVS_KEYS = (
 )
 
 EXPECTED_NVS_DEFAULTS = {
-    "nag_pv_n_min": "1.50",
+    "nag_pv_n_min": "1.70",
     "nag_pv_n_max": "1.80",
-    "nag_pv_p_min": "1.50",
+    "nag_pv_p_min": "1.70",
     "nag_pv_p_max": "1.80",
     "nag_cr_n_min": "1.80",
     "nag_cr_n_max": "2.00",
@@ -149,8 +149,8 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         compact = re.sub(r"\s+", "", self.source)
         self.assertIn(
             "constnagCustomDefaults={maintenanceEnabled:true,"
-            "preventiveNegative:[1.50,1.80],"
-            "preventivePositive:[1.50,1.80],correctiveNegative:[1.80,2.00],"
+            "preventiveNegative:[1.70,1.80],"
+            "preventivePositive:[1.70,1.80],correctiveNegative:[1.80,2.00],"
             "correctivePositive:[1.80,2.00],activity:[4.0,6.0],"
             "release:[0.2,0.4],rest:[2.0,3.0],correctiveSend:[4.0,6.0],"
             "correctivePause:[0.5,0.5],correctiveFrameIntervalMs:50,dasFreshTimeoutMs:750};",

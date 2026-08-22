@@ -17,7 +17,7 @@ The controller does not treat a successful local `driver.send()` as proof that D
 
 | HOS | Meaning | Adaptive action |
 |---:|---|---|
-| `0` | NOT_REQD | With maintenance enabled, inject `1.50..1.80 Nm` for a default 4..6 s, then send no additional frame for a default 2..3 s. With maintenance disabled, monitor only. |
+| `0` | NOT_REQD | With maintenance enabled, inject `1.70..1.80 Nm` for a default 4..6 s, then send no additional frame for a default 2..3 s. With maintenance disabled, monitor only. |
 | `1` | REQD_DETECTED | Same maintenance/monitor-only policy as H0. |
 | `2` | REQD_NOT_DETECTED | Same maintenance/monitor-only policy as H0. |
 | `3` | VISUAL | Immediately enter a default 4..6 s correction window at `1.80..2.00 Nm`, paced by a default 50 ms successful-send interval; if still H3..H5, pause for a default 500 ms and repeat. |
@@ -52,7 +52,7 @@ flowchart TB
     F -->|recovered + switch off| O
 ```
 
-`WAIT_DAS` requires fresh valid `0x39B`. `ARMING` requires three valid OEM `0x370` frames. With maintenance enabled, `MAINTENANCE` injects a `1.50..1.80 Nm` target on valid OEM frames for a default random 4..6 seconds. `REST` is a true no-send interval lasting a default random 2..3 seconds; it does not emit a `0 Nm` echo. With maintenance disabled, `MONITOR_ONLY` emits nothing during HOS `0..2`. `WAIT_DAS` and `FAULT_HOLD` also do not send.
+`WAIT_DAS` requires fresh valid `0x39B`. `ARMING` requires three valid OEM `0x370` frames. With maintenance enabled, `MAINTENANCE` injects a `1.70..1.80 Nm` target on valid OEM frames for a default random 4..6 seconds. `REST` is a true no-send interval lasting a default random 2..3 seconds; it does not emit a `0 Nm` echo. With maintenance disabled, `MONITOR_ONLY` emits nothing during HOS `0..2`. `WAIT_DAS` and `FAULT_HOLD` also do not send.
 
 HOS `3..5` clears the prior controller target and immediately enters a configurable correction window (default random 4..6 seconds). The controller selects one `1.80..2.00 Nm` magnitude per window and keeps it stable for that window. Successful corrective echoes are limited by a configurable interval (default 50 ms, approximately 20 frames/s). If fresh feedback is still H3..H5 at the end of the window, `VERIFY` sends no additional `0x370` for a configurable pause (default 500 ms) before the next correction window. This cycle has no attempt limit and ends immediately when fresh feedback returns to HOS `0..2`; with maintenance enabled, the controller begins the default 2..3-second preventive rest interval before any new preventive injection.
 
@@ -61,8 +61,8 @@ HOS `3..5` clears the prior controller target and immediately enters a configura
 | Parameter | Default | Configurable boundary | Notes |
 |---|---:|---:|---|
 | H0-H2 maintenance | Enabled | On/off | When off, H0-H2 is monitor-only; H3-H5 correction remains active. |
-| Preventive negative magnitude | `1.50..1.80 Nm` | `1.50..1.80 Nm` | Used opposite trusted positive OEM torque. |
-| Preventive positive magnitude | `1.50..1.80 Nm` | `1.50..1.80 Nm` | Used opposite trusted negative OEM torque. |
+| Preventive negative magnitude | `1.70..1.80 Nm` | `1.50..1.80 Nm` | Used opposite trusted positive OEM torque. |
+| Preventive positive magnitude | `1.70..1.80 Nm` | `1.50..1.80 Nm` | Used opposite trusted negative OEM torque. |
 | Corrective negative magnitude | `1.80..2.00 Nm` | `1.80..2.00 Nm` | HOS `3..5`. |
 | Corrective positive magnitude | `1.80..2.00 Nm` | `1.80..2.00 Nm` | HOS `3..5`. |
 | Direction threshold | None | Fixed | The deadband setting is removed; the first nonzero measured torque selects the opposite injection direction. |

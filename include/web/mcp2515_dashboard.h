@@ -727,7 +727,7 @@ static void dashSavePrefs()
         prefs.putString("nag_ci_ms", String(adaptive.correctiveFrameIntervalMs));
         prefs.remove("nag_dir_db");
         prefs.putString("nag_das_ms", String(adaptive.dasFreshTimeoutMs));
-        prefs.putUChar("nag_pol_v", 6);
+        prefs.putUChar("nag_pol_v", 7);
     }
 #endif
     prefs.putBool("auto_sleep", false);
@@ -868,9 +868,9 @@ static void dashLoadPrefs()
     {
         NagAdaptiveConfig adaptive;
         adaptive.maintenanceEnabled = prefs.getBool("nag_maint", true);
-        adaptive.preventiveNegativeMinCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_n_min", "1.50"), 150);
+        adaptive.preventiveNegativeMinCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_n_min", "1.70"), 170);
         adaptive.preventiveNegativeMaxCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_n_max", "1.80"), 180);
-        adaptive.preventivePositiveMinCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_p_min", "1.50"), 150);
+        adaptive.preventivePositiveMinCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_p_min", "1.70"), 170);
         adaptive.preventivePositiveMaxCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_p_max", "1.80"), 180);
         adaptive.correctiveNegativeMinCentiNm = dashNagParseNmCenti(prefs.getString("nag_cr_n_min", "1.80"), 180);
         adaptive.correctiveNegativeMaxCentiNm = dashNagParseNmCenti(prefs.getString("nag_cr_n_max", "2.00"), 200);
@@ -897,9 +897,9 @@ static void dashLoadPrefs()
         if (prefs.getUChar("nag_pol_v", 0) < 3)
         {
             adaptive = NagAdaptiveConfig{};
-            prefs.putString("nag_pv_n_min", "1.50");
+            prefs.putString("nag_pv_n_min", "1.70");
             prefs.putString("nag_pv_n_max", "1.80");
-            prefs.putString("nag_pv_p_min", "1.50");
+            prefs.putString("nag_pv_p_min", "1.70");
             prefs.putString("nag_pv_p_max", "1.80");
             prefs.putString("nag_cr_n_min", "1.80");
             prefs.putString("nag_cr_n_max", "2.00");
@@ -956,6 +956,23 @@ static void dashLoadPrefs()
             prefs.putString("nag_ci_ms", "50");
             prefs.putUChar("nag_pol_v", 6);
             dashLog("[BOOT] Migrated NAG policy to V6 configurable paced correction");
+        }
+        if (prefs.getUChar("nag_pol_v", 0) < 7)
+        {
+            if (adaptive.preventiveNegativeMinCentiNm == 150 &&
+                adaptive.preventiveNegativeMaxCentiNm == 180)
+            {
+                adaptive.preventiveNegativeMinCentiNm = 170;
+                prefs.putString("nag_pv_n_min", "1.70");
+            }
+            if (adaptive.preventivePositiveMinCentiNm == 150 &&
+                adaptive.preventivePositiveMaxCentiNm == 180)
+            {
+                adaptive.preventivePositiveMinCentiNm = 170;
+                prefs.putString("nag_pv_p_min", "1.70");
+            }
+            prefs.putUChar("nag_pol_v", 7);
+            dashLog("[BOOT] Migrated default prevention torque to V7 limits");
         }
         adaptive = NagAdaptiveController::normalizeConfig(adaptive);
         uint8_t storedMode = prefs.getUChar("nag_mode", NagHandler::MODE_ADAPTIVE);

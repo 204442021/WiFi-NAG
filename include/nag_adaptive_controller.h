@@ -7,9 +7,9 @@
 struct NagAdaptiveConfig
 {
     bool maintenanceEnabled = true;
-    int16_t preventiveNegativeMinCentiNm = 150;
+    int16_t preventiveNegativeMinCentiNm = 170;
     int16_t preventiveNegativeMaxCentiNm = 180;
-    int16_t preventivePositiveMinCentiNm = 150;
+    int16_t preventivePositiveMinCentiNm = 170;
     int16_t preventivePositiveMaxCentiNm = 180;
     int16_t correctiveNegativeMinCentiNm = 180;
     int16_t correctiveNegativeMaxCentiNm = 200;

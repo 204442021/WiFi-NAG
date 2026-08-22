@@ -1389,7 +1389,8 @@ void test_new_pulsed_policy_defaults_and_bounds()
 {
     const NagAdaptiveConfig defaults;
     TEST_ASSERT_TRUE(defaults.maintenanceEnabled);
-    TEST_ASSERT_EQUAL_INT16(150, defaults.preventiveNegativeMinCentiNm);
+    TEST_ASSERT_EQUAL_INT16(170, defaults.preventiveNegativeMinCentiNm);
+    TEST_ASSERT_EQUAL_INT16(170, defaults.preventivePositiveMinCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, defaults.preventivePositiveMaxCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, defaults.correctiveNegativeMinCentiNm);
     TEST_ASSERT_EQUAL_INT16(200, defaults.correctivePositiveMaxCentiNm);
