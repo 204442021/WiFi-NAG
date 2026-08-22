@@ -727,7 +727,7 @@ static void dashSavePrefs()
         prefs.putString("nag_ci_ms", String(adaptive.correctiveFrameIntervalMs));
         prefs.remove("nag_dir_db");
         prefs.putString("nag_das_ms", String(adaptive.dasFreshTimeoutMs));
-        prefs.putUChar("nag_pol_v", 7);
+        prefs.putUChar("nag_pol_v", 8);
     }
 #endif
     prefs.putBool("auto_sleep", false);
@@ -876,17 +876,17 @@ static void dashLoadPrefs()
         adaptive.correctiveNegativeMaxCentiNm = dashNagParseNmCenti(prefs.getString("nag_cr_n_max", "2.00"), 200);
         adaptive.correctivePositiveMinCentiNm = dashNagParseNmCenti(prefs.getString("nag_cr_p_min", "1.80"), 180);
         adaptive.correctivePositiveMaxCentiNm = dashNagParseNmCenti(prefs.getString("nag_cr_p_max", "2.00"), 200);
-        adaptive.activityMinMs = dashNagParseSecondsMs(prefs.getString("nag_act_min", "4.0"), 4000);
-        adaptive.activityMaxMs = dashNagParseSecondsMs(prefs.getString("nag_act_max", "6.0"), 6000);
+        adaptive.activityMinMs = dashNagParseSecondsMs(prefs.getString("nag_act_min", "2.0"), 2000);
+        adaptive.activityMaxMs = dashNagParseSecondsMs(prefs.getString("nag_act_max", "3.0"), 3000);
         adaptive.releaseMinMs = dashNagParseSecondsMs(prefs.getString("nag_rel_min", "0.2"), 200);
         adaptive.releaseMaxMs = dashNagParseSecondsMs(prefs.getString("nag_rel_max", "0.4"), 400);
-        adaptive.restMinMs = dashNagParseSecondsMs(prefs.getString("nag_rst_min", "2.0"), 2000);
-        adaptive.restMaxMs = dashNagParseSecondsMs(prefs.getString("nag_rst_max", "3.0"), 3000);
-        adaptive.correctiveSendMinMs = dashNagParseSecondsMs(prefs.getString("nag_cs_min", "4.0"), 4000);
-        adaptive.correctiveSendMaxMs = dashNagParseSecondsMs(prefs.getString("nag_cs_max", "6.0"), 6000);
-        adaptive.correctivePauseMinMs = dashNagParseSecondsMs(prefs.getString("nag_cp_min", "0.5"), 500);
-        adaptive.correctivePauseMaxMs = dashNagParseSecondsMs(prefs.getString("nag_cp_max", "0.5"), 500);
-        adaptive.correctiveFrameIntervalMs = dashNagParseMilliseconds(prefs.getString("nag_ci_ms", "50"), 50);
+        adaptive.restMinMs = dashNagParseSecondsMs(prefs.getString("nag_rst_min", "4.0"), 4000);
+        adaptive.restMaxMs = dashNagParseSecondsMs(prefs.getString("nag_rst_max", "5.0"), 5000);
+        adaptive.correctiveSendMinMs = dashNagParseSecondsMs(prefs.getString("nag_cs_min", "3.0"), 3000);
+        adaptive.correctiveSendMaxMs = dashNagParseSecondsMs(prefs.getString("nag_cs_max", "3.0"), 3000);
+        adaptive.correctivePauseMinMs = dashNagParseSecondsMs(prefs.getString("nag_cp_min", "1.0"), 1000);
+        adaptive.correctivePauseMaxMs = dashNagParseSecondsMs(prefs.getString("nag_cp_max", "2.0"), 2000);
+        adaptive.correctiveFrameIntervalMs = dashNagParseMilliseconds(prefs.getString("nag_ci_ms", "1"), 1);
         adaptive.dasFreshTimeoutMs = dashNagParseMilliseconds(prefs.getString("nag_das_ms", "750"), 750);
         if (adaptive.dasFreshTimeoutMs == 500)
         {
@@ -973,6 +973,46 @@ static void dashLoadPrefs()
             }
             prefs.putUChar("nag_pol_v", 7);
             dashLog("[BOOT] Migrated default prevention torque to V7 limits");
+        }
+        if (prefs.getUChar("nag_pol_v", 0) < 8)
+        {
+            if (adaptive.activityMinMs == 4000 && adaptive.activityMaxMs == 6000)
+            {
+                adaptive.activityMinMs = 2000;
+                adaptive.activityMaxMs = 3000;
+                prefs.putString("nag_act_min", "2.0");
+                prefs.putString("nag_act_max", "3.0");
+            }
+            if (adaptive.restMinMs == 2000 && adaptive.restMaxMs == 3000)
+            {
+                adaptive.restMinMs = 4000;
+                adaptive.restMaxMs = 5000;
+                prefs.putString("nag_rst_min", "4.0");
+                prefs.putString("nag_rst_max", "5.0");
+            }
+            if (adaptive.correctiveSendMinMs == 4000 &&
+                adaptive.correctiveSendMaxMs == 6000)
+            {
+                adaptive.correctiveSendMinMs = 3000;
+                adaptive.correctiveSendMaxMs = 3000;
+                prefs.putString("nag_cs_min", "3.0");
+                prefs.putString("nag_cs_max", "3.0");
+            }
+            if (adaptive.correctivePauseMinMs == 500 &&
+                adaptive.correctivePauseMaxMs == 500)
+            {
+                adaptive.correctivePauseMinMs = 1000;
+                adaptive.correctivePauseMaxMs = 2000;
+                prefs.putString("nag_cp_min", "1.0");
+                prefs.putString("nag_cp_max", "2.0");
+            }
+            if (adaptive.correctiveFrameIntervalMs == 50)
+            {
+                adaptive.correctiveFrameIntervalMs = 1;
+                prefs.putString("nag_ci_ms", "1");
+            }
+            prefs.putUChar("nag_pol_v", 8);
+            dashLog("[BOOT] Migrated NAG timing defaults to V8 limits");
         }
         adaptive = NagAdaptiveController::normalizeConfig(adaptive);
         uint8_t storedMode = prefs.getUChar("nag_mode", NagHandler::MODE_ADAPTIVE);

@@ -56,15 +56,15 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
         self.assertIn('prefs.remove("nag_dir_db")', self.dashboard)
 
     def test_prevention_and_correction_use_confirmed_pulse_windows(self):
-        self.assertIn("uint32_t activityMinMs = 4000;", self.controller)
-        self.assertIn("uint32_t activityMaxMs = 6000;", self.controller)
-        self.assertIn("uint32_t restMinMs = 2000;", self.controller)
-        self.assertIn("uint32_t restMaxMs = 3000;", self.controller)
-        self.assertIn("uint32_t correctiveSendMinMs = 4000;", self.controller)
-        self.assertIn("uint32_t correctiveSendMaxMs = 6000;", self.controller)
-        self.assertIn("uint32_t correctivePauseMinMs = 500;", self.controller)
-        self.assertIn("uint32_t correctivePauseMaxMs = 500;", self.controller)
-        self.assertIn("uint32_t correctiveFrameIntervalMs = 50;", self.controller)
+        self.assertIn("uint32_t activityMinMs = 2000;", self.controller)
+        self.assertIn("uint32_t activityMaxMs = 3000;", self.controller)
+        self.assertIn("uint32_t restMinMs = 4000;", self.controller)
+        self.assertIn("uint32_t restMaxMs = 5000;", self.controller)
+        self.assertIn("uint32_t correctiveSendMinMs = 3000;", self.controller)
+        self.assertIn("uint32_t correctiveSendMaxMs = 3000;", self.controller)
+        self.assertIn("uint32_t correctivePauseMinMs = 1000;", self.controller)
+        self.assertIn("uint32_t correctivePauseMaxMs = 2000;", self.controller)
+        self.assertIn("uint32_t correctiveFrameIntervalMs = 1;", self.controller)
 
     def test_prevention_timing_uses_recommended_defaults_without_business_clamps(self):
         self.assertNotIn(

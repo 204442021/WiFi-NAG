@@ -62,17 +62,17 @@ EXPECTED_NVS_DEFAULTS = {
     "nag_cr_n_max": "2.00",
     "nag_cr_p_min": "1.80",
     "nag_cr_p_max": "2.00",
-    "nag_act_min": "4.0",
-    "nag_act_max": "6.0",
+    "nag_act_min": "2.0",
+    "nag_act_max": "3.0",
     "nag_rel_min": "0.2",
     "nag_rel_max": "0.4",
-    "nag_rst_min": "2.0",
-    "nag_rst_max": "3.0",
-    "nag_cs_min": "4.0",
-    "nag_cs_max": "6.0",
-    "nag_cp_min": "0.5",
-    "nag_cp_max": "0.5",
-    "nag_ci_ms": "50",
+    "nag_rst_min": "4.0",
+    "nag_rst_max": "5.0",
+    "nag_cs_min": "3.0",
+    "nag_cs_max": "3.0",
+    "nag_cp_min": "1.0",
+    "nag_cp_max": "2.0",
+    "nag_ci_ms": "1",
     "nag_das_ms": "750",
 }
 
@@ -151,9 +151,9 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "constnagCustomDefaults={maintenanceEnabled:true,"
             "preventiveNegative:[1.70,1.80],"
             "preventivePositive:[1.70,1.80],correctiveNegative:[1.80,2.00],"
-            "correctivePositive:[1.80,2.00],activity:[4.0,6.0],"
-            "release:[0.2,0.4],rest:[2.0,3.0],correctiveSend:[4.0,6.0],"
-            "correctivePause:[0.5,0.5],correctiveFrameIntervalMs:50,dasFreshTimeoutMs:750};",
+            "correctivePositive:[1.80,2.00],activity:[2.0,3.0],"
+            "release:[0.2,0.4],rest:[4.0,5.0],correctiveSend:[3.0,3.0],"
+            "correctivePause:[1.0,2.0],correctiveFrameIntervalMs:1,dasFreshTimeoutMs:750};",
             compact,
         )
         self.assertIn("letnagCustomDraft=cloneNagCustomDefaults();", compact)

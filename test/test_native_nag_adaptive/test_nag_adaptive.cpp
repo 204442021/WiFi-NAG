@@ -1394,15 +1394,15 @@ void test_new_pulsed_policy_defaults_and_bounds()
     TEST_ASSERT_EQUAL_INT16(180, defaults.preventivePositiveMaxCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, defaults.correctiveNegativeMinCentiNm);
     TEST_ASSERT_EQUAL_INT16(200, defaults.correctivePositiveMaxCentiNm);
-    TEST_ASSERT_EQUAL_UINT32(4000U, defaults.activityMinMs);
-    TEST_ASSERT_EQUAL_UINT32(6000U, defaults.activityMaxMs);
-    TEST_ASSERT_EQUAL_UINT32(2000U, defaults.restMinMs);
-    TEST_ASSERT_EQUAL_UINT32(3000U, defaults.restMaxMs);
-    TEST_ASSERT_EQUAL_UINT32(4000U, defaults.correctiveSendMinMs);
-    TEST_ASSERT_EQUAL_UINT32(6000U, defaults.correctiveSendMaxMs);
-    TEST_ASSERT_EQUAL_UINT32(500U, defaults.correctivePauseMinMs);
-    TEST_ASSERT_EQUAL_UINT32(500U, defaults.correctivePauseMaxMs);
-    TEST_ASSERT_EQUAL_UINT32(50U, defaults.correctiveFrameIntervalMs);
+    TEST_ASSERT_EQUAL_UINT32(2000U, defaults.activityMinMs);
+    TEST_ASSERT_EQUAL_UINT32(3000U, defaults.activityMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(4000U, defaults.restMinMs);
+    TEST_ASSERT_EQUAL_UINT32(5000U, defaults.restMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(3000U, defaults.correctiveSendMinMs);
+    TEST_ASSERT_EQUAL_UINT32(3000U, defaults.correctiveSendMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(1000U, defaults.correctivePauseMinMs);
+    TEST_ASSERT_EQUAL_UINT32(2000U, defaults.correctivePauseMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(1U, defaults.correctiveFrameIntervalMs);
 
     NagAdaptiveConfig invalid;
     invalid.preventiveNegativeMinCentiNm = 1;

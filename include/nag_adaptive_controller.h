@@ -15,17 +15,17 @@ struct NagAdaptiveConfig
     int16_t correctiveNegativeMaxCentiNm = 200;
     int16_t correctivePositiveMinCentiNm = 180;
     int16_t correctivePositiveMaxCentiNm = 200;
-    uint32_t activityMinMs = 4000;
-    uint32_t activityMaxMs = 6000;
+    uint32_t activityMinMs = 2000;
+    uint32_t activityMaxMs = 3000;
     uint32_t releaseMinMs = 200;
     uint32_t releaseMaxMs = 400;
-    uint32_t restMinMs = 2000;
-    uint32_t restMaxMs = 3000;
-    uint32_t correctiveSendMinMs = 4000;
-    uint32_t correctiveSendMaxMs = 6000;
-    uint32_t correctivePauseMinMs = 500;
-    uint32_t correctivePauseMaxMs = 500;
-    uint32_t correctiveFrameIntervalMs = 50;
+    uint32_t restMinMs = 4000;
+    uint32_t restMaxMs = 5000;
+    uint32_t correctiveSendMinMs = 3000;
+    uint32_t correctiveSendMaxMs = 3000;
+    uint32_t correctivePauseMinMs = 1000;
+    uint32_t correctivePauseMaxMs = 2000;
+    uint32_t correctiveFrameIntervalMs = 1;
     uint32_t dasFreshTimeoutMs = 750;
 };
 

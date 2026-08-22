@@ -17,10 +17,10 @@ The controller does not treat a successful local `driver.send()` as proof that D
 
 | HOS | Meaning | Adaptive action |
 |---:|---|---|
-| `0` | NOT_REQD | With maintenance enabled, inject `1.70..1.80 Nm` for a default 4..6 s, then send no additional frame for a default 2..3 s. With maintenance disabled, monitor only. |
+| `0` | NOT_REQD | With maintenance enabled, inject `1.70..1.80 Nm` for a default 2..3 s, then send no additional frame for a default 4..5 s. With maintenance disabled, monitor only. |
 | `1` | REQD_DETECTED | Same maintenance/monitor-only policy as H0. |
 | `2` | REQD_NOT_DETECTED | Same maintenance/monitor-only policy as H0. |
-| `3` | VISUAL | Immediately enter a default 4..6 s correction window at `1.80..2.00 Nm`, paced by a default 50 ms successful-send interval; if still H3..H5, pause for a default 500 ms and repeat. |
+| `3` | VISUAL | Immediately enter a default fixed 3 s correction window at `1.80..2.00 Nm`, paced by a default 1 ms successful-send interval; if still H3..H5, pause for a default 1..2 s and repeat. |
 | `4` | CHIME_1 | Same pulsed corrective action as H3. |
 | `5` | CHIME_2 | Same pulsed corrective action as H3. |
 | `6` | SLOWING | Stop sending and enter fail-closed protection hold. |
@@ -52,9 +52,9 @@ flowchart TB
     F -->|recovered + switch off| O
 ```
 
-`WAIT_DAS` requires fresh valid `0x39B`. `ARMING` requires three valid OEM `0x370` frames. With maintenance enabled, `MAINTENANCE` injects a `1.70..1.80 Nm` target on valid OEM frames for a default random 4..6 seconds. `REST` is a true no-send interval lasting a default random 2..3 seconds; it does not emit a `0 Nm` echo. With maintenance disabled, `MONITOR_ONLY` emits nothing during HOS `0..2`. `WAIT_DAS` and `FAULT_HOLD` also do not send.
+`WAIT_DAS` requires fresh valid `0x39B`. `ARMING` requires three valid OEM `0x370` frames. With maintenance enabled, `MAINTENANCE` injects a `1.70..1.80 Nm` target on valid OEM frames for a default random 2..3 seconds. `REST` is a true no-send interval lasting a default random 4..5 seconds; it does not emit a `0 Nm` echo. With maintenance disabled, `MONITOR_ONLY` emits nothing during HOS `0..2`. `WAIT_DAS` and `FAULT_HOLD` also do not send.
 
-HOS `3..5` clears the prior controller target and immediately enters a configurable correction window (default random 4..6 seconds). The controller selects one `1.80..2.00 Nm` magnitude per window and keeps it stable for that window. Successful corrective echoes are limited by a configurable interval (default 50 ms, approximately 20 frames/s). If fresh feedback is still H3..H5 at the end of the window, `VERIFY` sends no additional `0x370` for a configurable pause (default 500 ms) before the next correction window. This cycle has no attempt limit and ends immediately when fresh feedback returns to HOS `0..2`; with maintenance enabled, the controller begins the default 2..3-second preventive rest interval before any new preventive injection.
+HOS `3..5` clears the prior controller target and immediately enters a configurable correction window (default fixed 3 seconds). The controller selects one `1.80..2.00 Nm` magnitude per window and keeps it stable for that window. Successful corrective echoes are limited by a configurable interval (default 1 ms). If fresh feedback is still H3..H5 at the end of the window, `VERIFY` sends no additional `0x370` for a configurable pause (default random 1..2 seconds) before the next correction window. This cycle has no attempt limit and ends immediately when fresh feedback returns to HOS `0..2`; with maintenance enabled, the controller begins the default 4..5-second preventive rest interval before any new preventive injection.
 
 ## Defaults and configuration limits
 
@@ -68,12 +68,12 @@ HOS `3..5` clears the prior controller target and immediately enters a configura
 | Direction threshold | None | Fixed | The deadband setting is removed; the first nonzero measured torque selects the opposite injection direction. |
 | Direction reversal confirmation | `100 ms` | Fixed | Opposite measured torque must remain stable before the sign flips; no old-direction frame is sent while confirmation is pending. |
 | Angle fallback threshold | `1.0 deg` | Fixed | Used only before a trusted torque direction exists; no direction means no send. |
-| Preventive activity window | `4.0..6.0 s` | `0.1 s..uint32 ms max` | Every valid OEM frame is eligible. |
+| Preventive activity window | `2.0..3.0 s` | `0.1 s..uint32 ms max` | Every valid OEM frame is eligible. |
 | Smooth release | Retained for API compatibility | `0.1..1.0 s` | Not used by the pulsed policy. |
-| Preventive no-send interval | `2.0..3.0 s` | `0.1 s..uint32 ms max` | No additional `0x370` is emitted. |
-| Corrective send window | `4.0..6.0 s` | `0.1 s..uint32 ms max` | H3..H5 only; one torque magnitude is held for the whole window. |
-| Corrective no-send interval | `0.5..0.5 s` | `0.1 s..uint32 ms max` | Used between corrective send windows while H3..H5 remains active. |
-| Corrective frame interval | `50 ms` | `1..uint32 ms max` | Limits successful corrective injections; default is about 20 frames/s. |
+| Preventive no-send interval | `4.0..5.0 s` | `0.1 s..uint32 ms max` | No additional `0x370` is emitted. |
+| Corrective send window | `3.0..3.0 s` | `0.1 s..uint32 ms max` | H3..H5 only; one torque magnitude is held for the whole window. |
+| Corrective no-send interval | `1.0..2.0 s` | `0.1 s..uint32 ms max` | Used between corrective send windows while H3..H5 remains active. |
+| Corrective frame interval | `1 ms` | `1..uint32 ms max` | Limits successful corrective injections; actual rate remains bounded by valid OEM `0x370` arrivals. |
 | DAS freshness timeout | `750 ms` | `100..2000 ms` | Allows margin for the observed ~500 ms DAS broadcast interval; stale feedback immediately returns to `WAIT_DAS`. |
 | EPAS gap rearm | `200 ms` | Fixed | A longer gap requires three valid OEM frames again. |
 | Fault recovery | HOS `0..2` for `2000 ms` | Fixed | Toggling NAG off and on also resets the controller. |
@@ -97,7 +97,7 @@ The controller may recover from fault hold only after fresh HOS `0..2` remains c
 | Layer | Fields | Interpretation |
 |---|---|---|
 | Local attempt | `nagSendAttempts` | The handler called the CAN driver for an eligible echo. This is not evidence of bus delivery or DAS acceptance. |
-| Local failure | `nagSendFailures` | The driver rejected/failed an attempted send. The current correction window continues while HOS is `3..5`; scheduled 500 ms no-send intervals still occur. |
+| Local failure | `nagSendFailures` | The driver rejected/failed an attempted send. The current correction window continues while HOS is `3..5`; scheduled 1..2-second no-send intervals still occur. |
 | Local success | `nagEcho` and last injected torque/age | The driver accepted the echo locally. It is still not a DAS acknowledgement. |
 | DAS response | `nagAcknowledgementCount`, last/max latency | HOS actually returned from a corrective state to `0..2`; timeout counting is retained only for telemetry compatibility. |
 
@@ -109,8 +109,8 @@ The custom-policy page has a readiness banner followed by four policy sections:
 
 1. Preventive layer: default-on H0-H2 maintenance switch and independent negative/positive min/max magnitude.
 2. Corrective layer: independent negative/positive min/max magnitude.
-3. Preventive timing: default 4..6-second injection duration and 2..3-second no-send duration.
-4. Corrective timing: independently configurable send/pause windows and successful-frame interval, defaulting to 4..6 seconds, 500 ms, and 50 ms.
+3. Preventive timing: default 2..3-second injection duration and 4..5-second no-send duration.
+4. Corrective timing: independently configurable send/pause windows and successful-frame interval, defaulting to 3 seconds, 1..2 seconds, and 1 ms.
 5. Safety boundary: read-only correction-only `+/-2.00 Nm` hard cap, `750 ms` recommended DAS timeout, no direction-deadband setting, and the no-extra-frame rest rule.
 
 Editing an input changes only the browser draft and shows an unsaved indicator. Restore recommended values loads the documented defaults into that draft and also remains unsaved. Only Save custom policy POSTs the normalized draft and persists it; success reloads the normalized response and clears dirty state, while failure preserves the unsaved draft.
