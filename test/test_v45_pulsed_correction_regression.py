@@ -21,10 +21,10 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
 
-    def test_internal_and_runtime_version_advance_to_v4_5_v13(self):
-        self.assertEqual(self.version, "V4.5 V13")
-        self.assertNotIn("V4.4 V13", self.ui)
-        self.assertGreaterEqual(self.ui.count("V4.5 V13"), 3)
+    def test_internal_and_runtime_version_advance_to_v4_6_v13(self):
+        self.assertEqual(self.version, "V4.6 V13")
+        self.assertNotIn("V4.5 V13", self.ui)
+        self.assertGreaterEqual(self.ui.count("V4.6 V13"), 3)
 
     def test_maintenance_switch_is_default_on_and_crosses_every_config_boundary(self):
         self.assertIn("bool maintenanceEnabled = true;", self.controller)
@@ -56,12 +56,15 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
         self.assertIn('prefs.remove("nag_dir_db")', self.dashboard)
 
     def test_prevention_and_correction_use_confirmed_pulse_windows(self):
-        self.assertIn("uint32_t activityMinMs = 1000;", self.controller)
-        self.assertIn("uint32_t activityMaxMs = 2000;", self.controller)
-        self.assertIn("uint32_t restMinMs = 3000;", self.controller)
-        self.assertIn("uint32_t restMaxMs = 5000;", self.controller)
-        self.assertIn("kCorrectiveSendMs = 1000", self.controller)
-        self.assertIn("kCorrectivePauseMs = 500", self.controller)
+        self.assertIn("uint32_t activityMinMs = 4000;", self.controller)
+        self.assertIn("uint32_t activityMaxMs = 6000;", self.controller)
+        self.assertIn("uint32_t restMinMs = 2000;", self.controller)
+        self.assertIn("uint32_t restMaxMs = 3000;", self.controller)
+        self.assertIn("uint32_t correctiveSendMinMs = 4000;", self.controller)
+        self.assertIn("uint32_t correctiveSendMaxMs = 6000;", self.controller)
+        self.assertIn("uint32_t correctivePauseMinMs = 500;", self.controller)
+        self.assertIn("uint32_t correctivePauseMaxMs = 500;", self.controller)
+        self.assertIn("uint32_t correctiveFrameIntervalMs = 50;", self.controller)
 
     def test_prevention_timing_uses_recommended_defaults_without_business_clamps(self):
         self.assertNotIn(

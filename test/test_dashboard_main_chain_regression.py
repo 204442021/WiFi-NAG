@@ -27,6 +27,9 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max",
     "nag-active-min", "nag-active-max",
     "nag-rest-min", "nag-rest-max", "nag-maintenance-enabled",
+    "nag-corrective-send-min", "nag-corrective-send-max",
+    "nag-corrective-pause-min", "nag-corrective-pause-max",
+    "nag-corrective-interval-ms",
     "nag-custom-hard-cap", "nag-custom-das-timeout",
 )
 
@@ -252,14 +255,14 @@ class DashboardMainChainRegressionTests(unittest.TestCase):
         self.assertIn("setWifiNagPage", self.source)
         self.assertIn(".bottom-nav", self.source)
 
-    def test_custom_strategy_fixed_actionbar_and_accessible_status_contract(self) -> None:
+    def test_custom_strategy_inline_actionbar_and_accessible_status_contract(self) -> None:
         compact = re.sub(r"\s+", "", self.source)
         self.assertIn("body.ui-shell#config-card{overflow:visible}", compact)
         self.assertNotIn(".ui-main-card{overflow:visible}", compact)
-        self.assertIn(".nag-custom-actionbar{position:fixed", compact)
-        self.assertIn("z-index:49", compact)
+        self.assertIn(".nag-custom-actionbar{position:static", compact)
+        self.assertNotIn(".nag-custom-actionbar{position:fixed", compact)
         self.assertIn(".nag-custom-shell{", compact)
-        self.assertRegex(compact, r"\.nag-custom-shell\{[^}]*padding-bottom:")
+        self.assertNotRegex(compact, r"\.nag-custom-shell\{[^}]*padding-bottom:")
         for element_id in (
             "nag-custom-readiness", "nag-custom-readiness-reason",
             "nag-custom-dirty", "nag-adaptive-msg",

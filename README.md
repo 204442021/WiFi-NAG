@@ -72,12 +72,12 @@ The only active CAN write behavior is Nag echo on `0x370 / 880`. DAS `0x39B / 92
 - Range is clamped to `-1.80 .. +1.80 Nm`.
 - If min is greater than max, values are automatically swapped.
 
-### Mode ADAPTIVE (V4.5-V13 closed loop)
+### Mode ADAPTIVE (V4.6-V13 closed loop)
 
 - Requires fresh DAS HOS feedback from read-only `0x39B` and three valid OEM `0x370` frames before sending.
-- Treats HOS `0..2` as normal: with the default-on maintenance switch enabled, every valid OEM `0x370` gets a random `1.50..1.80 Nm` echo for `1..2 s`, followed by `3..5 s` with no injected frame. Turning maintenance off makes HOS `0..2` monitor-only while correction remains armed.
-- Treats HOS `3..5` as pulsed correction: the previous target is cleared, then valid OEM frames get random `1.80..2.00 Nm` echoes for `1 s`; if HOS is still `3..5`, the controller sends nothing for `500 ms` and repeats until DAS returns to `0..2`.
-- Returning to HOS `0..2` immediately ends correction and starts the preventive `3..5 s` no-send interval. Stale DAS feedback or HOS `6..15` still fails closed.
+- Treats HOS `0..2` as normal: with the default-on maintenance switch enabled, valid OEM `0x370` frames receive `1.50..1.80 Nm` echoes for a default `4..6 s`, followed by a default `2..3 s` with no injected frame. Turning maintenance off makes HOS `0..2` monitor-only while correction remains armed.
+- Treats HOS `3..5` as paced correction: the previous target is cleared, one `1.80..2.00 Nm` magnitude is chosen for the whole correction window, and successful echoes are limited by a configurable interval (default `50 ms`). The default send window is `4..6 s`; if HOS is still `3..5`, the controller sends nothing for a configurable default `500 ms` and repeats until DAS returns to `0..2`.
+- Returning to HOS `0..2` immediately ends correction and starts the preventive `2..3 s` no-send interval. Stale DAS feedback or HOS `6..15` still fails closed.
 - Selects injection direction opposite the first nonzero measured steering torque, with angle fallback only before a torque direction is known. A reversal must remain stable for `100 ms`; the old direction is not sent while reversal is pending.
 - Corrective output alone may reach `-2.00..+2.00 Nm`; maintenance and legacy output remain clamped to `-1.80..+1.80 Nm`. HOS `6..15` still stops transmission immediately.
 - The rest interval does not transmit an additional `0x370`; it is true no-send time, not a `0 Nm` injection.
@@ -102,7 +102,7 @@ The WebUI provides:
 
 - CAN status, RX/TX/errors, FPS, uptime
 - CAN Write toggle
-- Nag mode, A_V2 range, and V4.5-V13 ADAPTIVE closed-loop policy controls
+- Nag mode, A_V2 range, and V4.6-V13 ADAPTIVE closed-loop policy controls
 - Four-layer NAG diagnostics for OEM input, controller decisions, local TX, and DAS response
 - AP hotspot settings
 - WiFi scan/connect/delete

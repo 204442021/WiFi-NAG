@@ -647,29 +647,38 @@ void test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix()
         if (representativeIndex >= 0 && !representativeAcknowledged[representativeIndex])
         {
             uint32_t nowMs = epasStartMs + 30U;
+            const uint32_t correctionEndAt = epasStartMs + 20U +
+                                             initialSnapshot.phaseRemainingMs;
+            uint32_t lastSuccessfulAtMs = epasStartMs + 20U;
             uint8_t nextCounter = static_cast<uint8_t>((counter2 + 1U) & 0x0FU);
-            while (nowMs < NagAdaptiveController::kCorrectiveSendMs)
+            while (nowMs < correctionEndAt)
             {
                 if (nowMs % 200U == 0)
                     handleAt(handler, driver, makeDasFrame(hos), nowMs);
                 const size_t sentBefore = driver.sent.size();
                 handleAt(handler, driver,
                          makeLiteralEpasFrame(nextCounter, observedTorqueCentiNm), nowMs);
-                TEST_ASSERT_EQUAL(sentBefore + 1U, driver.sent.size());
-                const CanFrame &burstEcho = driver.sent.back();
-                assertLiteralChecksum(burstEcho);
-                const int16_t burstTorqueCentiNm = readLiteralTorqueCentiNm(burstEcho);
-                TEST_ASSERT_TRUE(burstTorqueCentiNm >= -200 && burstTorqueCentiNm <= 200);
-                TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>((nextCounter + 1U) & 0x0FU),
-                                        burstEcho.data[6] & 0x0F);
-                if (observedTorqueCentiNm > 0)
-                    TEST_ASSERT_TRUE(burstTorqueCentiNm < 0);
+                if (static_cast<uint32_t>(nowMs - lastSuccessfulAtMs) >=
+                    handler.adaptiveConfig().correctiveFrameIntervalMs)
+                {
+                    TEST_ASSERT_EQUAL(sentBefore + 1U, driver.sent.size());
+                    const CanFrame &burstEcho = driver.sent.back();
+                    assertLiteralChecksum(burstEcho);
+                    const int16_t burstTorqueCentiNm = readLiteralTorqueCentiNm(burstEcho);
+                    TEST_ASSERT_EQUAL_INT16(sentTorqueCentiNm, burstTorqueCentiNm);
+                    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>((nextCounter + 1U) & 0x0FU),
+                                            burstEcho.data[6] & 0x0F);
+                    lastSuccessfulAtMs = nowMs;
+                }
                 else
-                    TEST_ASSERT_TRUE(burstTorqueCentiNm > 0);
+                {
+                    TEST_ASSERT_EQUAL(sentBefore, driver.sent.size());
+                }
                 nextCounter = static_cast<uint8_t>((nextCounter + 1U) & 0x0FU);
                 nowMs += 10U;
             }
 
+            nowMs = correctionEndAt;
             handleAt(handler, driver, makeDasFrame(hos), nowMs);
             const size_t sentBeforeVerify = driver.sent.size();
             const uint32_t attemptsBeforeVerify = handler.nagSendAttemptCount;
@@ -1384,10 +1393,15 @@ void test_new_pulsed_policy_defaults_and_bounds()
     TEST_ASSERT_EQUAL_INT16(180, defaults.preventivePositiveMaxCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, defaults.correctiveNegativeMinCentiNm);
     TEST_ASSERT_EQUAL_INT16(200, defaults.correctivePositiveMaxCentiNm);
-    TEST_ASSERT_EQUAL_UINT32(1000U, defaults.activityMinMs);
-    TEST_ASSERT_EQUAL_UINT32(2000U, defaults.activityMaxMs);
-    TEST_ASSERT_EQUAL_UINT32(3000U, defaults.restMinMs);
-    TEST_ASSERT_EQUAL_UINT32(5000U, defaults.restMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(4000U, defaults.activityMinMs);
+    TEST_ASSERT_EQUAL_UINT32(6000U, defaults.activityMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(2000U, defaults.restMinMs);
+    TEST_ASSERT_EQUAL_UINT32(3000U, defaults.restMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(4000U, defaults.correctiveSendMinMs);
+    TEST_ASSERT_EQUAL_UINT32(6000U, defaults.correctiveSendMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(500U, defaults.correctivePauseMinMs);
+    TEST_ASSERT_EQUAL_UINT32(500U, defaults.correctivePauseMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(50U, defaults.correctiveFrameIntervalMs);
 
     NagAdaptiveConfig invalid;
     invalid.preventiveNegativeMinCentiNm = 1;
@@ -1398,6 +1412,11 @@ void test_new_pulsed_policy_defaults_and_bounds()
     invalid.activityMaxMs = 99999;
     invalid.restMinMs = 1;
     invalid.restMaxMs = 99999;
+    invalid.correctiveSendMinMs = 1;
+    invalid.correctiveSendMaxMs = 99999;
+    invalid.correctivePauseMinMs = 1;
+    invalid.correctivePauseMaxMs = 99999;
+    invalid.correctiveFrameIntervalMs = 0;
     const NagAdaptiveConfig normalized = NagAdaptiveController::normalizeConfig(invalid);
     TEST_ASSERT_EQUAL_INT16(150, normalized.preventiveNegativeMinCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, normalized.preventiveNegativeMaxCentiNm);
@@ -1407,6 +1426,11 @@ void test_new_pulsed_policy_defaults_and_bounds()
     TEST_ASSERT_EQUAL_UINT32(99999U, normalized.activityMaxMs);
     TEST_ASSERT_EQUAL_UINT32(100U, normalized.restMinMs);
     TEST_ASSERT_EQUAL_UINT32(99999U, normalized.restMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(100U, normalized.correctiveSendMinMs);
+    TEST_ASSERT_EQUAL_UINT32(99999U, normalized.correctiveSendMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(100U, normalized.correctivePauseMinMs);
+    TEST_ASSERT_EQUAL_UINT32(99999U, normalized.correctivePauseMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(1U, normalized.correctiveFrameIntervalMs);
 }
 
 void test_prevention_windows_accept_values_outside_recommended_defaults()
@@ -1513,7 +1537,7 @@ void test_hos_0_to_2_send_one_second_then_stop_for_three_seconds()
     }
 }
 
-void test_hos_3_to_5_send_one_second_pause_500ms_until_normal()
+void test_hos_3_to_5_use_configurable_windows_and_50ms_constant_torque_pacing()
 {
     for (uint8_t hos = 3; hos <= 5; ++hos)
     {
@@ -1521,6 +1545,9 @@ void test_hos_3_to_5_send_one_second_pause_500ms_until_normal()
         NagAdaptiveConfig config;
         config.restMinMs = config.restMaxMs = 3000U;
         config.dasFreshTimeoutMs = 2000U;
+        config.correctiveSendMinMs = config.correctiveSendMaxMs = 400U;
+        config.correctivePauseMinMs = config.correctivePauseMaxMs = 200U;
+        config.correctiveFrameIntervalMs = 50U;
         controller.setConfig(config);
         resetWithDas(controller, 2);
         NagAdaptiveDecision decision = arm(controller);
@@ -1535,46 +1562,52 @@ void test_hos_3_to_5_send_one_second_pause_500ms_until_normal()
         decision = epas(controller, 30);
         TEST_ASSERT_TRUE(decision.shouldSend);
         TEST_ASSERT_TRUE(decision.corrective);
+        const int16_t windowTorque = decision.targetTorqueCentiNm;
         controller.onTransmitResult(30, decision, true);
 
-        for (uint32_t nowMs = 130; nowMs <= 930; nowMs += 100)
+        TEST_ASSERT_FALSE(epas(controller, 31, 20, 0, kEntropy + 1U).shouldSend);
+        TEST_ASSERT_FALSE(epas(controller, 79, 20, 0, kEntropy + 2U).shouldSend);
+        decision = epas(controller, 80, 20, 0, kEntropy + 3U);
+        TEST_ASSERT_TRUE(decision.shouldSend);
+        TEST_ASSERT_EQUAL_INT16(windowTorque, decision.targetTorqueCentiNm);
+        controller.onTransmitResult(80, decision, true);
+
+        for (uint32_t nowMs = 179; nowMs <= 379; nowMs += 100)
         {
-            if (nowMs == 530U)
-                TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), nowMs));
-            decision = epas(controller, nowMs);
+            decision = epas(controller, nowMs, 20, 0, kEntropy + nowMs);
             TEST_ASSERT_TRUE(decision.shouldSend);
+            TEST_ASSERT_EQUAL_INT16(windowTorque, decision.targetTorqueCentiNm);
             controller.onTransmitResult(nowMs, decision, true);
         }
 
-        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), 1029));
-        decision = epas(controller, 1029);
+        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), 429));
+        decision = epas(controller, 429, 20, 0, kEntropy + 4U);
         TEST_ASSERT_TRUE(decision.shouldSend);
-        controller.onTransmitResult(1029, decision, true);
+        TEST_ASSERT_EQUAL_INT16(windowTorque, decision.targetTorqueCentiNm);
+        controller.onTransmitResult(429, decision, true);
 
-        decision = epas(controller, 1030);
+        decision = epas(controller, 430);
         TEST_ASSERT_FALSE(decision.shouldSend);
         TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_VERIFY,
-                                controller.snapshot(1030).phase);
-        TEST_ASSERT_EQUAL_UINT32(500U, controller.snapshot(1030).phaseRemainingMs);
+                                controller.snapshot(430).phase);
+        TEST_ASSERT_EQUAL_UINT32(200U, controller.snapshot(430).phaseRemainingMs);
 
-        for (uint32_t nowMs = 1130; nowMs <= 1430; nowMs += 100)
-            TEST_ASSERT_FALSE(epas(controller, nowMs).shouldSend);
-        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), 1529));
-        TEST_ASSERT_FALSE(epas(controller, 1529).shouldSend);
-        decision = epas(controller, 1530);
+        TEST_ASSERT_FALSE(epas(controller, 629).shouldSend);
+        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(hos), 630));
+        decision = epas(controller, 630);
         TEST_ASSERT_TRUE(decision.shouldSend);
         TEST_ASSERT_TRUE(decision.corrective);
         TEST_ASSERT_EQUAL_UINT8(2U, decision.attempt);
-        controller.onTransmitResult(1530, decision, true);
+        controller.onTransmitResult(630, decision, true);
 
-        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(2), 1600));
-        TEST_ASSERT_EQUAL_UINT32(1U, controller.snapshot(1600).acknowledgementCount);
-        decision = epas(controller, 1600);
+        TEST_ASSERT_TRUE(controller.observeDas(makeDasFrame(2), 700));
+        TEST_ASSERT_EQUAL_UINT32(1U, controller.snapshot(700).acknowledgementCount);
+        decision = epas(controller, 700);
         TEST_ASSERT_FALSE(decision.shouldSend);
         TEST_ASSERT_FALSE(decision.corrective);
         TEST_ASSERT_EQUAL_UINT8(NagAdaptiveController::PHASE_REST,
-                                controller.snapshot(1600).phase);
-        TEST_ASSERT_EQUAL_UINT32(3000U, controller.snapshot(1600).phaseRemainingMs);
+                                controller.snapshot(700).phase);
+        TEST_ASSERT_EQUAL_UINT32(3000U, controller.snapshot(700).phaseRemainingMs);
     }
 }
 
@@ -1703,7 +1736,7 @@ int main()
     RUN_TEST(test_direction_flip_requires_100ms_stability);
     RUN_TEST(test_zero_torque_holds_last_trusted_direction);
     RUN_TEST(test_no_torque_and_no_angle_direction_blocks_send);
-    RUN_TEST(test_hos_3_to_5_send_one_second_pause_500ms_until_normal);
+    RUN_TEST(test_hos_3_to_5_use_configurable_windows_and_50ms_constant_torque_pacing);
     RUN_TEST(test_100000_deterministic_370_sequences_cover_adaptive_safety_matrix);
     RUN_TEST(test_maintenance_switch_off_suppresses_hos_0_to_2_but_keeps_correction);
     RUN_TEST(test_handler_applies_maintenance_only_config_change);

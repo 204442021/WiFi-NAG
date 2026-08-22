@@ -260,6 +260,16 @@ inline const char *validate(const NagAdaptiveConfig &config)
         return "restMinSec";
     if (config.restMaxMs < config.restMinMs)
         return "restMaxSec";
+    if (config.correctiveSendMinMs < 100)
+        return "correctiveSendMinSec";
+    if (config.correctiveSendMaxMs < config.correctiveSendMinMs)
+        return "correctiveSendMaxSec";
+    if (config.correctivePauseMinMs < 100)
+        return "correctivePauseMinSec";
+    if (config.correctivePauseMaxMs < config.correctivePauseMinMs)
+        return "correctivePauseMaxSec";
+    if (config.correctiveFrameIntervalMs < 1)
+        return "correctiveFrameIntervalMs";
     if (config.dasFreshTimeoutMs < 100 || config.dasFreshTimeoutMs > 2000)
         return "dasFreshTimeoutMs";
     return nullptr;

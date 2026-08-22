@@ -15,12 +15,17 @@ struct NagAdaptiveConfig
     int16_t correctiveNegativeMaxCentiNm = 200;
     int16_t correctivePositiveMinCentiNm = 180;
     int16_t correctivePositiveMaxCentiNm = 200;
-    uint32_t activityMinMs = 1000;
-    uint32_t activityMaxMs = 2000;
+    uint32_t activityMinMs = 4000;
+    uint32_t activityMaxMs = 6000;
     uint32_t releaseMinMs = 200;
     uint32_t releaseMaxMs = 400;
-    uint32_t restMinMs = 3000;
-    uint32_t restMaxMs = 5000;
+    uint32_t restMinMs = 2000;
+    uint32_t restMaxMs = 3000;
+    uint32_t correctiveSendMinMs = 4000;
+    uint32_t correctiveSendMaxMs = 6000;
+    uint32_t correctivePauseMinMs = 500;
+    uint32_t correctivePauseMaxMs = 500;
+    uint32_t correctiveFrameIntervalMs = 50;
     uint32_t dasFreshTimeoutMs = 750;
 };
 
@@ -115,6 +120,7 @@ public:
         BLOCK_ACK_TIMEOUT = 9,
         BLOCK_DIRECTION_CHANGE = 10,
         BLOCK_MAINTENANCE_DISABLED = 11,
+        BLOCK_CORRECTIVE_INTERVAL = 12,
     };
 
     enum DirectionSource : uint8_t
@@ -124,9 +130,6 @@ public:
         DIRECTION_ANGLE = 2,
         DIRECTION_HOLD = 3,
     };
-
-    static constexpr uint32_t kCorrectiveSendMs = 1000;
-    static constexpr uint32_t kCorrectivePauseMs = 500;
 
     static NagAdaptiveConfig normalizeConfig(NagAdaptiveConfig value)
     {
@@ -141,6 +144,12 @@ public:
         normalizeU32Range(value.activityMinMs, value.activityMaxMs, 100, UINT32_MAX);
         normalizeU32Range(value.releaseMinMs, value.releaseMaxMs, 100, 1000);
         normalizeU32Range(value.restMinMs, value.restMaxMs, 100, UINT32_MAX);
+        normalizeU32Range(value.correctiveSendMinMs, value.correctiveSendMaxMs,
+                          100, UINT32_MAX);
+        normalizeU32Range(value.correctivePauseMinMs, value.correctivePauseMaxMs,
+                          100, UINT32_MAX);
+        value.correctiveFrameIntervalMs =
+            clampU32(value.correctiveFrameIntervalMs, 1, UINT32_MAX);
         value.dasFreshTimeoutMs = clampU32(value.dasFreshTimeoutMs, 100, 2000);
         return value;
     }
@@ -348,7 +357,11 @@ public:
 
         if (phase_ == PHASE_CORRECTIVE)
         {
-            selectRandomMagnitude(true, entropy);
+            if (correctiveSendSeen_ &&
+                static_cast<uint32_t>(nowMs - correctiveLastSendAtMs_) <
+                    config_.correctiveFrameIntervalMs)
+                return blockedDecision(BLOCK_CORRECTIVE_INTERVAL);
+            prepareCorrective(entropy);
             return sendDecision(true);
         }
 
@@ -381,6 +394,8 @@ public:
         }
         if (correctiveBurstFrame_ < 0xFFU)
             correctiveBurstFrame_++;
+        correctiveSendSeen_ = true;
+        correctiveLastSendAtMs_ = nowMs;
     }
 
     NagAdaptiveSnapshot snapshot(uint32_t nowMs) const
@@ -492,6 +507,8 @@ private:
         correctiveAttempt_ = 0;
         correctiveBurstFrame_ = 0;
         correctiveBurstFrameTarget_ = 0;
+        correctiveSendSeen_ = false;
+        correctiveLastSendAtMs_ = 0;
         acknowledgementStarted_ = false;
         rngState_ = 0;
         hosEscalationCount_ = 0;
@@ -595,7 +612,9 @@ private:
         phase_ = PHASE_CORRECTIVE;
         blockReason_ = BLOCK_NONE;
         phaseStartedAtMs_ = nowMs;
-        phaseDurationMs_ = kCorrectiveSendMs;
+        phaseDurationMs_ = triangularDuration(config_.correctiveSendMinMs,
+                                              config_.correctiveSendMaxMs,
+                                              rngState_);
         if (correctiveAttempt_ < 0xFFU)
             correctiveAttempt_++;
         correctiveBurstFrame_ = 0;
@@ -604,6 +623,8 @@ private:
         targetTorqueCentiNm_ = 0;
         lastSuccessfullyTransmittedTorqueCentiNm_ = 0;
         outputActive_ = false;
+        correctiveSendSeen_ = false;
+        correctiveLastSendAtMs_ = 0;
     }
 
     void beginCorrectivePause(uint32_t nowMs)
@@ -611,7 +632,9 @@ private:
         phase_ = PHASE_VERIFY;
         blockReason_ = BLOCK_VERIFY;
         phaseStartedAtMs_ = nowMs;
-        phaseDurationMs_ = kCorrectivePauseMs;
+        phaseDurationMs_ = triangularDuration(config_.correctivePauseMinMs,
+                                              config_.correctivePauseMaxMs,
+                                              rngState_);
         targetTorqueCentiNm_ = 0;
         currentMagnitudeCentiNm_ = 0;
         outputActive_ = false;
@@ -876,6 +899,8 @@ private:
     uint8_t correctiveAttempt_ = 0;
     uint8_t correctiveBurstFrame_ = 0;
     uint8_t correctiveBurstFrameTarget_ = 0;
+    bool correctiveSendSeen_ = false;
+    uint32_t correctiveLastSendAtMs_ = 0;
     bool acknowledgementStarted_ = false;
     uint32_t acknowledgementStartedAtMs_ = 0;
     uint32_t hosEscalationCount_ = 0;

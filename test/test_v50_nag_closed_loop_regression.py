@@ -13,6 +13,9 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max",
     "nag-active-min", "nag-active-max",
     "nag-rest-min", "nag-rest-max", "nag-maintenance-enabled",
+    "nag-corrective-send-min", "nag-corrective-send-max",
+    "nag-corrective-pause-min", "nag-corrective-pause-max",
+    "nag-corrective-interval-ms",
     "nag-custom-hard-cap", "nag-custom-das-timeout",
 )
 
@@ -47,6 +50,7 @@ EXPECTED_NVS_KEYS = (
     "nag_cr_n_min", "nag_cr_n_max", "nag_cr_p_min", "nag_cr_p_max",
     "nag_act_min", "nag_act_max", "nag_rel_min", "nag_rel_max",
     "nag_rst_min", "nag_rst_max", "nag_das_ms",
+    "nag_cs_min", "nag_cs_max", "nag_cp_min", "nag_cp_max", "nag_ci_ms",
 )
 
 EXPECTED_NVS_DEFAULTS = {
@@ -58,12 +62,17 @@ EXPECTED_NVS_DEFAULTS = {
     "nag_cr_n_max": "2.00",
     "nag_cr_p_min": "1.80",
     "nag_cr_p_max": "2.00",
-    "nag_act_min": "1.0",
-    "nag_act_max": "2.0",
+    "nag_act_min": "4.0",
+    "nag_act_max": "6.0",
     "nag_rel_min": "0.2",
     "nag_rel_max": "0.4",
-    "nag_rst_min": "3.0",
-    "nag_rst_max": "5.0",
+    "nag_rst_min": "2.0",
+    "nag_rst_max": "3.0",
+    "nag_cs_min": "4.0",
+    "nag_cs_max": "6.0",
+    "nag_cp_min": "0.5",
+    "nag_cp_max": "0.5",
+    "nag_ci_ms": "50",
     "nag_das_ms": "750",
 }
 
@@ -74,6 +83,9 @@ EXPECTED_CONFIG_FIELDS = (
     "correctivePositiveMinNm", "correctivePositiveMaxNm",
     "maintenanceEnabled", "activityMinSec", "activityMaxSec",
     "releaseMinSec", "releaseMaxSec", "restMinSec", "restMaxSec",
+    "correctiveSendMinSec", "correctiveSendMaxSec",
+    "correctivePauseMinSec", "correctivePauseMaxSec",
+    "correctiveFrameIntervalMs",
     "dasFreshTimeoutMs",
 )
 
@@ -139,8 +151,9 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "constnagCustomDefaults={maintenanceEnabled:true,"
             "preventiveNegative:[1.50,1.80],"
             "preventivePositive:[1.50,1.80],correctiveNegative:[1.80,2.00],"
-            "correctivePositive:[1.80,2.00],activity:[1.0,2.0],"
-            "release:[0.2,0.4],rest:[3.0,5.0],dasFreshTimeoutMs:750};",
+            "correctivePositive:[1.80,2.00],activity:[4.0,6.0],"
+            "release:[0.2,0.4],rest:[2.0,3.0],correctiveSend:[4.0,6.0],"
+            "correctivePause:[0.5,0.5],correctiveFrameIntervalMs:50,dasFreshTimeoutMs:750};",
             compact,
         )
         self.assertIn("letnagCustomDraft=cloneNagCustomDefaults();", compact)
@@ -228,7 +241,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         self.assertIn(
             "constphaseNames={disabled:'关闭','wait-das':'等待DAS',"
             "arming:'确认OEM帧',maintenance:'预防注入窗口',release:'兼容释放阶段',"
-            "rest:'预防停发间隔',corrective:'纠正发送窗口',verify:'纠正停发500ms',"
+            "rest:'预防停发间隔',corrective:'纠正发送窗口',verify:'纠正停发窗口',"
             "'fault-hold':'保护停发','monitor-only':'仅监控纠正区'};",
             compact,
         )
