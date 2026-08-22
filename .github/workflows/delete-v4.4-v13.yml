@@ -1,0 +1,20 @@
+name: Delete V4.4-V13 branch
+
+on:
+  push:
+    branches:
+      - V4.4-V13
+    paths:
+      - .github/workflows/delete-v4.4-v13.yml
+
+permissions:
+  contents: write
+
+jobs:
+  delete-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete exact remote branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method DELETE "repos/${{ github.repository }}/git/refs/heads/V4.4-V13"

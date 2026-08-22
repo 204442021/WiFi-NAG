@@ -74,8 +74,13 @@ struct NagHandler : public CarManagerBase
     Shared<uint32_t> nagOwnEchoSkipCount{0};
     Shared<uint32_t> nagChecksumRejectCount{0};
     Shared<uint32_t> nagInvalidTorqueRejectCount{0};
+    // Compatibility names consumed by the existing dashboard API. In V4.4
+    // the count means OEM sequence anomaly and the gap means normal echo->OEM
+    // counter reuse timing; it is no longer a synthetic "collision" count.
     Shared<uint32_t> nagCounterCollisionCount{0};
     Shared<uint32_t> nagLastCounterCollisionGapUs{0};
+    Shared<uint32_t> nagOemCounterAnomalyCount{0};
+    Shared<uint32_t> nagEchoCounterReuseGapUs{0};
     Shared<uint32_t> nagDasFrameCount{0};
     Shared<uint32_t> nagOemEpasFrameCount{0};
     Shared<uint32_t> nagLastOemEpasAtMs{0};
@@ -90,10 +95,12 @@ struct NagHandler : public CarManagerBase
     uint32_t lastAppliedAdaptiveCommandGeneration = 0;
 
     static constexpr uint32_t kInjectedFreshMs = 200;
-    static constexpr int16_t kTorqueMinCentiNm = -180;
-    static constexpr int16_t kTorqueMaxCentiNm = 180;
+    static constexpr int16_t kLegacyTorqueMinCentiNm = -180;
+    static constexpr int16_t kLegacyTorqueMaxCentiNm = 180;
+    static constexpr int16_t kAdaptiveTorqueMinCentiNm = -200;
+    static constexpr int16_t kAdaptiveTorqueMaxCentiNm = 200;
     static constexpr uint32_t kOwnEchoFingerprintLifetimeMs = 100;
-    static constexpr uint64_t kCounterCollisionWindowUs = 100000;
+    static constexpr uint64_t kCounterReuseWindowUs = 100000;
     static constexpr uint8_t kRecentEchoCount = 4;
 
     struct RecentEcho
@@ -107,6 +114,8 @@ struct NagHandler : public CarManagerBase
     uint8_t lastSuccessfulEchoCounter = 0;
     uint64_t lastSuccessfulEchoAtUs = 0;
     bool lastSuccessfulEchoCounterValid = false;
+    uint8_t previousOemCounter = 0;
+    bool previousOemCounterValid = false;
     Shared<uint8_t> lastOemHandsOnRaw{0};
     Shared<uint8_t> lastOemHandsOnTier{1};
     Shared<int16_t> lastOemSteeringAngleDeciDeg{0};
@@ -126,12 +135,22 @@ struct NagHandler : public CarManagerBase
 
     uint8_t filterIdCount() const override { return 2; }
 
+    // Legacy helper semantics stay at +/-1.80 Nm so MODE_A behavior is unchanged.
     static int16_t clampTorqueCentiNm(int16_t v)
     {
-        if (v < kTorqueMinCentiNm)
-            return kTorqueMinCentiNm;
-        if (v > kTorqueMaxCentiNm)
-            return kTorqueMaxCentiNm;
+        if (v < kLegacyTorqueMinCentiNm)
+            return kLegacyTorqueMinCentiNm;
+        if (v > kLegacyTorqueMaxCentiNm)
+            return kLegacyTorqueMaxCentiNm;
+        return v;
+    }
+
+    static int16_t clampAdaptiveTorqueCentiNm(int16_t v)
+    {
+        if (v < kAdaptiveTorqueMinCentiNm)
+            return kAdaptiveTorqueMinCentiNm;
+        if (v > kAdaptiveTorqueMaxCentiNm)
+            return kAdaptiveTorqueMaxCentiNm;
         return v;
     }
 
@@ -150,6 +169,12 @@ struct NagHandler : public CarManagerBase
     static uint16_t centiNmToRaw(int16_t centiNm)
     {
         centiNm = clampTorqueCentiNm(centiNm);
+        return static_cast<uint16_t>(2050 + centiNm);
+    }
+
+    static uint16_t centiNmToAdaptiveRaw(int16_t centiNm)
+    {
+        centiNm = clampAdaptiveTorqueCentiNm(centiNm);
         return static_cast<uint16_t>(2050 + centiNm);
     }
 
@@ -252,7 +277,6 @@ struct NagHandler : public CarManagerBase
         testNowMs = ms;
     }
 
-
     void setTestNowUs(uint64_t us)
     {
         testUsClockEnabled = true;
@@ -281,8 +305,8 @@ struct NagHandler : public CarManagerBase
             magnitude = -magnitude;
         if (magnitude < 10)
             return 10;
-        if (magnitude > kTorqueMaxCentiNm)
-            return kTorqueMaxCentiNm;
+        if (magnitude > kAdaptiveTorqueMaxCentiNm)
+            return kAdaptiveTorqueMaxCentiNm;
         return static_cast<int16_t>(magnitude);
     }
 
@@ -296,16 +320,12 @@ struct NagHandler : public CarManagerBase
         NagAdaptiveConfig config = adaptiveConfig();
         if (tier == 2)
         {
-            if (sign < 0)
-            {
-                config.correctiveNegativeMinCentiNm = minCentiNm;
-                config.correctiveNegativeMaxCentiNm = maxCentiNm;
-            }
-            else
-            {
-                config.correctivePositiveMinCentiNm = minCentiNm;
-                config.correctivePositiveMaxCentiNm = maxCentiNm;
-            }
+            config.correctiveMinCentiNm = minCentiNm;
+            config.correctiveMaxCentiNm = maxCentiNm;
+            config.correctiveNegativeMinCentiNm = minCentiNm;
+            config.correctiveNegativeMaxCentiNm = maxCentiNm;
+            config.correctivePositiveMinCentiNm = minCentiNm;
+            config.correctivePositiveMaxCentiNm = maxCentiNm;
         }
         else if (sign < 0)
         {
@@ -324,8 +344,7 @@ struct NagHandler : public CarManagerBase
     {
         const NagAdaptiveConfig config = adaptiveConfig();
         if (tier == 2)
-            return sign < 0 ? config.correctiveNegativeMinCentiNm
-                            : config.correctivePositiveMinCentiNm;
+            return config.correctiveMinCentiNm;
         return sign < 0 ? config.preventiveNegativeMinCentiNm
                         : config.preventivePositiveMinCentiNm;
     }
@@ -334,8 +353,7 @@ struct NagHandler : public CarManagerBase
     {
         const NagAdaptiveConfig config = adaptiveConfig();
         if (tier == 2)
-            return sign < 0 ? config.correctiveNegativeMaxCentiNm
-                            : config.correctivePositiveMaxCentiNm;
+            return config.correctiveMaxCentiNm;
         return sign < 0 ? config.preventiveNegativeMaxCentiNm
                         : config.preventivePositiveMaxCentiNm;
     }
@@ -366,11 +384,9 @@ struct NagHandler : public CarManagerBase
                left.preventiveNegativeMaxCentiNm == right.preventiveNegativeMaxCentiNm &&
                left.preventivePositiveMinCentiNm == right.preventivePositiveMinCentiNm &&
                left.preventivePositiveMaxCentiNm == right.preventivePositiveMaxCentiNm &&
-               left.correctiveNegativeMinCentiNm == right.correctiveNegativeMinCentiNm &&
-               left.correctiveNegativeMaxCentiNm == right.correctiveNegativeMaxCentiNm &&
-               left.correctivePositiveMinCentiNm == right.correctivePositiveMinCentiNm &&
-               left.correctivePositiveMaxCentiNm == right.correctivePositiveMaxCentiNm &&
-               left.torqueDeadbandCentiNm == right.torqueDeadbandCentiNm &&
+               left.correctiveMinCentiNm == right.correctiveMinCentiNm &&
+               left.correctiveMaxCentiNm == right.correctiveMaxCentiNm &&
+               left.maintenanceEnabled == right.maintenanceEnabled &&
                left.activityMinMs == right.activityMinMs &&
                left.activityMaxMs == right.activityMaxMs &&
                left.releaseMinMs == right.releaseMinMs &&
@@ -437,7 +453,7 @@ struct NagHandler : public CarManagerBase
 
     int16_t targetTorqueCentiNm() const
     {
-        return kTorqueMaxCentiNm;
+        return kLegacyTorqueMaxCentiNm;
     }
 
     bool isOwnEcho(const CanFrame &frame) const
@@ -520,17 +536,31 @@ struct NagHandler : public CarManagerBase
 
         const uint64_t receivedAtUs = nowUs();
         const uint8_t oemCounter = static_cast<uint8_t>(frame.data[6] & 0x0F);
+
+        if (previousOemCounterValid)
+        {
+            const uint8_t expectedOemCounter = static_cast<uint8_t>((previousOemCounter + 1U) & 0x0F);
+            if (oemCounter != expectedOemCounter)
+            {
+                nagOemCounterAnomalyCount++;
+                nagCounterCollisionCount = static_cast<uint32_t>(nagOemCounterAnomalyCount);
+            }
+        }
+        previousOemCounter = oemCounter;
+        previousOemCounterValid = true;
+
         if (lastSuccessfulEchoCounterValid)
         {
             const uint64_t gapUs = receivedAtUs - lastSuccessfulEchoAtUs;
             if (oemCounter == lastSuccessfulEchoCounter &&
-                gapUs >= 1 && gapUs <= kCounterCollisionWindowUs)
+                gapUs >= 1 && gapUs <= kCounterReuseWindowUs)
             {
-                nagCounterCollisionCount++;
+                nagEchoCounterReuseGapUs = static_cast<uint32_t>(gapUs);
                 nagLastCounterCollisionGapUs = static_cast<uint32_t>(gapUs);
             }
             lastSuccessfulEchoCounterValid = false;
         }
+
         nagOemEpasFrameCount++;
         nagLastOemEpasAtMs = now;
         nagLastOemEpasCounter = oemCounter;
@@ -569,8 +599,13 @@ struct NagHandler : public CarManagerBase
         echo.id = 880;
         echo.dlc = 8;
 
-        torqueCentiNm = clampTorqueCentiNm(torqueCentiNm);
-        const uint16_t torqueRaw = centiNmToRaw(torqueCentiNm);
+        if (adaptiveMode)
+            torqueCentiNm = clampAdaptiveTorqueCentiNm(torqueCentiNm);
+        else
+            torqueCentiNm = clampTorqueCentiNm(torqueCentiNm);
+        const uint16_t torqueRaw = adaptiveMode
+                                       ? centiNmToAdaptiveRaw(torqueCentiNm)
+                                       : centiNmToRaw(torqueCentiNm);
         writeTorqueRaw(echo, torqueRaw);
 
         echo.data[4] = static_cast<uint8_t>((frame.data[4] & 0x3F) | 0x40);

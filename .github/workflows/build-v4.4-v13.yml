@@ -1,0 +1,164 @@
+name: WIFI-NAG V4.4-V13 Build
+
+on:
+  push:
+    branches: ["V4.4-V13"]
+  pull_request:
+    branches: ["V4.3-V13"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wifi-nag-v4.4-v13-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip platformio -r scripts/requirements-dashboard.txt
+
+      - name: Generate V4.4 dashboard payload
+        run: python scripts/minify_dashboard.py
+
+      - name: Run V4.4 and safety Python regressions
+        run: |
+          for test_file in \
+            test/test_v44_adaptive_regression.py \
+            test/test_ble_adaptive_config_contract.py \
+            test/test_ble_obstacle_shift_regression.py \
+            test/test_ble_pairing_unbind_regression.py \
+            test/test_can_restart_safety_regression.py \
+            test/test_dashboard_main_chain_regression.py \
+            test/test_wifi_settings_regression.py \
+            test/test_v20_restore_regression.py; do
+            python "$test_file"
+          done
+
+      - name: Verify dashboard payload
+        run: python scripts/minify_dashboard.py --check
+
+      - name: Run native Nag tests
+        run: |
+          pio test -e native_nag
+          pio test -e native_nag_sweep
+          pio test -e native_nag_v44
+
+      - name: Run other native safety tests
+        run: |
+          pio test -e native_twai
+          pio test -e native_log_buffer
+          pio test -e native_ble
+          pio test -e native_obstacle_shift
+
+      - name: Verify firmware version
+        run: test "$(tr -d '\r\n' < VERSION)" = "V4.4 V13"
+
+      - name: Build ESP32-S3 firmware
+        run: pio run -e wifi_nag_ESP32_S3_CAN
+
+      - name: Prepare firmware bundle
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p dist
+          cp .pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin "dist/WIFI-NAG-V4.4-V13-${SOURCE_SHA:0:7}-OTA.bin"
+          python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" \
+            --chip esp32s3 merge_bin \
+            -o "dist/WIFI-NAG-V4.4-V13-${SOURCE_SHA:0:7}-FACTORY-16MB.bin" \
+            --flash_mode dio \
+            --flash_freq 80m \
+            --flash_size 16MB \
+            --fill-flash-size 16MB \
+            0x0 .pio/build/wifi_nag_ESP32_S3_CAN/bootloader.bin \
+            0x8000 .pio/build/wifi_nag_ESP32_S3_CAN/partitions.bin \
+            0x19000 .pio/build/wifi_nag_ESP32_S3_CAN/ota_data_initial.bin \
+            0x20000 .pio/build/wifi_nag_ESP32_S3_CAN/firmware.bin
+          test "$(stat -c%s "dist/WIFI-NAG-V4.4-V13-${SOURCE_SHA:0:7}-FACTORY-16MB.bin")" -eq 16777216
+
+      - name: Verify 16MB factory image integrity
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          ESPTOOL="$HOME/.platformio/packages/tool-esptoolpy/esptool.py"
+          BUILD=.pio/build/wifi_nag_ESP32_S3_CAN
+          FACTORY="dist/WIFI-NAG-V4.4-V13-${SOURCE_SHA:0:7}-FACTORY-16MB.bin"
+          OTA="dist/WIFI-NAG-V4.4-V13-${SOURCE_SHA:0:7}-OTA.bin"
+
+          python "$ESPTOOL" --chip esp32s3 image_info "$BUILD/bootloader.bin"
+          python "$ESPTOOL" --chip esp32s3 image_info "$BUILD/firmware.bin"
+
+          python - <<'PY'
+          from pathlib import Path
+          import os, hashlib
+
+          build = Path('.pio/build/wifi_nag_ESP32_S3_CAN')
+          sha = os.environ['SOURCE_SHA'][:7]
+          factory = Path(f'dist/WIFI-NAG-V4.4-V13-{sha}-FACTORY-16MB.bin')
+          ota = Path(f'dist/WIFI-NAG-V4.4-V13-{sha}-OTA.bin')
+          data = factory.read_bytes()
+          assert len(data) == 16 * 1024 * 1024, f'factory size={len(data)}'
+
+          components = [
+              (0x00000, build / 'bootloader.bin'),
+              (0x08000, build / 'partitions.bin'),
+              (0x19000, build / 'ota_data_initial.bin'),
+              (0x20000, build / 'firmware.bin'),
+          ]
+          for offset, path in components:
+              payload = path.read_bytes()
+              embedded = data[offset:offset + len(payload)]
+              assert embedded == payload, f'{path.name} mismatch at 0x{offset:X}'
+              print(f'OK {path.name}: offset=0x{offset:X} size={len(payload)} sha256={hashlib.sha256(payload).hexdigest()}')
+
+          firmware = (build / 'firmware.bin').read_bytes()
+          assert len(firmware) <= 0x400000, f'app exceeds ota_0 partition: {len(firmware)} > 0x400000'
+          assert ota.read_bytes() == firmware, 'OTA artifact differs from compiled firmware.bin'
+
+          # Partition map contract for this board/release.
+          csv = Path('partitions_16mb_ota_4096k_nvs64_boot.csv').read_text(encoding='utf-8')
+          for token in ('0x19000', '0x20000', '0x400000', '0x420000', '0xFE0000'):
+              assert token in csv, f'partition contract missing {token}'
+
+          print(f'OK factory full image: {len(data)} bytes sha256={hashlib.sha256(data).hexdigest()}')
+          print(f'OK OTA image: {len(firmware)} bytes sha256={hashlib.sha256(firmware).hexdigest()}')
+          PY
+
+          {
+            echo "WIFI-NAG V4.4-V13 factory image verification"
+            echo "source_sha=$SOURCE_SHA"
+            echo "flash_size=16MB"
+            echo "bootloader_offset=0x00000"
+            echo "partition_table_offset=0x08000"
+            echo "otadata_offset=0x19000"
+            echo "app_offset=0x20000"
+            echo "app_partition_size=0x400000"
+            echo "factory_size=$(stat -c%s "$FACTORY")"
+            echo "factory_sha256=$(sha256sum "$FACTORY" | awk '{print $1}')"
+            echo "ota_sha256=$(sha256sum "$OTA" | awk '{print $1}')"
+          } > dist/FACTORY-VERIFY.txt
+
+          (cd dist && sha256sum *.bin > SHA256SUMS.txt)
+
+      - name: Upload firmware bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: WIFI-NAG-V4.4-V13-${{ github.sha }}
+          path: |
+            dist/*.bin
+            dist/SHA256SUMS.txt
+            dist/FACTORY-VERIFY.txt
+          if-no-files-found: error
+          retention-days: 30
