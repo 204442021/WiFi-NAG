@@ -33,17 +33,17 @@ class FirmwareInfoRegressionTests(unittest.TestCase):
         cls.nag_operations = NAG_OPERATIONS_FILE.read_text(encoding="utf-8")
 
     def test_version_file_is_single_v4_4_v13_source(self) -> None:
-        self.assertEqual(self.version, "V4.7 V13")
+        self.assertEqual(self.version, "V4.8 V13")
         self.assertNotIn("3.0.0-beta.5", self.version)
 
     def test_release_facing_adaptive_version_is_v4_4_v13(self) -> None:
         for text in (self.readme, self.nag_operations, self.ui_source, self.ui_base):
             self.assertNotIn("V5.0", text)
             self.assertNotIn("V4.2 V13", text)
-        self.assertIn("V4.7-V13", self.readme)
-        self.assertIn("V4.7-V13", self.nag_operations)
-        self.assertIn("V4.7 V13", self.ui_source)
-        self.assertIn("V4.7 V13", self.ui_base)
+        self.assertIn("V4.8-V13", self.readme)
+        self.assertIn("V4.8-V13", self.nag_operations)
+        self.assertIn("V4.8 V13", self.ui_source)
+        self.assertIn("V4.8 V13", self.ui_base)
 
     def test_v1_0_7_release_notes_match_internal_version(self) -> None:
         self.assertIn("# WIFI-NAG V1.0.7", self.release_notes)

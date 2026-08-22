@@ -7,6 +7,7 @@
 struct NagAdaptiveConfig
 {
     bool maintenanceEnabled = true;
+    bool lateEchoEnabled = false;
     int16_t preventiveNegativeMinCentiNm = 170;
     int16_t preventiveNegativeMaxCentiNm = 180;
     int16_t preventivePositiveMinCentiNm = 170;
@@ -15,6 +16,8 @@ struct NagAdaptiveConfig
     int16_t correctiveNegativeMaxCentiNm = 200;
     int16_t correctivePositiveMinCentiNm = 180;
     int16_t correctivePositiveMaxCentiNm = 200;
+    uint16_t correctivePositiveFrames = 50;
+    uint16_t correctiveNegativeFrames = 50;
     uint32_t activityMinMs = 2000;
     uint32_t activityMaxMs = 3000;
     uint32_t releaseMinMs = 200;
@@ -63,6 +66,10 @@ struct NagAdaptiveSnapshot
     uint8_t correctiveAttempt = 0;
     uint8_t correctiveBurstFrame = 0;
     uint8_t correctiveBurstFrameTarget = 0;
+    int8_t correctiveSweepSign = 0;
+    uint16_t correctiveSweepFrame = 0;
+    uint16_t correctiveSweepFrameTarget = 0;
+    int16_t correctiveSweepPeakCentiNm = 0;
     uint32_t phaseRemainingMs = 0;
     uint32_t hosEscalationCount = 0;
     uint32_t acknowledgementCount = 0;
@@ -144,9 +151,13 @@ public:
         normalizeI16Range(value.preventivePositiveMinCentiNm,
                           value.preventivePositiveMaxCentiNm, 150, 180);
         normalizeI16Range(value.correctiveNegativeMinCentiNm,
-                          value.correctiveNegativeMaxCentiNm, 180, 200);
+                          value.correctiveNegativeMaxCentiNm, 180, 250);
         normalizeI16Range(value.correctivePositiveMinCentiNm,
-                          value.correctivePositiveMaxCentiNm, 180, 200);
+                          value.correctivePositiveMaxCentiNm, 180, 250);
+        value.correctivePositiveFrames =
+            clampU16(value.correctivePositiveFrames, 10, 255);
+        value.correctiveNegativeFrames =
+            clampU16(value.correctiveNegativeFrames, 10, 255);
         normalizeU32Range(value.activityMinMs, value.activityMaxMs, 100, UINT32_MAX);
         normalizeU32Range(value.releaseMinMs, value.releaseMaxMs, 100, 1000);
         normalizeOptionalU32Range(value.restMinMs, value.restMaxMs, 100, UINT32_MAX);
@@ -195,6 +206,7 @@ public:
         normalHosConsecutive_ = 0;
         h2ReturnsToStability_ = false;
         stabilityVerifyActive_ = false;
+        clearSweepState();
     }
 
     bool observeDas(const CanFrame &frame, uint32_t nowMs)
@@ -335,7 +347,8 @@ public:
             beginArming();
         epasSeen_ = true;
         lastEpasAtMs_ = nowMs;
-        updateDirection(nowMs, steeringAngleDeciDeg, observedTorqueCentiNm);
+        if (phase_ != PHASE_CORRECTIVE || correctiveSweepSign_ == 0)
+            updateDirection(nowMs, steeringAngleDeciDeg, observedTorqueCentiNm);
 
         if (armingFrames_ < 3)
             armingFrames_++;
@@ -382,7 +395,7 @@ public:
         if (phase_ == PHASE_STABILITY_VERIFY && phaseExpired(nowMs))
             beginMaintenance(nowMs, entropy);
 
-        if (candidateSign_ != 0)
+        if (phase_ != PHASE_CORRECTIVE && candidateSign_ != 0)
             return blockedDecision(BLOCK_DIRECTION_CHANGE);
 
         if (phase_ == PHASE_MAINTENANCE && phaseExpired(nowMs))
@@ -398,6 +411,16 @@ public:
         if (phase_ == PHASE_RELEASE)
             return releaseDecision(nowMs, entropy);
 
+        if (phase_ == PHASE_CORRECTIVE && correctiveSweepSign_ == 0 &&
+            injectionSign_ != 0)
+        {
+            correctiveSweepSign_ = injectionSign_;
+            correctiveSweepFrame_ = 0;
+            correctiveSweepFrameTarget_ = correctiveFramesForSign(correctiveSweepSign_);
+            correctiveSweepPeakCentiNm_ = 0;
+            correctiveBurstFrameTarget_ = static_cast<uint8_t>(correctiveSweepFrameTarget_);
+        }
+
         if (injectionSign_ == 0)
             return blockedDecision(BLOCK_NO_DIRECTION);
 
@@ -407,8 +430,7 @@ public:
                 static_cast<uint32_t>(nowMs - correctiveLastSendAtMs_) <
                     config_.correctiveFrameIntervalMs)
                 return blockedDecision(BLOCK_CORRECTIVE_INTERVAL);
-            prepareCorrective(entropy);
-            return sendDecision(true);
+            return prepareCorrectiveSweepDecision(entropy);
         }
 
         if (phase_ == PHASE_MAINTENANCE ||
@@ -433,7 +455,13 @@ public:
         outputActive_ = decision.targetTorqueCentiNm != 0;
 
         if (phase_ != PHASE_CORRECTIVE || !decision.corrective)
+        {
+            if (phase_ == PHASE_MAINTENANCE ||
+                phase_ == PHASE_H2_PENDING ||
+                phase_ == PHASE_STABILITY_VERIFY)
+                advancePreventiveSweep();
             return;
+        }
 
         if (!acknowledgementStarted_)
         {
@@ -442,6 +470,17 @@ public:
         }
         if (correctiveBurstFrame_ < 0xFFU)
             correctiveBurstFrame_++;
+        if (correctiveSweepFrame_ < correctiveSweepFrameTarget_)
+            correctiveSweepFrame_++;
+        if (correctiveSweepFrame_ >= correctiveSweepFrameTarget_)
+        {
+            correctiveSweepSign_ = static_cast<int8_t>(-correctiveSweepSign_);
+            correctiveSweepFrame_ = 0;
+            correctiveSweepFrameTarget_ = correctiveFramesForSign(correctiveSweepSign_);
+            correctiveSweepPeakCentiNm_ = 0;
+            correctiveBurstFrameTarget_ = static_cast<uint8_t>(correctiveSweepFrameTarget_);
+            currentMagnitudeCentiNm_ = 0;
+        }
         correctiveSendSeen_ = true;
         correctiveLastSendAtMs_ = nowMs;
     }
@@ -465,7 +504,9 @@ public:
         value.targetTorqueCentiNm = targetTorqueCentiNm_;
         value.injectionSign = outputActive_ && lastSuccessfullyTransmittedTorqueCentiNm_ != 0
                                   ? (lastSuccessfullyTransmittedTorqueCentiNm_ < 0 ? -1 : 1)
-                                  : injectionSign_;
+                                  : (phase_ == PHASE_CORRECTIVE && correctiveSweepSign_ != 0
+                                         ? correctiveSweepSign_
+                                         : injectionSign_);
         value.outputActive = outputActive_;
         value.lastSuccessfullyTransmittedTorqueCentiNm =
             lastSuccessfullyTransmittedTorqueCentiNm_;
@@ -473,6 +514,10 @@ public:
         value.correctiveAttempt = correctiveAttempt_;
         value.correctiveBurstFrame = correctiveBurstFrame_;
         value.correctiveBurstFrameTarget = correctiveBurstFrameTarget_;
+        value.correctiveSweepSign = correctiveSweepSign_;
+        value.correctiveSweepFrame = correctiveSweepFrame_;
+        value.correctiveSweepFrameTarget = correctiveSweepFrameTarget_;
+        value.correctiveSweepPeakCentiNm = correctiveSweepPeakCentiNm_;
         value.phaseRemainingMs = phaseRemainingMs(nowMs);
         value.hosEscalationCount = hosEscalationCount_;
         value.acknowledgementCount = acknowledgementCount_;
@@ -493,6 +538,15 @@ private:
     }
 
     static uint32_t clampU32(uint32_t value, uint32_t minValue, uint32_t maxValue)
+    {
+        if (value < minValue)
+            return minValue;
+        if (value > maxValue)
+            return maxValue;
+        return value;
+    }
+
+    static uint16_t clampU16(uint16_t value, uint16_t minValue, uint16_t maxValue)
     {
         if (value < minValue)
             return minValue;
@@ -559,6 +613,11 @@ private:
         lastSuccessfullyTransmittedTorqueCentiNm_ = 0;
         outputActive_ = false;
         currentMagnitudeCentiNm_ = 0;
+        preventiveMagnitudeStep_ = 1;
+        correctiveSweepSign_ = 0;
+        correctiveSweepFrame_ = 0;
+        correctiveSweepFrameTarget_ = 0;
+        correctiveSweepPeakCentiNm_ = 0;
         correctiveActive_ = false;
         correctiveAttempt_ = 0;
         correctiveBurstFrame_ = 0;
@@ -591,6 +650,7 @@ private:
         stabilityVerifyActive_ = false;
         faultRecoveryActive_ = false;
         outputActive_ = false;
+        clearSweepState();
     }
 
     void beginArming()
@@ -618,7 +678,7 @@ private:
                                : triangularDuration(config_.activityMinMs,
                                                     config_.activityMaxMs,
                                                     entropy);
-        currentMagnitudeCentiNm_ = 0;
+        clearSweepState();
         stabilityVerifyActive_ = false;
         h2ReturnsToStability_ = false;
         normalHosConsecutive_ = 0;
@@ -634,7 +694,7 @@ private:
         blockReason_ = BLOCK_MAINTENANCE_DISABLED;
         phaseDurationMs_ = 0;
         targetTorqueCentiNm_ = 0;
-        currentMagnitudeCentiNm_ = 0;
+        clearSweepState();
         outputActive_ = false;
         correctiveAttempt_ = 0;
         correctiveBurstFrame_ = 0;
@@ -671,6 +731,7 @@ private:
         phaseDurationMs_ = triangularDuration(config_.restMinMs, config_.restMaxMs, entropy);
         targetTorqueCentiNm_ = 0;
         currentMagnitudeCentiNm_ = 0;
+        preventiveMagnitudeStep_ = 1;
         outputActive_ = false;
     }
 
@@ -686,7 +747,7 @@ private:
         blockReason_ = BLOCK_NONE;
         phaseStartedAtMs_ = nowMs;
         phaseDurationMs_ = config_.h2PersistenceMs;
-        currentMagnitudeCentiNm_ = 0;
+        clearSweepState();
         preparePreventive(rngState_);
         if (config_.h2PersistenceMs == 0U)
             beginRecovery(nowMs);
@@ -703,6 +764,7 @@ private:
         hosEscalationCount_++;
         targetTorqueCentiNm_ = 0;
         currentMagnitudeCentiNm_ = 0;
+        clearSweepState();
         outputActive_ = false;
         if (config_.preCorrectionPauseMs == 0U)
         {
@@ -751,7 +813,7 @@ private:
         phaseDurationMs_ = config_.stabilityVerifyMs;
         stabilityVerifyActive_ = true;
         h2ReturnsToStability_ = false;
-        currentMagnitudeCentiNm_ = 0;
+        clearSweepState();
         targetTorqueCentiNm_ = 0;
         outputActive_ = false;
         preparePreventive(rngState_);
@@ -769,7 +831,13 @@ private:
         if (correctiveAttempt_ < 0xFFU)
             correctiveAttempt_++;
         correctiveBurstFrame_ = 0;
-        correctiveBurstFrameTarget_ = 0;
+        correctiveSweepSign_ = injectionSign_;
+        correctiveSweepFrame_ = 0;
+        correctiveSweepFrameTarget_ = correctiveFramesForSign(correctiveSweepSign_);
+        correctiveSweepPeakCentiNm_ = 0;
+        correctiveBurstFrameTarget_ = static_cast<uint8_t>(correctiveSweepFrameTarget_);
+        candidateSign_ = 0;
+        candidateStartedAtMs_ = 0;
         currentMagnitudeCentiNm_ = 0;
         targetTorqueCentiNm_ = 0;
         lastSuccessfullyTransmittedTorqueCentiNm_ = 0;
@@ -793,6 +861,7 @@ private:
                                               rngState_);
         targetTorqueCentiNm_ = 0;
         currentMagnitudeCentiNm_ = 0;
+        clearSweepState();
         outputActive_ = false;
     }
 
@@ -819,6 +888,7 @@ private:
         stabilityVerifyActive_ = false;
         faultRecoveryActive_ = false;
         outputActive_ = false;
+        clearSweepState();
     }
 
     void updateDirection(uint32_t nowMs, int16_t angleDeciDeg, int16_t torqueCentiNm)
@@ -896,7 +966,7 @@ private:
         const double weight = 1.0 - (3.0 * x * x - 2.0 * x * x * x);
         const double scaled = static_cast<double>(releaseStartTorqueCentiNm_) * weight;
         const int32_t rounded = static_cast<int32_t>(scaled >= 0.0 ? scaled + 0.5 : scaled - 0.5);
-        targetTorqueCentiNm_ = clampI16(rounded, -200, 200);
+        targetTorqueCentiNm_ = clampI16(rounded, -180, 180);
         if (targetTorqueCentiNm_ == 0)
         {
             beginRest(nowMs, entropy);
@@ -912,33 +982,48 @@ private:
 
     void preparePreventive(uint32_t entropy)
     {
-        if (injectionSign_ == 0 || currentMagnitudeCentiNm_ != 0)
+        if (injectionSign_ == 0)
             return;
         int16_t minValue;
         int16_t maxValue;
         preventiveRange(minValue, maxValue);
-        currentMagnitudeCentiNm_ = triangularMagnitude(minValue, maxValue, entropy);
+        if (currentMagnitudeCentiNm_ == 0)
+        {
+            currentMagnitudeCentiNm_ = triangularMagnitude(minValue, maxValue, entropy);
+            if (currentMagnitudeCentiNm_ <= minValue)
+                preventiveMagnitudeStep_ = 1;
+            else if (currentMagnitudeCentiNm_ >= maxValue)
+                preventiveMagnitudeStep_ = -1;
+            else
+                preventiveMagnitudeStep_ = (nextRandom(entropy) & 1U) != 0U ? 1 : -1;
+        }
+        else
+        {
+            currentMagnitudeCentiNm_ =
+                clampI16(currentMagnitudeCentiNm_, minValue, maxValue);
+            if (currentMagnitudeCentiNm_ <= minValue)
+                preventiveMagnitudeStep_ = 1;
+            else if (currentMagnitudeCentiNm_ >= maxValue)
+                preventiveMagnitudeStep_ = -1;
+        }
     }
 
-    void prepareCorrective(uint32_t entropy)
+    void advancePreventiveSweep()
     {
-        if (injectionSign_ == 0 || currentMagnitudeCentiNm_ != 0)
+        if (injectionSign_ == 0 || currentMagnitudeCentiNm_ == 0)
             return;
         int16_t minValue;
         int16_t maxValue;
-        correctiveRange(minValue, maxValue);
-        currentMagnitudeCentiNm_ = triangularMagnitude(minValue, maxValue, entropy);
-    }
-
-    void selectRandomMagnitude(bool corrective, uint32_t entropy)
-    {
-        int16_t minValue;
-        int16_t maxValue;
-        if (corrective)
-            correctiveRange(minValue, maxValue);
-        else
-            preventiveRange(minValue, maxValue);
-        currentMagnitudeCentiNm_ = triangularMagnitude(minValue, maxValue, entropy);
+        preventiveRange(minValue, maxValue);
+        if (minValue == maxValue)
+            return;
+        if (currentMagnitudeCentiNm_ >= maxValue)
+            preventiveMagnitudeStep_ = -1;
+        else if (currentMagnitudeCentiNm_ <= minValue)
+            preventiveMagnitudeStep_ = 1;
+        currentMagnitudeCentiNm_ = clampI16(
+            static_cast<int32_t>(currentMagnitudeCentiNm_) + preventiveMagnitudeStep_,
+            minValue, maxValue);
     }
 
     void preventiveRange(int16_t &minValue, int16_t &maxValue) const
@@ -955,9 +1040,9 @@ private:
         }
     }
 
-    void correctiveRange(int16_t &minValue, int16_t &maxValue) const
+    void correctiveRangeForSign(int8_t sign, int16_t &minValue, int16_t &maxValue) const
     {
-        if (injectionSign_ < 0)
+        if (sign < 0)
         {
             minValue = config_.correctiveNegativeMinCentiNm;
             maxValue = config_.correctiveNegativeMaxCentiNm;
@@ -969,14 +1054,78 @@ private:
         }
     }
 
-    NagAdaptiveDecision sendDecision(bool corrective)
+    uint16_t correctiveFramesForSign(int8_t sign) const
     {
+        if (sign < 0)
+            return config_.correctiveNegativeFrames;
+        if (sign > 0)
+            return config_.correctivePositiveFrames;
+        return 0;
+    }
+
+    NagAdaptiveDecision prepareCorrectiveSweepDecision(uint32_t entropy)
+    {
+        if (correctiveSweepSign_ == 0)
+            return blockedDecision(BLOCK_NO_DIRECTION);
+        if (correctiveSweepFrameTarget_ == 0)
+            correctiveSweepFrameTarget_ = correctiveFramesForSign(correctiveSweepSign_);
+        if (correctiveSweepPeakCentiNm_ == 0)
+        {
+            int16_t minValue;
+            int16_t maxValue;
+            correctiveRangeForSign(correctiveSweepSign_, minValue, maxValue);
+            correctiveSweepPeakCentiNm_ = triangularMagnitude(minValue, maxValue, entropy);
+            correctiveBurstFrameTarget_ = static_cast<uint8_t>(correctiveSweepFrameTarget_);
+        }
+
+        const uint16_t lastFrame = static_cast<uint16_t>(correctiveSweepFrameTarget_ - 1U);
+        const uint16_t mirroredFrame = correctiveSweepFrame_ <= lastFrame - correctiveSweepFrame_
+                                           ? correctiveSweepFrame_
+                                           : static_cast<uint16_t>(lastFrame - correctiveSweepFrame_);
+        const uint16_t rampMaximum = static_cast<uint16_t>(lastFrame / 2U);
+        int16_t magnitude = correctiveSweepPeakCentiNm_;
+        if (rampMaximum != 0U)
+        {
+            const uint32_t scaled =
+                static_cast<uint32_t>(correctiveSweepPeakCentiNm_ - 1) * mirroredFrame;
+            magnitude = static_cast<int16_t>(1U + scaled / rampMaximum);
+        }
+        currentMagnitudeCentiNm_ = magnitude;
         targetTorqueCentiNm_ = clampI16(
-            static_cast<int32_t>(injectionSign_) * currentMagnitudeCentiNm_, -200, 200);
+            static_cast<int32_t>(correctiveSweepSign_) * magnitude, -250, 250);
+
         NagAdaptiveDecision decision;
         decision.shouldSend = true;
         decision.targetTorqueCentiNm = targetTorqueCentiNm_;
-        decision.injectionSign = injectionSign_;
+        decision.injectionSign = correctiveSweepSign_;
+        decision.corrective = true;
+        decision.attempt = correctiveAttempt_;
+        decision.burstFrame = correctiveBurstFrame_;
+        blockReason_ = BLOCK_NONE;
+        return decision;
+    }
+
+    void clearSweepState()
+    {
+        currentMagnitudeCentiNm_ = 0;
+        preventiveMagnitudeStep_ = 1;
+        correctiveSweepSign_ = 0;
+        correctiveSweepFrame_ = 0;
+        correctiveSweepFrameTarget_ = 0;
+        correctiveSweepPeakCentiNm_ = 0;
+    }
+
+    NagAdaptiveDecision sendDecision(bool corrective)
+    {
+        targetTorqueCentiNm_ = clampI16(
+            static_cast<int32_t>(injectionSign_) * currentMagnitudeCentiNm_, -180, 180);
+        NagAdaptiveDecision decision;
+        decision.shouldSend = true;
+        decision.targetTorqueCentiNm = targetTorqueCentiNm_;
+        decision.injectionSign =
+            phase_ == PHASE_CORRECTIVE && correctiveSweepSign_ != 0
+                ? correctiveSweepSign_
+                : injectionSign_;
         decision.corrective = corrective;
         decision.attempt = corrective ? correctiveAttempt_ : 0;
         decision.burstFrame = corrective ? correctiveBurstFrame_ : 0;
@@ -988,7 +1137,10 @@ private:
     {
         blockReason_ = reason;
         NagAdaptiveDecision decision;
-        decision.injectionSign = injectionSign_;
+        decision.injectionSign =
+            phase_ == PHASE_CORRECTIVE && correctiveSweepSign_ != 0
+                ? correctiveSweepSign_
+                : injectionSign_;
         decision.corrective = phase_ == PHASE_CORRECTIVE;
         decision.attempt = correctiveAttempt_;
         decision.burstFrame = correctiveBurstFrame_;
@@ -1055,6 +1207,7 @@ private:
     int16_t releaseStartTorqueCentiNm_ = 0;
     int16_t lastSuccessfullyTransmittedTorqueCentiNm_ = 0;
     int16_t currentMagnitudeCentiNm_ = 0;
+    int8_t preventiveMagnitudeStep_ = 1;
     bool outputActive_ = false;
     int8_t injectionSign_ = 0;
     int8_t candidateSign_ = 0;
@@ -1069,6 +1222,10 @@ private:
     uint8_t correctiveAttempt_ = 0;
     uint8_t correctiveBurstFrame_ = 0;
     uint8_t correctiveBurstFrameTarget_ = 0;
+    int8_t correctiveSweepSign_ = 0;
+    uint16_t correctiveSweepFrame_ = 0;
+    uint16_t correctiveSweepFrameTarget_ = 0;
+    int16_t correctiveSweepPeakCentiNm_ = 0;
     bool correctiveSendSeen_ = false;
     uint32_t correctiveLastSendAtMs_ = 0;
     bool acknowledgementStarted_ = false;

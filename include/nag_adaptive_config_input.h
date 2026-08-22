@@ -237,17 +237,23 @@ inline const char *validate(const NagAdaptiveConfig &config)
         config.preventivePositiveMaxCentiNm > 180)
         return "preventivePositiveMaxNm";
     if (config.correctiveNegativeMinCentiNm < 180 ||
-        config.correctiveNegativeMinCentiNm > 200)
+        config.correctiveNegativeMinCentiNm > 250)
         return "correctiveNegativeMinNm";
     if (config.correctiveNegativeMaxCentiNm < config.correctiveNegativeMinCentiNm ||
-        config.correctiveNegativeMaxCentiNm > 200)
+        config.correctiveNegativeMaxCentiNm > 250)
         return "correctiveNegativeMaxNm";
     if (config.correctivePositiveMinCentiNm < 180 ||
-        config.correctivePositiveMinCentiNm > 200)
+        config.correctivePositiveMinCentiNm > 250)
         return "correctivePositiveMinNm";
     if (config.correctivePositiveMaxCentiNm < config.correctivePositiveMinCentiNm ||
-        config.correctivePositiveMaxCentiNm > 200)
+        config.correctivePositiveMaxCentiNm > 250)
         return "correctivePositiveMaxNm";
+    if (config.correctiveNegativeFrames < 10 ||
+        config.correctiveNegativeFrames > 255)
+        return "correctiveNegativeFrames";
+    if (config.correctivePositiveFrames < 10 ||
+        config.correctivePositiveFrames > 255)
+        return "correctivePositiveFrames";
     if (config.activityMinMs < 100)
         return "activityMinSec";
     if (config.activityMaxMs < config.activityMinMs)

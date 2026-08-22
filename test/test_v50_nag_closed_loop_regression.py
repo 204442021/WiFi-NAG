@@ -16,6 +16,8 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-corrective-send-min", "nag-corrective-send-max",
     "nag-corrective-pause-min", "nag-corrective-pause-max",
     "nag-corrective-interval-ms",
+    "nag-corrective-negative-frames", "nag-corrective-positive-frames",
+    "nag-late-echo-enabled",
     "nag-h2-persistence-sec", "nag-pre-correction-pause-sec",
     "nag-stability-verify-sec",
     "nag-custom-hard-cap", "nag-custom-das-timeout",
@@ -92,6 +94,7 @@ EXPECTED_CONFIG_FIELDS = (
     "correctiveSendMinSec", "correctiveSendMaxSec",
     "correctivePauseMinSec", "correctivePauseMaxSec",
     "correctiveFrameIntervalMs",
+    "correctiveNegativeFrames", "correctivePositiveFrames", "lateEchoEnabled",
     "h2PersistenceSec", "preCorrectionPauseSec", "stabilityVerifySec",
     "dasFreshTimeoutMs",
 )
@@ -149,16 +152,17 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         for element_id in ("nag-cr-neg-min", "nag-cr-neg-max", "nag-cr-pos-min", "nag-cr-pos-max"):
             self.assertRegex(
                 self.source,
-                rf'id="{element_id}"[^>]*min="1\.80"[^>]*max="2\.00"[^>]*step="0\.01"',
+                rf'id="{element_id}"[^>]*min="1\.80"[^>]*max="2\.50"[^>]*step="0\.01"',
             )
 
     def test_custom_strategy_uses_structured_draft_and_explicit_save_contract(self):
         compact = re.sub(r"\s+", "", self.source)
         self.assertIn(
-            "constnagCustomDefaults={maintenanceEnabled:true,"
+            "constnagCustomDefaults={maintenanceEnabled:true,lateEchoEnabled:false,"
             "preventiveNegative:[1.70,1.80],"
             "preventivePositive:[1.70,1.80],correctiveNegative:[1.80,2.00],"
-            "correctivePositive:[1.80,2.00],activity:[2.0,3.0],"
+            "correctivePositive:[1.80,2.00],correctiveNegativeFrames:50,"
+            "correctivePositiveFrames:50,activity:[2.0,3.0],"
             "release:[0.2,0.4],rest:[0.0,0.0],h2PersistenceSec:3.0,"
             "preCorrectionPauseSec:0.5,correctiveSend:[3.0,3.0],"
             "correctivePause:[1.0,2.0],correctiveFrameIntervalMs:1,"
@@ -540,6 +544,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         equality = self.dashboard[equality_start:equality_end]
         for member in (
             "maintenanceEnabled",
+            "lateEchoEnabled", "correctivePositiveFrames", "correctiveNegativeFrames",
             "preventiveNegativeMinCentiNm", "preventiveNegativeMaxCentiNm",
             "preventivePositiveMinCentiNm", "preventivePositiveMaxCentiNm",
             "correctiveNegativeMinCentiNm", "correctiveNegativeMaxCentiNm",

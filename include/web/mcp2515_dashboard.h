@@ -488,6 +488,7 @@ static bool dashNagAdaptiveConfigEqual(const NagAdaptiveConfig &left,
                                        const NagAdaptiveConfig &right)
 {
     return left.maintenanceEnabled == right.maintenanceEnabled &&
+           left.lateEchoEnabled == right.lateEchoEnabled &&
            left.preventiveNegativeMinCentiNm == right.preventiveNegativeMinCentiNm &&
            left.preventiveNegativeMaxCentiNm == right.preventiveNegativeMaxCentiNm &&
            left.preventivePositiveMinCentiNm == right.preventivePositiveMinCentiNm &&
@@ -496,6 +497,8 @@ static bool dashNagAdaptiveConfigEqual(const NagAdaptiveConfig &left,
            left.correctiveNegativeMaxCentiNm == right.correctiveNegativeMaxCentiNm &&
            left.correctivePositiveMinCentiNm == right.correctivePositiveMinCentiNm &&
            left.correctivePositiveMaxCentiNm == right.correctivePositiveMaxCentiNm &&
+           left.correctivePositiveFrames == right.correctivePositiveFrames &&
+           left.correctiveNegativeFrames == right.correctiveNegativeFrames &&
            left.activityMinMs == right.activityMinMs &&
            left.activityMaxMs == right.activityMaxMs &&
            left.releaseMinMs == right.releaseMinMs &&
@@ -532,6 +535,8 @@ static void dashAppendNagAdaptiveConfigJson(String &j, const NagAdaptiveConfig &
 {
     j += ",\"maintenanceEnabled\":";
     j += config.maintenanceEnabled ? "true" : "false";
+    j += ",\"lateEchoEnabled\":";
+    j += config.lateEchoEnabled ? "true" : "false";
     j += ",\"preventiveNegativeMinNm\":";
     j += dashNagNmString(config.preventiveNegativeMinCentiNm);
     j += ",\"preventiveNegativeMaxNm\":";
@@ -548,6 +553,10 @@ static void dashAppendNagAdaptiveConfigJson(String &j, const NagAdaptiveConfig &
     j += dashNagNmString(config.correctivePositiveMinCentiNm);
     j += ",\"correctivePositiveMaxNm\":";
     j += dashNagNmString(config.correctivePositiveMaxCentiNm);
+    j += ",\"correctivePositiveFrames\":";
+    j += String(config.correctivePositiveFrames);
+    j += ",\"correctiveNegativeFrames\":";
+    j += String(config.correctiveNegativeFrames);
     j += ",\"activityMinSec\":";
     j += dashNagSecondsString(config.activityMinMs);
     j += ",\"activityMaxSec\":";
@@ -624,6 +633,14 @@ static void dashAppendNagClosedLoopTelemetry(String &j, NagHandler *nag)
     j += String((unsigned int)snapshot.correctiveBurstFrame);
     j += ",\"nagCorrectiveBurstFrameTarget\":";
     j += String((unsigned int)snapshot.correctiveBurstFrameTarget);
+    j += ",\"nagCorrectiveSweepSign\":";
+    j += String((int)snapshot.correctiveSweepSign);
+    j += ",\"nagCorrectiveSweepFrame\":";
+    j += String((unsigned int)snapshot.correctiveSweepFrame);
+    j += ",\"nagCorrectiveSweepFrameTarget\":";
+    j += String((unsigned int)snapshot.correctiveSweepFrameTarget);
+    j += ",\"nagCorrectiveSweepPeakNm\":";
+    j += dashNagNmString(snapshot.correctiveSweepPeakCentiNm);
     j += ",\"nagHosEscalations\":";
     j += String(snapshot.hosEscalationCount);
     j += ",\"nagAcknowledgementCount\":";
@@ -644,6 +661,22 @@ static void dashAppendNagClosedLoopTelemetry(String &j, NagHandler *nag)
     j += String((uint32_t)nag->nagCounterCollisionCount);
     j += ",\"nagLastCounterCollisionGapUs\":";
     j += String((uint32_t)nag->nagLastCounterCollisionGapUs);
+    j += ",\"lateEchoReady\":";
+    j += nag->lateEchoReady() ? "true" : "false";
+    j += ",\"lateEchoEstimatedPeriodUs\":";
+    j += String(nag->lateEchoEstimatedPeriodUs());
+    j += ",\"lateEchoPending\":";
+    j += nag->lateEchoPending() ? "true" : "false";
+    j += ",\"lateEchoScheduledCount\":";
+    j += String((uint32_t)nag->nagLateEchoScheduledCount);
+    j += ",\"lateEchoSentCount\":";
+    j += String((uint32_t)nag->nagLateEchoSentCount);
+    j += ",\"lateEchoEarlyCancelCount\":";
+    j += String((uint32_t)nag->nagLateEchoEarlyCancelCount);
+    j += ",\"lateEchoExpiredCount\":";
+    j += String((uint32_t)nag->nagLateEchoExpiredCount);
+    j += ",\"lateEchoLastLeadUs\":";
+    j += String(nag->lateEchoLastLeadUs());
 }
 
 static String dashNagStatusJson(bool includeOk)
@@ -718,6 +751,7 @@ static void dashSavePrefs()
         prefs.putUChar("nag_mode", nag->requestedMode());
         const NagAdaptiveConfig adaptive = nag->adaptiveConfig();
         prefs.putBool("nag_maint", adaptive.maintenanceEnabled);
+        prefs.putBool("nag_late_echo", adaptive.lateEchoEnabled);
         prefs.putString("nag_pv_n_min", dashNagNmString(adaptive.preventiveNegativeMinCentiNm));
         prefs.putString("nag_pv_n_max", dashNagNmString(adaptive.preventiveNegativeMaxCentiNm));
         prefs.putString("nag_pv_p_min", dashNagNmString(adaptive.preventivePositiveMinCentiNm));
@@ -726,6 +760,8 @@ static void dashSavePrefs()
         prefs.putString("nag_cr_n_max", dashNagNmString(adaptive.correctiveNegativeMaxCentiNm));
         prefs.putString("nag_cr_p_min", dashNagNmString(adaptive.correctivePositiveMinCentiNm));
         prefs.putString("nag_cr_p_max", dashNagNmString(adaptive.correctivePositiveMaxCentiNm));
+        prefs.putUChar("nag_cr_pos_fr", static_cast<uint8_t>(adaptive.correctivePositiveFrames));
+        prefs.putUChar("nag_cr_neg_fr", static_cast<uint8_t>(adaptive.correctiveNegativeFrames));
         prefs.putString("nag_act_min", dashNagSecondsString(adaptive.activityMinMs));
         prefs.putString("nag_act_max", dashNagSecondsString(adaptive.activityMaxMs));
         prefs.putString("nag_rel_min", dashNagSecondsString(adaptive.releaseMinMs));
@@ -742,7 +778,7 @@ static void dashSavePrefs()
         prefs.putString("nag_stab_ms", String(adaptive.stabilityVerifyMs));
         prefs.remove("nag_dir_db");
         prefs.putString("nag_das_ms", String(adaptive.dasFreshTimeoutMs));
-        prefs.putUChar("nag_pol_v", 9);
+        prefs.putUChar("nag_pol_v", 10);
     }
 #endif
     prefs.putBool("auto_sleep", false);
@@ -883,6 +919,7 @@ static void dashLoadPrefs()
     {
         NagAdaptiveConfig adaptive;
         adaptive.maintenanceEnabled = prefs.getBool("nag_maint", true);
+        adaptive.lateEchoEnabled = prefs.getBool("nag_late_echo", false);
         adaptive.preventiveNegativeMinCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_n_min", "1.70"), 170);
         adaptive.preventiveNegativeMaxCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_n_max", "1.80"), 180);
         adaptive.preventivePositiveMinCentiNm = dashNagParseNmCenti(prefs.getString("nag_pv_p_min", "1.70"), 170);
@@ -891,6 +928,8 @@ static void dashLoadPrefs()
         adaptive.correctiveNegativeMaxCentiNm = dashNagParseNmCenti(prefs.getString("nag_cr_n_max", "2.00"), 200);
         adaptive.correctivePositiveMinCentiNm = dashNagParseNmCenti(prefs.getString("nag_cr_p_min", "1.80"), 180);
         adaptive.correctivePositiveMaxCentiNm = dashNagParseNmCenti(prefs.getString("nag_cr_p_max", "2.00"), 200);
+        adaptive.correctivePositiveFrames = prefs.getUChar("nag_cr_pos_fr", 50);
+        adaptive.correctiveNegativeFrames = prefs.getUChar("nag_cr_neg_fr", 50);
         adaptive.activityMinMs = dashNagParseSecondsMs(prefs.getString("nag_act_min", "2.0"), 2000);
         adaptive.activityMaxMs = dashNagParseSecondsMs(prefs.getString("nag_act_max", "3.0"), 3000);
         adaptive.releaseMinMs = dashNagParseSecondsMs(prefs.getString("nag_rel_min", "0.2"), 200);
@@ -1046,6 +1085,17 @@ static void dashLoadPrefs()
             prefs.putString("nag_stab_ms", "5000");
             prefs.putUChar("nag_pol_v", 9);
             dashLog("[BOOT] Migrated NAG policy to V9 H2 recovery loop");
+        }
+        if (prefs.getUChar("nag_pol_v", 0) < 10)
+        {
+            adaptive.lateEchoEnabled = false;
+            adaptive.correctivePositiveFrames = 50;
+            adaptive.correctiveNegativeFrames = 50;
+            prefs.putBool("nag_late_echo", false);
+            prefs.putUChar("nag_cr_pos_fr", 50);
+            prefs.putUChar("nag_cr_neg_fr", 50);
+            prefs.putUChar("nag_pol_v", 10);
+            dashLog("[BOOT] Migrated NAG policy to V10 sweep and Late Echo controls");
         }
         adaptive = NagAdaptiveController::normalizeConfig(adaptive);
         uint8_t storedMode = prefs.getUChar("nag_mode", NagHandler::MODE_ADAPTIVE);
@@ -1264,6 +1314,16 @@ static bool dashParseNagConfigRequest(DashNagConfigRequest &request,
             return false;
         }
     }
+    if (server.hasArg("lateEchoEnabled"))
+    {
+        if (!NagAdaptiveConfigInput::parseBoolean(
+                server.arg("lateEchoEnabled").c_str(),
+                request.config.lateEchoEnabled, parseError))
+        {
+            error = {"lateEchoEnabled", parseError};
+            return false;
+        }
+    }
 
 #define DASH_NAG_PARSE_NM_ARG(name, member, minimum, maximum)                    \
     if (server.hasArg(name))                                                      \
@@ -1291,10 +1351,10 @@ static bool dashParseNagConfigRequest(DashNagConfigRequest &request,
     DASH_NAG_PARSE_NM_ARG("preventiveNegativeMaxNm", preventiveNegativeMaxCentiNm, 1.50, 1.80)
     DASH_NAG_PARSE_NM_ARG("preventivePositiveMinNm", preventivePositiveMinCentiNm, 1.50, 1.80)
     DASH_NAG_PARSE_NM_ARG("preventivePositiveMaxNm", preventivePositiveMaxCentiNm, 1.50, 1.80)
-    DASH_NAG_PARSE_NM_ARG("correctiveNegativeMinNm", correctiveNegativeMinCentiNm, 1.80, 2.00)
-    DASH_NAG_PARSE_NM_ARG("correctiveNegativeMaxNm", correctiveNegativeMaxCentiNm, 1.80, 2.00)
-    DASH_NAG_PARSE_NM_ARG("correctivePositiveMinNm", correctivePositiveMinCentiNm, 1.80, 2.00)
-    DASH_NAG_PARSE_NM_ARG("correctivePositiveMaxNm", correctivePositiveMaxCentiNm, 1.80, 2.00)
+    DASH_NAG_PARSE_NM_ARG("correctiveNegativeMinNm", correctiveNegativeMinCentiNm, 1.80, 2.50)
+    DASH_NAG_PARSE_NM_ARG("correctiveNegativeMaxNm", correctiveNegativeMaxCentiNm, 1.80, 2.50)
+    DASH_NAG_PARSE_NM_ARG("correctivePositiveMinNm", correctivePositiveMinCentiNm, 1.80, 2.50)
+    DASH_NAG_PARSE_NM_ARG("correctivePositiveMaxNm", correctivePositiveMaxCentiNm, 1.80, 2.50)
     DASH_NAG_PARSE_SEC_ARG("activityMinSec", activityMinMs, 0.1, 4294967.295)
     DASH_NAG_PARSE_SEC_ARG("activityMaxSec", activityMaxMs, 0.1, 4294967.295)
     DASH_NAG_PARSE_SEC_ARG("releaseMinSec", releaseMinMs, 0.1, 1.0)
@@ -1310,6 +1370,30 @@ static bool dashParseNagConfigRequest(DashNagConfigRequest &request,
     DASH_NAG_PARSE_SEC_ARG("stabilityVerifySec", stabilityVerifyMs, 0.0, 4294967.295)
 #undef DASH_NAG_PARSE_SEC_ARG
 #undef DASH_NAG_PARSE_NM_ARG
+    if (server.hasArg("correctivePositiveFrames"))
+    {
+        uint32_t frames = request.config.correctivePositiveFrames;
+        if (!NagAdaptiveConfigInput::parseMilliseconds(
+                server.arg("correctivePositiveFrames").c_str(), 10, 255,
+                frames, parseError))
+        {
+            error = {"correctivePositiveFrames", parseError};
+            return false;
+        }
+        request.config.correctivePositiveFrames = static_cast<uint16_t>(frames);
+    }
+    if (server.hasArg("correctiveNegativeFrames"))
+    {
+        uint32_t frames = request.config.correctiveNegativeFrames;
+        if (!NagAdaptiveConfigInput::parseMilliseconds(
+                server.arg("correctiveNegativeFrames").c_str(), 10, 255,
+                frames, parseError))
+        {
+            error = {"correctiveNegativeFrames", parseError};
+            return false;
+        }
+        request.config.correctiveNegativeFrames = static_cast<uint16_t>(frames);
+    }
     if (server.hasArg("dasFreshTimeoutMs"))
     {
         if (!NagAdaptiveConfigInput::parseMilliseconds(

@@ -72,15 +72,16 @@ The only active CAN write behavior is Nag echo on `0x370 / 880`. DAS `0x39B / 92
 - Range is clamped to `-1.80 .. +1.80 Nm`.
 - If min is greater than max, values are automatically swapped.
 
-### Mode ADAPTIVE (V4.7-V13 closed loop)
+### Mode ADAPTIVE (V4.8-V13 closed loop)
 
 - Requires fresh DAS HOS feedback from read-only `0x39B` and three valid OEM `0x370` frames before sending.
-- Continuously injects the preventive `1.70..1.80 Nm` target while HOS is `0..1` by default. The optional preventive rest range defaults to `0/0` (disabled); setting both endpoints to zero keeps maintenance continuous.
+- Continuously injects within the preventive `1.70..1.80 Nm` range while HOS is `0..1` by default. After each successful echo, magnitude moves by exactly `0.01 Nm` and reverses at the configured boundary. The optional preventive rest range defaults to `0/0` (disabled); setting both endpoints to zero keeps maintenance continuous.
 - Treats a continuous HOS `2` as a maintenance failure timer (default `3 s`). HOS `0..1` resets that timer; at expiry, all adaptive output pauses for a configurable default `500 ms` before correction starts. HOS `3..5` bypasses the H2 timer and enters the same reset pause immediately.
-- Correction holds one `1.80..2.00 Nm` magnitude per send window (default `3 s`) and uses the configurable successful-send interval (default `1 ms`). If still unresolved, it pauses for `1..2 s` and repeats. A `0/0` corrective pause disables that pause.
+- Correction starts opposite the current trusted OEM torque, then alternates negative and positive triangular sweeps independently of live torque. Each side defaults to `50` successful frames and ramps from a nonzero near-zero value to a selected `1.80..2.00 Nm` peak and back down. The configurable range may be raised to `2.50 Nm`; defaults remain unchanged. If still unresolved, correction pauses for `1..2 s` and repeats. A `0/0` corrective pause disables that pause.
 - HOS `2` is not correction success. Two consecutive fresh HOS `0..1` frames end correction, resume preventive injection, and start a default `5 s` stability check. H2/H3 during that check restarts the recovery loop; stale DAS or HOS `6..15` still fails closed.
-- Selects injection direction opposite the first nonzero measured steering torque, with angle fallback only before a torque direction is known. A reversal must remain stable for `100 ms`; the old direction is not sent while reversal is pending.
-- Corrective output alone may reach `-2.00..+2.00 Nm`; maintenance and legacy output remain clamped to `-1.80..+1.80 Nm`. HOS `6..15` still stops transmission immediately.
+- Selects the initial injection direction opposite the first nonzero measured steering torque, with angle fallback only before a torque direction is known. Maintenance reversal must remain stable for `100 ms`; correction locks its initial sign per sending window and then follows its own bipolar sweep.
+- Corrective output alone may be configured up to `-2.50..+2.50 Nm`; maintenance and legacy output remain clamped to `-1.80..+1.80 Nm`. HOS `6..15` still stops transmission immediately.
+- Optional Late Echo is off by default. When enabled, it learns eight valid OEM periods and schedules one pending counter+1 echo about `1 ms` before the predicted next OEM frame. A new OEM frame replaces the pending echo; stale/fault, disabled writes, OTA, or restart preparation clear it. This timing mode is experimental and has not been validated on a vehicle in this release.
 - The rest interval does not transmit an additional `0x370`; it is true no-send time, not a `0 Nm` injection.
 - Local send attempts/successes are reported separately from DAS acknowledgement/timeout/latency evidence.
 - Adaptive policy settings are bounded in the WebUI and persisted in NVS only after explicit save.
@@ -103,7 +104,7 @@ The WebUI provides:
 
 - CAN status, RX/TX/errors, FPS, uptime
 - CAN Write toggle
-- Nag mode, A_V2 range, and V4.7-V13 ADAPTIVE closed-loop policy controls
+- Nag mode, A_V2 range, and V4.8-V13 ADAPTIVE closed-loop policy controls
 - Four-layer NAG diagnostics for OEM input, controller decisions, local TX, and DAS response
 - AP hotspot settings
 - WiFi scan/connect/delete

@@ -22,9 +22,9 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
         )
 
     def test_internal_and_runtime_version_advance_to_v4_7_v13(self):
-        self.assertEqual(self.version, "V4.7 V13")
+        self.assertEqual(self.version, "V4.8 V13")
         self.assertNotIn("V4.5 V13", self.ui)
-        self.assertGreaterEqual(self.ui.count("V4.7 V13"), 3)
+        self.assertGreaterEqual(self.ui.count("V4.8 V13"), 3)
 
     def test_maintenance_switch_is_default_on_and_crosses_every_config_boundary(self):
         self.assertIn("bool maintenanceEnabled = true;", self.controller)
@@ -103,10 +103,10 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
 
     def test_two_nm_torque_cap_is_unchanged_while_timing_is_unlocked(self):
         self.assertIn(
-            'DASH_NAG_PARSE_NM_ARG("correctivePositiveMaxNm", correctivePositiveMaxCentiNm, 1.80, 2.00)',
+            'DASH_NAG_PARSE_NM_ARG("correctivePositiveMaxNm", correctivePositiveMaxCentiNm, 1.80, 2.50)',
             self.dashboard,
         )
-        self.assertIn("config.correctivePositiveMaxCentiNm > 200", (
+        self.assertIn("config.correctivePositiveMaxCentiNm > 250", (
             ROOT / "include/nag_adaptive_config_input.h"
         ).read_text(encoding="utf-8"))
 
@@ -125,7 +125,7 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
         )
 
     def test_two_nm_limit_applies_only_to_adaptive_correction(self):
-        self.assertIn("kCorrectiveTorqueMaxCentiNm = 200", self.handler)
+        self.assertIn("kCorrectiveTorqueMaxCentiNm = 250", self.handler)
         self.assertIn("adaptiveMode && decision.corrective", self.handler)
         self.assertIn("clampCorrectiveTorqueCentiNm(torqueCentiNm)", self.handler)
         self.assertIn("kTorqueMaxCentiNm = 180", self.handler)

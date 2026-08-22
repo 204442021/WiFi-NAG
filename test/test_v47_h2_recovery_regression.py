@@ -15,7 +15,7 @@ class V47H2RecoveryRegressionTests(unittest.TestCase):
         cls.version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
     def test_version_and_defaults_match_v47_contract(self):
-        self.assertEqual(self.version, "V4.7 V13")
+        self.assertEqual(self.version, "V4.8 V13")
         for declaration in (
             "uint32_t restMinMs = 0;", "uint32_t restMaxMs = 0;",
             "uint32_t h2PersistenceMs = 3000;",
