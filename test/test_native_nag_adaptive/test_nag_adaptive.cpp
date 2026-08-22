@@ -1403,10 +1403,42 @@ void test_new_pulsed_policy_defaults_and_bounds()
     TEST_ASSERT_EQUAL_INT16(180, normalized.preventiveNegativeMaxCentiNm);
     TEST_ASSERT_EQUAL_INT16(180, normalized.correctivePositiveMinCentiNm);
     TEST_ASSERT_EQUAL_INT16(200, normalized.correctivePositiveMaxCentiNm);
-    TEST_ASSERT_EQUAL_UINT32(1000U, normalized.activityMinMs);
-    TEST_ASSERT_EQUAL_UINT32(2000U, normalized.activityMaxMs);
-    TEST_ASSERT_EQUAL_UINT32(3000U, normalized.restMinMs);
-    TEST_ASSERT_EQUAL_UINT32(5000U, normalized.restMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(100U, normalized.activityMinMs);
+    TEST_ASSERT_EQUAL_UINT32(99999U, normalized.activityMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(100U, normalized.restMinMs);
+    TEST_ASSERT_EQUAL_UINT32(99999U, normalized.restMaxMs);
+}
+
+void test_prevention_windows_accept_values_outside_recommended_defaults()
+{
+    NagAdaptiveConfig requested;
+    requested.activityMinMs = 100U;
+    requested.activityMaxMs = 3600000U;
+    requested.restMinMs = 250U;
+    requested.restMaxMs = 86400000U;
+
+    const NagAdaptiveConfig normalized = NagAdaptiveController::normalizeConfig(requested);
+    TEST_ASSERT_EQUAL_UINT32(100U, normalized.activityMinMs);
+    TEST_ASSERT_EQUAL_UINT32(3600000U, normalized.activityMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(250U, normalized.restMinMs);
+    TEST_ASSERT_EQUAL_UINT32(86400000U, normalized.restMaxMs);
+    TEST_ASSERT_NULL(NagAdaptiveConfigInput::validate(normalized));
+}
+
+void test_prevention_window_validation_keeps_positive_and_torque_safety_bounds()
+{
+    NagAdaptiveConfig config;
+    config.activityMinMs = 100U;
+    config.activityMaxMs = 600000U;
+    config.restMinMs = 100U;
+    config.restMaxMs = 600000U;
+    TEST_ASSERT_NULL(NagAdaptiveConfigInput::validate(config));
+
+    config.activityMinMs = 0U;
+    TEST_ASSERT_EQUAL_STRING("activityMinSec", NagAdaptiveConfigInput::validate(config));
+    config.activityMinMs = 100U;
+    config.correctivePositiveMaxCentiNm = 201;
+    TEST_ASSERT_EQUAL_STRING("correctivePositiveMaxNm", NagAdaptiveConfigInput::validate(config));
 }
 
 void test_maintenance_switch_parser_accepts_boolean_form_values()
@@ -1663,6 +1695,8 @@ int main()
     RUN_TEST(test_adaptive_never_sends_without_fresh_das);
     RUN_TEST(test_adaptive_requires_three_valid_oem_epas_frames);
     RUN_TEST(test_new_pulsed_policy_defaults_and_bounds);
+    RUN_TEST(test_prevention_windows_accept_values_outside_recommended_defaults);
+    RUN_TEST(test_prevention_window_validation_keeps_positive_and_torque_safety_bounds);
     RUN_TEST(test_maintenance_switch_parser_accepts_boolean_form_values);
     RUN_TEST(test_hos_0_to_2_send_one_second_then_stop_for_three_seconds);
     RUN_TEST(test_measured_torque_selects_opposite_injection_direction);

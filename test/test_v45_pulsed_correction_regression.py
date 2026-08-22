@@ -63,6 +63,49 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
         self.assertIn("kCorrectiveSendMs = 1000", self.controller)
         self.assertIn("kCorrectivePauseMs = 500", self.controller)
 
+    def test_prevention_timing_uses_recommended_defaults_without_business_clamps(self):
+        self.assertNotIn(
+            "normalizeU32Range(value.activityMinMs, value.activityMaxMs, 1000, 2000)",
+            self.controller,
+        )
+        self.assertNotIn(
+            "normalizeU32Range(value.restMinMs, value.restMaxMs, 3000, 5000)",
+            self.controller,
+        )
+        self.assertIn(
+            "normalizeU32Range(value.activityMinMs, value.activityMaxMs, 100, UINT32_MAX)",
+            self.controller,
+        )
+        self.assertIn(
+            "normalizeU32Range(value.restMinMs, value.restMaxMs, 100, UINT32_MAX)",
+            self.controller,
+        )
+        self.assertNotIn(
+            'DASH_NAG_PARSE_SEC_ARG("activityMinSec", activityMinMs, 1.0, 2.0)',
+            self.dashboard,
+        )
+        self.assertNotIn(
+            'DASH_NAG_PARSE_SEC_ARG("restMinSec", restMinMs, 3.0, 5.0)',
+            self.dashboard,
+        )
+        for field_id in ("nag-active-min", "nag-active-max", "nag-rest-min", "nag-rest-max"):
+            markup = re.search(
+                rf'<input[^>]+id="{re.escape(field_id)}"[^>]*>', self.ui
+            )
+            self.assertIsNotNone(markup, field_id)
+            self.assertIn('min="0.1"', markup.group(0))
+            self.assertNotIn('max="2.0"', markup.group(0))
+            self.assertNotIn('max="5.0"', markup.group(0))
+
+    def test_two_nm_torque_cap_is_unchanged_while_timing_is_unlocked(self):
+        self.assertIn(
+            'DASH_NAG_PARSE_NM_ARG("correctivePositiveMaxNm", correctivePositiveMaxCentiNm, 1.80, 2.00)',
+            self.dashboard,
+        )
+        self.assertIn("config.correctivePositiveMaxCentiNm > 200", (
+            ROOT / "include/nag_adaptive_config_input.h"
+        ).read_text(encoding="utf-8"))
+
     def test_monitor_only_and_direction_change_are_visible_in_diagnostics(self):
         self.assertIn(
             'case NagAdaptiveController::PHASE_MONITOR_ONLY: return "monitor-only";',

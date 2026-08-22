@@ -207,7 +207,7 @@ body.ui-shell #firmware-update-card>.firmware-body{margin:0 16px 16px}
 .nag-status-pill{display:inline-flex;padding:2px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg2);color:var(--tx2);line-height:1.4}
 .nag-adaptive-row{align-items:stretch}
 .nag-adaptive-row .setting-info{width:100%}
-.nag-custom-shell{display:grid;gap:10px;margin-top:12px}
+.nag-custom-shell{display:grid;gap:10px;margin-top:12px;padding-bottom:260px}
 .nag-strategy-card{padding:14px;border:1px solid var(--bd);border-radius:12px;background:var(--card);min-width:0}
 .nag-strategy-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}
 .nag-strategy-kicker{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--tx3)}
@@ -231,7 +231,7 @@ body.ui-shell #firmware-update-card>.firmware-body{margin:0 16px 16px}
 .nag-safety-grid{display:grid;grid-template-columns:1fr;gap:7px}
 .nag-safety-item{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--tx3);font-size:11px}
 .nag-safety-item b{color:var(--tx2);font-size:11px;font-variant-numeric:tabular-nums;text-align:right}
-.nag-custom-actionbar{position:sticky;bottom:76px;z-index:4;display:grid;gap:10px;padding:12px 14px;border:1px solid var(--bd2);border-radius:12px;background:var(--card);box-shadow:0 10px 24px rgba(0,0,0,.18)}
+.nag-custom-actionbar{position:fixed;left:50%;bottom:calc(max(8px,env(safe-area-inset-bottom)) + 72px);transform:translateX(-50%);z-index:49;width:min(calc(100% - 28px),892px);display:grid;gap:10px;padding:12px 14px;border:1px solid var(--bd2);border-radius:12px;background:var(--card);box-shadow:0 10px 24px rgba(0,0,0,.18)}
 .nag-action-state{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--tx3)}
 .nag-action-state::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--okBg)}
 .nag-action-state.dirty{color:var(--warn)}
@@ -272,6 +272,7 @@ body.ui-shell #firmware-update-card>.firmware-body{margin:0 16px 16px}
 .nag-diag-event time{color:var(--tx3);font-variant-numeric:tabular-nums}.nag-diag-event b{color:var(--tx2);font-weight:700}.nag-diag-event span{min-width:0;color:var(--tx);font-family:'SF Mono','Courier New',monospace;overflow-wrap:anywhere}
 .nag-diag-empty{padding:18px 10px;text-align:center;color:var(--tx3);font-size:10px;background:var(--bg2)}
 @media(min-width:900px){
+  .nag-custom-shell{padding-bottom:170px}
   .nag-custom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .nag-rhythm-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .nag-field-pair{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -619,9 +620,9 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
                 <div class="nag-field-group"><div class="nag-field-label">负方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-cr-neg-min" type="number" min="1.80" max="2.00" step="0.01" value="1.80"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-cr-neg-max" type="number" min="1.80" max="2.00" step="0.01" value="2.00"></label></div></div>
                 <div class="nag-field-group"><div class="nag-field-label">正方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-cr-pos-min" type="number" min="1.80" max="2.00" step="0.01" value="1.80"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-cr-pos-max" type="number" min="1.80" max="2.00" step="0.01" value="2.00"></label></div></div>
               </div></section>
-              <section class="nag-strategy-card nag-rhythm-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">闭环周期</div><div class="nag-strategy-title">注入与停发间隔</div><div class="nag-strategy-copy">H0～H2 注入 1～2 秒，再完全停发 3～5 秒，然后循环。</div></div></div><div class="nag-rhythm-grid">
-                <div class="nag-field-group"><div class="nag-field-label">非零注入 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-active-min" type="number" min="1.0" max="2.0" step="0.1" value="1.0"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-active-max" type="number" min="1.0" max="2.0" step="0.1" value="2.0"></label></div></div>
-                <div class="nag-field-group"><div class="nag-field-label">停发间隔 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-rest-min" type="number" min="3.0" max="5.0" step="0.1" value="3.0"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-rest-max" type="number" min="3.0" max="5.0" step="0.1" value="5.0"></label></div></div>
+              <section class="nag-strategy-card nag-rhythm-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">闭环周期</div><div class="nag-strategy-title">注入与停发间隔</div><div class="nag-strategy-copy">H0～H2 按下方时间循环；建议值为注入 1～2 秒、停发 3～5 秒，可自由修改。</div></div></div><div class="nag-rhythm-grid">
+                <div class="nag-field-group"><div class="nag-field-label">非零注入 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-active-min" type="number" min="0.1" step="0.1" value="1.0"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-active-max" type="number" min="0.1" step="0.1" value="2.0"></label></div></div>
+                <div class="nag-field-group"><div class="nag-field-label">停发间隔 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-rest-min" type="number" min="0.1" step="0.1" value="3.0"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-rest-max" type="number" min="0.1" step="0.1" value="5.0"></label></div></div>
               </div></section>
             </div>
             <aside class="nag-safety-panel"><div class="nag-safety-title">安全边界</div><div class="nag-safety-grid"><div class="nag-safety-item"><span>纠正限幅</span><b id="nag-custom-hard-cap">±2.00 Nm</b></div><div class="nag-safety-item"><span>DAS 超时阈值</span><b id="nag-custom-das-timeout">750 ms</b></div><div class="nag-safety-item"><span>停发语义</span><b>间隔期不额外发送 0x370</b></div></div><div class="nag-strategy-copy">方向判断没有死区；换向需稳定 100 ms，确认期间旧方向停发。H6 以上或反馈失效时立即保护停发；本地发送成功不等于 DAS 接受。</div></aside>
@@ -1174,8 +1175,8 @@ const nagCustomFieldDefs=[
   ['preventivePositive',0,'nag-pv-pos-min','preventivePositiveMinNm',1.50,1.80,2],['preventivePositive',1,'nag-pv-pos-max','preventivePositiveMaxNm',1.50,1.80,2],
   ['correctiveNegative',0,'nag-cr-neg-min','correctiveNegativeMinNm',1.80,2.00,2],['correctiveNegative',1,'nag-cr-neg-max','correctiveNegativeMaxNm',1.80,2.00,2],
   ['correctivePositive',0,'nag-cr-pos-min','correctivePositiveMinNm',1.80,2.00,2],['correctivePositive',1,'nag-cr-pos-max','correctivePositiveMaxNm',1.80,2.00,2],
-  ['activity',0,'nag-active-min','activityMinSec',1.0,2.0,1],['activity',1,'nag-active-max','activityMaxSec',1.0,2.0,1],
-  ['rest',0,'nag-rest-min','restMinSec',3.0,5.0,1],['rest',1,'nag-rest-max','restMaxSec',3.0,5.0,1]
+  ['activity',0,'nag-active-min','activityMinSec',0.1,4294967.295,1],['activity',1,'nag-active-max','activityMaxSec',0.1,4294967.295,1],
+  ['rest',0,'nag-rest-min','restMinSec',0.1,4294967.295,1],['rest',1,'nag-rest-max','restMaxSec',0.1,4294967.295,1]
 ];
 let otaFile=null;
 let logSince=0;

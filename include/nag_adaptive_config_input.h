@@ -248,17 +248,17 @@ inline const char *validate(const NagAdaptiveConfig &config)
     if (config.correctivePositiveMaxCentiNm < config.correctivePositiveMinCentiNm ||
         config.correctivePositiveMaxCentiNm > 200)
         return "correctivePositiveMaxNm";
-    if (config.activityMinMs < 1000 || config.activityMinMs > 2000)
+    if (config.activityMinMs < 100)
         return "activityMinSec";
-    if (config.activityMaxMs < config.activityMinMs || config.activityMaxMs > 2000)
+    if (config.activityMaxMs < config.activityMinMs)
         return "activityMaxSec";
     if (config.releaseMinMs < 100 || config.releaseMinMs > 1000)
         return "releaseMinSec";
     if (config.releaseMaxMs < config.releaseMinMs || config.releaseMaxMs > 1000)
         return "releaseMaxSec";
-    if (config.restMinMs < 3000 || config.restMinMs > 5000)
+    if (config.restMinMs < 100)
         return "restMinSec";
-    if (config.restMaxMs < config.restMinMs || config.restMaxMs > 5000)
+    if (config.restMaxMs < config.restMinMs)
         return "restMaxSec";
     if (config.dasFreshTimeoutMs < 100 || config.dasFreshTimeoutMs > 2000)
         return "dasFreshTimeoutMs";

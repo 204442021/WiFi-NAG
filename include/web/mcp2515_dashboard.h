@@ -1156,12 +1156,12 @@ static bool dashParseNagConfigRequest(DashNagConfigRequest &request,
     DASH_NAG_PARSE_NM_ARG("correctiveNegativeMaxNm", correctiveNegativeMaxCentiNm, 1.80, 2.00)
     DASH_NAG_PARSE_NM_ARG("correctivePositiveMinNm", correctivePositiveMinCentiNm, 1.80, 2.00)
     DASH_NAG_PARSE_NM_ARG("correctivePositiveMaxNm", correctivePositiveMaxCentiNm, 1.80, 2.00)
-    DASH_NAG_PARSE_SEC_ARG("activityMinSec", activityMinMs, 1.0, 2.0)
-    DASH_NAG_PARSE_SEC_ARG("activityMaxSec", activityMaxMs, 1.0, 2.0)
+    DASH_NAG_PARSE_SEC_ARG("activityMinSec", activityMinMs, 0.1, 4294967.295)
+    DASH_NAG_PARSE_SEC_ARG("activityMaxSec", activityMaxMs, 0.1, 4294967.295)
     DASH_NAG_PARSE_SEC_ARG("releaseMinSec", releaseMinMs, 0.1, 1.0)
     DASH_NAG_PARSE_SEC_ARG("releaseMaxSec", releaseMaxMs, 0.1, 1.0)
-    DASH_NAG_PARSE_SEC_ARG("restMinSec", restMinMs, 3.0, 5.0)
-    DASH_NAG_PARSE_SEC_ARG("restMaxSec", restMaxMs, 3.0, 5.0)
+    DASH_NAG_PARSE_SEC_ARG("restMinSec", restMinMs, 0.1, 4294967.295)
+    DASH_NAG_PARSE_SEC_ARG("restMaxSec", restMaxMs, 0.1, 4294967.295)
 #undef DASH_NAG_PARSE_SEC_ARG
 #undef DASH_NAG_PARSE_NM_ARG
     if (server.hasArg("dasFreshTimeoutMs"))

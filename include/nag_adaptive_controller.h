@@ -138,9 +138,9 @@ public:
                           value.correctiveNegativeMaxCentiNm, 180, 200);
         normalizeI16Range(value.correctivePositiveMinCentiNm,
                           value.correctivePositiveMaxCentiNm, 180, 200);
-        normalizeU32Range(value.activityMinMs, value.activityMaxMs, 1000, 2000);
+        normalizeU32Range(value.activityMinMs, value.activityMaxMs, 100, UINT32_MAX);
         normalizeU32Range(value.releaseMinMs, value.releaseMaxMs, 100, 1000);
-        normalizeU32Range(value.restMinMs, value.restMaxMs, 3000, 5000);
+        normalizeU32Range(value.restMinMs, value.restMaxMs, 100, UINT32_MAX);
         value.dasFreshTimeoutMs = clampU32(value.dasFreshTimeoutMs, 100, 2000);
         return value;
     }
