@@ -15,7 +15,7 @@ EXPECTED_CUSTOM_UI_IDS = (
     "nag-corrective-send-min", "nag-corrective-send-max",
     "nag-corrective-pause-min", "nag-corrective-pause-max",
     "nag-corrective-negative-frames", "nag-corrective-positive-frames",
-    "nag-activity-hint", "nag-steering-angle",
+    "nag-activity-hint", "nag-corrective-mode-hint", "nag-steering-angle",
     "nag-h2-persistence-sec", "nag-pre-correction-pause-sec",
     "nag-stability-verify-sec",
     "nag-custom-hard-cap", "nag-custom-das-timeout",
@@ -26,7 +26,7 @@ EXPECTED_DIAGNOSTIC_UI_IDS = (
     "nag-diag-epas", "nag-diag-oem-torque", "nag-diag-angle", "nag-diag-counter",
     "nag-diag-das", "nag-diag-hos",
     "nag-diag-phase", "nag-diag-target", "nag-diag-direction",
-    "nag-diag-timer", "nag-diag-burst",
+    "nag-diag-timer", "nag-diag-h2", "nag-diag-burst",
     "nag-diag-tx", "nag-diag-last-tx", "nag-diag-collision",
     "nag-diag-ack", "nag-diag-latency",
     "nag-diag-escalations", "nag-diag-events", "nag-diag-clear-events",
@@ -102,10 +102,15 @@ EXPECTED_STATUS_FIELDS = (
     "nagDirectionSource",
     "nagAdaptivePhase", "nagAdaptiveBlockReason",
     "nagAdaptiveTargetTorqueNm", "nagAdaptivePhaseRemainingMs",
+    "nagPreventiveSubstate", "nagPreventiveRemainingMs",
+    "nagH2Tracking", "nagH2ElapsedMs", "nagH2ThresholdMs",
+    "nagCorrectiveMode",
     "nagCorrectiveAttempt", "nagCorrectiveBurstFrame",
     "nagCorrectiveBurstFrameTarget", "nagCorrectiveSweepSign",
     "nagCorrectiveSweepFrame", "nagCorrectiveSweepFrameTarget",
-    "nagCorrectiveSweepPeakNm", "nagHosEscalations",
+    "nagCorrectiveSweepPeakNm", "nagCorrectiveTransition",
+    "nagCorrectiveTransitionFrame", "nagCorrectiveTransitionFrameTarget",
+    "nagHosEscalations",
     "nagAcknowledgementCount",
     "nagLastAcknowledgementLatencyMs", "nagMaxAcknowledgementLatencyMs",
     "nagSendAttempts", "nagSendFailures", "nagEcho",
@@ -152,6 +157,43 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
                 self.source,
                 rf'id="{element_id}"[^>]*min="1\.80"[^>]*max="2\.50"[^>]*step="0\.01"',
             )
+
+    def test_v50_zero_frame_direction_disable_contract_is_visible_end_to_end(self):
+        compact = re.sub(r"\s+", "", self.source)
+        self.assertEqual(
+            (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
+            "V5.0 V13",
+        )
+        for element_id in (
+            "nag-corrective-negative-frames",
+            "nag-corrective-positive-frames",
+        ):
+            self.assertRegex(
+                self.source,
+                rf'id="{element_id}"[^>]*min="0"[^>]*max="255"[^>]*step="1"',
+            )
+        self.assertIn("0 表示关闭该方向", self.source)
+        self.assertIn("纠正层已关闭", self.source)
+        self.assertIn("固定正方向", self.source)
+        self.assertIn("固定负方向", self.source)
+        self.assertIn("正负方向帧数只能填 0 或 10～255 的整数", self.source)
+        self.assertIn("nagCorrectiveFrameCountsValid", self.source)
+        self.assertIn(
+            "['correctiveNegativeFrames',null,'nag-corrective-negative-frames','correctiveNegativeFrames',0,255,0]",
+            compact,
+        )
+        self.assertIn(
+            "['correctivePositiveFrames',null,'nag-corrective-positive-frames','correctivePositiveFrames',0,255,0]",
+            compact,
+        )
+        self.assertRegex(
+            self.dashboard,
+            r'arg\("correctivePositiveFrames"\)\.c_str\(\),\s*0,\s*255',
+        )
+        self.assertRegex(
+            self.dashboard,
+            r'arg\("correctiveNegativeFrames"\)\.c_str\(\),\s*0,\s*255',
+        )
 
     def test_custom_strategy_uses_structured_draft_and_explicit_save_contract(self):
         compact = re.sub(r"\s+", "", self.source)
@@ -252,7 +294,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "arming:'确认OEM帧',maintenance:'预防注入窗口',release:'兼容释放阶段',"
             "rest:'预防停发间隔',corrective:'纠正发送窗口',verify:'纠正停发窗口',"
             "'fault-hold':'保护停发','monitor-only':'仅监控纠正区',"
-            "'h2-pending':'H2持续检测','pre-corrective-pause':'纠正前停发',"
+            "'pre-corrective-pause':'纠正前停发',"
             "'stability-verify':'H0/H1稳定确认'};",
             compact,
         )
@@ -272,7 +314,7 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
             "disabled: 'muted'", "'wait-das': 'muted'", "arming: 'active'",
             "maintenance: 'active'", "release: 'caution'", "rest: 'caution'",
             "corrective: 'active'", "verify: 'caution'", "'fault-hold': 'error'",
-            "'monitor-only': 'muted'", "'h2-pending': 'caution'",
+            "'monitor-only': 'muted'",
             "'pre-corrective-pause': 'caution'", "'stability-verify': 'active'",
         ):
             self.assertIn(mapping, self.source)
@@ -588,10 +630,12 @@ class V50NagClosedLoopRegressionTests(unittest.TestCase):
         for name in (
             "disabled", "wait-das", "arming", "maintenance", "release",
             "rest", "corrective", "verify", "fault-hold", "monitor-only",
-            "h2-pending", "pre-corrective-pause", "stability-verify",
+            "pre-corrective-pause", "stability-verify",
             "none", "das-missing", "das-stale", "no-direction", "das-state",
-            "steering-angle-limit", "maintenance-disabled",
+            "steering-angle-limit", "maintenance-disabled", "corrective-disabled",
             "angle", "hold", "corrective-sweep",
+            "corrective-fixed", "corrective-transition", "bipolar",
+            "positive-only", "negative-only", "active", "inactive",
         ):
             self.assertIn(f'return "{name}"', self.dashboard)
 

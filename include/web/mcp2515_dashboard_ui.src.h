@@ -566,7 +566,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
   <div class="brand">
     <div class="brand-copy">
       <div class="brand-title" id="brand-title">Albert FSD辅助系统</div>
-      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V4.9 V13</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
+      <div class="brand-sub"><span class="sdot dot-off" id="dot"></span><span id="hdr-desc">等待设备连接</span><span class="version-badge">V5.0 V13</span><span class="hw-badge" id="hw-badge">WIFI-NAG</span></div>
     </div>
   </div>
   <div class="shell-actions">
@@ -612,18 +612,19 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
                 <div class="nag-field-group"><div class="nag-field-label">负方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-pv-neg-min" type="number" min="1.50" max="1.80" step="0.01" value="1.50"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-pv-neg-max" type="number" min="1.50" max="1.80" step="0.01" value="1.80"></label></div></div>
                 <div class="nag-field-group"><div class="nag-field-label">正方向 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-pv-pos-min" type="number" min="1.50" max="1.80" step="0.01" value="1.50"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-pv-pos-max" type="number" min="1.50" max="1.80" step="0.01" value="1.80"></label></div></div>
               </div></section>
-              <section class="nag-strategy-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">双向三角扫动</div><div class="nag-strategy-title">纠正层</div><div class="nag-strategy-copy">H3～H5 在发送窗口内按设置帧数负、正方向交替，从接近 0 平滑升至峰值再回落；H2 不算成功，连续两帧回到 H0～H1 才退出纠正。</div></div></div><div class="nag-field-grid">
+              <section class="nag-strategy-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">可选单向 / 双向扫动</div><div class="nag-strategy-title">纠正层</div><div class="nag-strategy-copy">H3～H5 在发送窗口内按设置帧数运行；有效方向从所设最小值升至峰值再回到最小值。某侧填 0 表示关闭该方向，两侧都为 0 时纠正层只监控、不发送。</div></div></div><div class="nag-field-grid">
                 <div class="nag-field-group"><div class="nag-field-label">负方向峰值范围 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-cr-neg-min" type="number" min="1.80" max="2.50" step="0.01" value="1.80"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-cr-neg-max" type="number" min="1.80" max="2.50" step="0.01" value="2.40"></label></div></div>
                 <div class="nag-field-group"><div class="nag-field-label">正方向峰值范围 / Nm</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-cr-pos-min" type="number" min="1.80" max="2.50" step="0.01" value="1.80"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-cr-pos-max" type="number" min="1.80" max="2.50" step="0.01" value="2.40"></label></div></div>
-                <div class="nag-field-group"><div class="nag-field-label">负方向单侧三角帧数</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>帧</span><input class="sniff-input" id="nag-corrective-negative-frames" type="number" min="10" max="255" step="1" value="100"></label></div></div>
-                <div class="nag-field-group"><div class="nag-field-label">正方向单侧三角帧数</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>帧</span><input class="sniff-input" id="nag-corrective-positive-frames" type="number" min="10" max="255" step="1" value="100"></label></div></div>
+                <div class="nag-field-group"><div class="nag-field-label">负方向单侧三角帧数</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>帧（0 表示关闭该方向）</span><input class="sniff-input" id="nag-corrective-negative-frames" type="number" min="0" max="255" step="1" value="100"></label></div></div>
+                <div class="nag-field-group"><div class="nag-field-label">正方向单侧三角帧数</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>帧（0 表示关闭该方向）</span><input class="sniff-input" id="nag-corrective-positive-frames" type="number" min="0" max="255" step="1" value="100"></label></div></div>
+                <div class="nag-strategy-copy nag-conditional-hint visible" id="nag-corrective-mode-hint">正负双向扫动</div>
               </div></section>
               <section class="nag-strategy-card nag-rhythm-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">预防区周期</div><div class="nag-strategy-title">注入与停发间隔</div><div class="nag-strategy-copy">H0～H1 按下方时间循环；默认持续注入。停发最小和最大同时填 0 为关闭停发。</div></div></div><div class="nag-rhythm-grid">
                 <div class="nag-field-group"><div class="nag-field-label">非零注入 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-active-min" type="number" min="0.1" step="0.1" value="2.0"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-active-max" type="number" min="0.1" step="0.1" value="3.0"></label></div></div>
                 <div class="nag-field-group"><div class="nag-field-label">停发间隔 / s（0 为关闭停发）</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>最小</span><input class="sniff-input" id="nag-rest-min" type="number" min="0" step="0.1" value="0.0"></label><label class="nag-adaptive-field"><span>最大</span><input class="sniff-input" id="nag-rest-max" type="number" min="0" step="0.1" value="0.0"></label></div></div>
                 <div class="nag-strategy-copy nag-conditional-hint" id="nag-activity-hint">当前持续注入；启用停发后生效</div>
               </div></section>
-              <section class="nag-strategy-card nag-rhythm-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">闭环恢复</div><div class="nag-strategy-title">H2 连续检测与模式交接</div><div class="nag-strategy-copy">H2 连续检测超时后先停止全部发送，再进入纠正；回到 H0～H1 后继续注入并确认 H0/H1 稳定。各停发时间填 0 可关闭对应停发。</div></div></div><div class="nag-rhythm-grid">
+              <section class="nag-strategy-card nag-rhythm-card"><div class="nag-strategy-head"><div><div class="nag-strategy-kicker">闭环恢复</div><div class="nag-strategy-title">H2 连续检测与模式交接</div><div class="nag-strategy-copy">H2 检测独立计时，不会覆盖正在执行的预防注入或停发周期；连续超时后先停止发送，再进入纠正。回到 H0～H1 后继续注入并确认稳定。</div></div></div><div class="nag-rhythm-grid">
                 <div class="nag-field-group"><div class="nag-field-label">H2 连续检测 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>阈值</span><input class="sniff-input" id="nag-h2-persistence-sec" type="number" min="0" step="0.1" value="3.0"></label></div></div>
                 <div class="nag-field-group"><div class="nag-field-label">纠正前停发 / s（0 为关闭停发）</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>时间</span><input class="sniff-input" id="nag-pre-correction-pause-sec" type="number" min="0" step="0.1" value="1.0"></label></div></div>
                 <div class="nag-field-group"><div class="nag-field-label">H0/H1 稳定确认 / s</div><div class="nag-field-pair"><label class="nag-adaptive-field"><span>时间</span><input class="sniff-input" id="nag-stability-verify-sec" type="number" min="0" step="0.1" value="5.0"></label></div></div>
@@ -846,7 +847,7 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
       <div class="stat"><div class="stat-lbl">蓝牙</div><div class="stat-val v-dim" id="diag-ble-state">未连接</div></div>
       <div class="stat"><div class="stat-lbl">Wi-Fi</div><div class="stat-val v-dim" id="diag-wifi-state">未配置</div></div>
       <div class="stat"><div class="stat-lbl">温度</div><div class="stat-val v-dim" id="sys-temp">--</div></div>
-      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V4.9 V13</div></div>
+      <div class="stat"><div class="stat-lbl">系统版本</div><div class="stat-val v-dim" id="diag-version">V5.0 V13</div></div>
     </div>
     <section class="nag-diag-panel" aria-labelledby="nag-diag-panel-title">
       <header class="nag-diag-header"><div><div class="nag-diag-kicker">NAG 自适应闭环</div><h2 class="nag-diag-title" id="nag-diag-panel-title">闭环健康</h2></div><div class="nag-diag-health nag-tone-muted" id="nag-diag-health" role="status" aria-live="polite" aria-atomic="true">已关闭</div></header>
@@ -865,8 +866,9 @@ body.ui-shell .warn-bar{width:min(calc(100% - 28px),892px);margin:2px auto 14px}
           <div class="nag-diag-metric"><span>目标扭矩</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-target">--</strong></div>
           <div class="nag-diag-metric"><span>方向来源</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-direction">--</strong><small id="nag-direction-meta">--</small></div>
           <div class="nag-diag-metric"><span>阶段剩余时间</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-timer">--</strong></div>
+          <div class="nag-diag-metric"><span>H2 连续检测</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-h2">未触发</strong></div>
           <div class="nag-diag-metric"><span>本窗口成功发送帧数</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-burst">--</strong></div>
-          <div class="nag-diag-metric"><span>纠正扫动极性 / 帧位 / 峰值</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-sweep">--</strong></div>
+          <div class="nag-diag-metric"><span>纠正模式 / 极性 / 帧位 / 峰值</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-sweep">--</strong></div>
         </div></article>
         <article class="nag-diag-group"><h3>本地发送</h3><div class="nag-diag-metrics">
           <div class="nag-diag-metric"><span>尝试 / 成功 / 失败</span><strong class="nag-diag-value nag-tone-muted" id="nag-diag-tx">0 / 0 / 0</strong></div>
@@ -1161,6 +1163,7 @@ let nagCustomDirty=false;
 let nagCustomHydrated=false;
 let nagCustomLoading=false;
 let nagCustomSaving=false;
+let nagCustomControlsLocked=true;
 let nagCustomLoadError='';
 let nagCustomRevision=0;
 const phaseNames={
@@ -1168,11 +1171,11 @@ const phaseNames={
   maintenance:'预防注入窗口', release:'兼容释放阶段', rest:'预防停发间隔',
   corrective:'纠正发送窗口', verify:'纠正停发窗口',
   'fault-hold':'保护停发', 'monitor-only':'仅监控纠正区',
-  'h2-pending':'H2 持续检测', 'pre-corrective-pause':'纠正前停发',
+  'pre-corrective-pause':'纠正前停发',
   'stability-verify':'H0/H1 稳定确认'
 };
 const nagDiagnosticSemanticTones={release: 'caution', rest: 'caution', verify: 'caution', collision: 'caution', sendFailure: 'error'};
-const nagDiagnosticPhaseTones={disabled: 'muted', 'wait-das': 'muted', arming: 'active', maintenance: 'active', release: 'caution', rest: 'caution', corrective: 'active', verify: 'caution', 'fault-hold': 'error', 'monitor-only': 'muted', 'h2-pending': 'caution', 'pre-corrective-pause': 'caution', 'stability-verify': 'active'};
+const nagDiagnosticPhaseTones={disabled: 'muted', 'wait-das': 'muted', arming: 'active', maintenance: 'active', release: 'caution', rest: 'caution', corrective: 'active', verify: 'caution', 'fault-hold': 'error', 'monitor-only': 'muted', 'pre-corrective-pause': 'caution', 'stability-verify': 'active'};
 const nagDiagnosticEventFields=[
   ['nagDasFresh','DAS 新鲜度'],['nagDasHos','DAS 手握状态'],
   ['nagAdaptivePhase','控制阶段'],['nagAcknowledgementCount','确认次数'],
@@ -1188,7 +1191,7 @@ const nagCustomFieldDefs=[
   ['preventivePositive',0,'nag-pv-pos-min','preventivePositiveMinNm',1.50,1.80,2],['preventivePositive',1,'nag-pv-pos-max','preventivePositiveMaxNm',1.50,1.80,2],
   ['correctiveNegative',0,'nag-cr-neg-min','correctiveNegativeMinNm',1.80,2.50,2],['correctiveNegative',1,'nag-cr-neg-max','correctiveNegativeMaxNm',1.80,2.50,2],
   ['correctivePositive',0,'nag-cr-pos-min','correctivePositiveMinNm',1.80,2.50,2],['correctivePositive',1,'nag-cr-pos-max','correctivePositiveMaxNm',1.80,2.50,2],
-  ['correctiveNegativeFrames',null,'nag-corrective-negative-frames','correctiveNegativeFrames',10,255,0],['correctivePositiveFrames',null,'nag-corrective-positive-frames','correctivePositiveFrames',10,255,0],
+  ['correctiveNegativeFrames',null,'nag-corrective-negative-frames','correctiveNegativeFrames',0,255,0],['correctivePositiveFrames',null,'nag-corrective-positive-frames','correctivePositiveFrames',0,255,0],
   ['activity',0,'nag-active-min','activityMinSec',0.1,4294967.295,1],['activity',1,'nag-active-max','activityMaxSec',0.1,4294967.295,1],
   ['rest',0,'nag-rest-min','restMinSec',0,4294967.295,1],['rest',1,'nag-rest-max','restMaxSec',0,4294967.295,1],
   ['h2PersistenceSec',null,'nag-h2-persistence-sec','h2PersistenceSec',0,4294967.295,1],['preCorrectionPauseSec',null,'nag-pre-correction-pause-sec','preCorrectionPauseSec',0,4294967.295,1],
@@ -1534,7 +1537,7 @@ function syncDashboardSummary(){
   mirrorDashboardText('wifi-status','top-wifi-state',trText('Not configured'));
   mirrorDashboardText('ble-main-card-meta','diag-ble-state',trText('Offline'));
   mirrorDashboardText('wifi-status','diag-wifi-state',trText('Not configured'));
-  mirrorDashboardText('fw-version','diag-version','V4.9 V13');
+  mirrorDashboardText('fw-version','diag-version','V5.0 V13');
   if(nagCustomHydrated){if(!nagCustomDirty)mirrorDashboardText('s-inj','nag-card-meta',trText('Enabled'));}
   const note=$('top-nag-note');if(note)note.textContent=state.nagMode===5?'自适应':'持续注入';
 }
@@ -1924,7 +1927,7 @@ function updateNagDiagnostics(d){
   const phase=String(d.nagAdaptivePhase===undefined?'disabled':d.nagAdaptivePhase);
   const dasSeen=!!d.nagDasSeen,dasFresh=!!d.nagDasFresh,hos=nagDiagnosticFinite(d.nagDasHos);
   const block=String(d.nagAdaptiveBlockReason===undefined?'none':d.nagAdaptiveBlockReason);
-  const blockNames={none:'无阻塞',disabled:'自适应模式未启用','das-missing':'未收到 DAS 0x39B；固件过滤器已放行，请确认当前 CAN 总线是否存在该报文','das-stale':'DAS 反馈已过期',verify:'纠正层停发窗口','no-direction':'中心区尚无可保持的方向','maintenance-disabled':'H0～H2 维持区已关闭，仅监控纠正区','das-state':'H6 以上状态要求保护停发','steering-angle-limit':'方向盘角度绝对值超过 50.0°，保护停发'};
+  const blockNames={none:'无阻塞',disabled:'自适应模式未启用','das-missing':'未收到 DAS 0x39B；固件过滤器已放行，请确认当前 CAN 总线是否存在该报文','das-stale':'DAS 反馈已过期',verify:'纠正层停发窗口','no-direction':'中心区尚无可保持的方向','maintenance-disabled':'H0～H2 维持区已关闭，仅监控纠正区','das-state':'H6 以上状态要求保护停发','steering-angle-limit':'方向盘角度绝对值超过 50.0°，保护停发','corrective-disabled':'纠正层已关闭：正负方向帧数均为 0'};
   let health='就绪',healthTone='ready';
   if(mode!==5||phase==='disabled'){health='已关闭';healthTone='muted';}
   else if(phase==='fault-hold'){health='保护停发';healthTone='error';}
@@ -1945,14 +1948,19 @@ function updateNagDiagnostics(d){
   const phaseTone=phase==='wait-das'?(dasSeen?'error':'muted'):(nagDiagnosticPhaseTones[phase]||'active');
   setNagDiagnosticValue('nag-diag-phase',phaseNames[phase]||phase,phaseTone);
   setNagDiagnosticValue('nag-diag-target',nagDiagnosticFixed(d.nagAdaptiveTargetTorqueNm,2,' Nm'),phase==='disabled'?'muted':'active');
-  const source=String(d.nagDirectionSource===undefined?'--':d.nagDirectionSource),sourceNames={angle:'方向盘角度',hold:'保持上一方向','corrective-sweep':'纠正独立扫动',none:'尚无方向'};
+  const source=String(d.nagDirectionSource===undefined?'--':d.nagDirectionSource),sourceNames={angle:'方向盘角度',hold:'保持上一方向','corrective-sweep':'纠正双向扫动','corrective-fixed':'纠正固定方向','corrective-transition':'纠正极性过渡',none:'尚无方向'};
   setNagDiagnosticValue('nag-diag-direction',sourceNames[source]||source,source==='--'?'muted':'active');
   setNagDiagnosticValue('nag-diag-timer',nagDiagnosticAge(d.nagAdaptivePhaseRemainingMs),phaseTone);
+  const h2Tracking=!!d.nagH2Tracking,h2Elapsed=nagDiagnosticFinite(d.nagH2ElapsedMs),h2Threshold=nagDiagnosticFinite(d.nagH2ThresholdMs);
+  setNagDiagnosticValue('nag-diag-h2',h2Tracking?(nagDiagnosticAge(h2Elapsed)+' / '+nagDiagnosticAge(h2Threshold)):'未触发',h2Tracking?'caution':'muted');
   const burst=nagDiagnosticInteger(d.nagCorrectiveBurstFrame);
   setNagDiagnosticValue('nag-diag-burst',burst+(dashLang==='zh'?' 帧':' frames'),phase==='corrective'?'active':'muted');
   const sweepSign=nagDiagnosticFinite(d.nagCorrectiveSweepSign),sweepFrame=nagDiagnosticFinite(d.nagCorrectiveSweepFrame),sweepTarget=nagDiagnosticFinite(d.nagCorrectiveSweepFrameTarget),sweepPeak=nagDiagnosticFinite(d.nagCorrectiveSweepPeakNm);
   const sweepPolarity=sweepSign===null||sweepSign===0?'--':(sweepSign>0?'+':'−');
-  const sweepText=sweepPolarity+' / '+nagDiagnosticInteger(sweepFrame)+' / '+nagDiagnosticInteger(sweepTarget)+' / '+(sweepPeak===null?'--':sweepPeak.toFixed(2)+' Nm');
+  const correctiveMode=String(d.nagCorrectiveMode===undefined?'disabled':d.nagCorrectiveMode),correctiveModeNames={bipolar:'双向','positive-only':'固定正方向','negative-only':'固定负方向',disabled:'纠正层已关闭'};
+  const transition=!!d.nagCorrectiveTransition,transitionFrame=nagDiagnosticFinite(d.nagCorrectiveTransitionFrame),transitionTarget=nagDiagnosticFinite(d.nagCorrectiveTransitionFrameTarget);
+  const sweepPosition=transition?('过渡 '+nagDiagnosticInteger(transitionFrame)+' / '+nagDiagnosticInteger(transitionTarget)):(sweepPolarity+' / '+nagDiagnosticInteger(sweepFrame)+' / '+nagDiagnosticInteger(sweepTarget));
+  const sweepText=(correctiveModeNames[correctiveMode]||correctiveMode)+' / '+sweepPosition+' / '+(sweepPeak===null?'--':sweepPeak.toFixed(2)+' Nm');
   setNagDiagnosticValue('nag-diag-sweep',sweepText,phase==='corrective'?'active':'muted');
   const sends=nagDiagnosticFinite(d.nagSendAttempts),failures=nagDiagnosticFinite(d.nagSendFailures),success=sends===null||failures===null?null:Math.max(0,Math.trunc(sends)-Math.trunc(failures));
   setNagDiagnosticValue('nag-diag-tx',nagDiagnosticInteger(sends)+' / '+nagDiagnosticInteger(success)+' / '+nagDiagnosticInteger(failures),failures!==null&&failures>0?nagDiagnosticSemanticTones.sendFailure:(sends!==null&&sends>0?'active':'muted'));
@@ -1988,18 +1996,24 @@ function setNagCustomDirty(dirty){
   const cardMeta=$('nag-card-meta');if(cardMeta)cardMeta.textContent=text;
 }
 function setNagCustomControlsDisabled(disabled){
+  nagCustomControlsLocked=!!disabled;
   nagCustomFieldDefs.forEach(def=>{const input=$(def[2]);if(input)input.disabled=disabled;});
   const maintenance=$('nag-maintenance-enabled');if(maintenance)maintenance.disabled=disabled;
   const defaults=$('nag-custom-defaults'),save=$('nag-custom-save');if(defaults)defaults.disabled=disabled;if(save)save.disabled=disabled;
-  if(!disabled)applyNagCustomConditionalState();
+  applyNagCustomConditionalState();
 }
 function applyNagCustomConditionalState(){
   const maintenanceEnabled=nagCustomDraft.maintenanceEnabled!==false;
   const restDisabled=Number(nagCustomDraft.rest[0])===0&&Number(nagCustomDraft.rest[1])===0;
+  const negativeDisabled=Number(nagCustomDraft.correctiveNegativeFrames)===0;
+  const positiveDisabled=Number(nagCustomDraft.correctivePositiveFrames)===0;
   const preventiveKeys=new Set(['preventiveNegative','preventivePositive','activity','rest','h2PersistenceSec','preCorrectionPauseSec']);
-  nagCustomFieldDefs.forEach(def=>{if(preventiveKeys.has(def[0])){const input=$(def[2]);if(input)input.disabled=!maintenanceEnabled;}});
-  ['nag-active-min','nag-active-max'].forEach(id=>{const input=$(id);if(input)input.disabled=!maintenanceEnabled||restDisabled;});
+  nagCustomFieldDefs.forEach(def=>{if(preventiveKeys.has(def[0])){const input=$(def[2]);if(input)input.disabled=nagCustomControlsLocked||!maintenanceEnabled;}});
+  ['nag-active-min','nag-active-max'].forEach(id=>{const input=$(id);if(input)input.disabled=nagCustomControlsLocked||!maintenanceEnabled||restDisabled;});
+  ['nag-cr-neg-min','nag-cr-neg-max'].forEach(id=>{const input=$(id);if(input)input.disabled=nagCustomControlsLocked||negativeDisabled;});
+  ['nag-cr-pos-min','nag-cr-pos-max'].forEach(id=>{const input=$(id);if(input)input.disabled=nagCustomControlsLocked||positiveDisabled;});
   const hint=$('nag-activity-hint');if(hint)hint.classList.toggle('visible',maintenanceEnabled&&restDisabled);
+  const modeHint=$('nag-corrective-mode-hint');if(modeHint){let modeText='正负双向扫动';if(negativeDisabled&&positiveDisabled)modeText='纠正层已关闭：正负方向帧数均为 0';else if(negativeDisabled)modeText='固定正方向：负方向帧数为 0';else if(positiveDisabled)modeText='固定负方向：正方向帧数为 0';modeHint.textContent=modeText;modeHint.classList.add('visible');}
 }
 function normalizeNagCustomDraft(source){
   const next=JSON.parse(JSON.stringify(source));const clamp=(value,min,max,fallback)=>{const n=Number(value);return Math.max(min,Math.min(max,Number.isFinite(n)?n:fallback));};
@@ -2051,10 +2065,14 @@ async function setNagMode(mode){
   }catch(e){addLog(trText('Nag mode save failed'),'le');}
 }
 
+function nagCorrectiveFrameCountsValid(draft){
+  return [draft.correctiveNegativeFrames,draft.correctivePositiveFrames].every(value=>{const frames=Number(value);return Number.isInteger(frames)&&(frames===0||(frames>=10&&frames<=255));});
+}
 async function saveNagAdaptive(){
   if(!nagCustomHydrated){loadNagAdaptive();return;}
-  if(nagCustomSaving)return;nagCustomSaving=true;const saveRevision=nagCustomRevision;const requestDraft=normalizeNagCustomDraft(nagCustomDraft);nagCustomDraft=JSON.parse(JSON.stringify(requestDraft));renderNagCustomDraft();setNagCustomControlsDisabled(true);
-  const button=$('nag-custom-save'),message=$('nag-adaptive-msg');
+  if(nagCustomSaving)return;const message=$('nag-adaptive-msg');if(!nagCorrectiveFrameCountsValid(nagCustomDraft)){if(message){message.textContent='正负方向帧数只能填 0 或 10～255 的整数';message.style.color='var(--err)';}return;}
+  nagCustomSaving=true;const saveRevision=nagCustomRevision;const requestDraft=normalizeNagCustomDraft(nagCustomDraft);nagCustomDraft=JSON.parse(JSON.stringify(requestDraft));renderNagCustomDraft();setNagCustomControlsDisabled(true);
+  const button=$('nag-custom-save');
   if(button){button.disabled=true;button.textContent=trText('Saving...');}
   if(message){message.textContent='';message.style.color='';}
   const params=new URLSearchParams();

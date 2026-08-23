@@ -17,8 +17,8 @@ class V48NagCombinedRegressionTests(unittest.TestCase):
         cls.platformio = (ROOT / "platformio.ini").read_text(encoding="utf-8")
 
     def test_version_is_v49_v13(self):
-        self.assertEqual((ROOT / "VERSION").read_text(encoding="utf-8").strip(), "V4.9 V13")
-        self.assertGreaterEqual(self.ui.count("V4.9 V13"), 3)
+        self.assertEqual((ROOT / "VERSION").read_text(encoding="utf-8").strip(), "V5.0 V13")
+        self.assertGreaterEqual(self.ui.count("V5.0 V13"), 3)
 
     def test_config_defaults_follow_v49_screenshot_values(self):
         self.assertNotIn("lateEchoEnabled", self.controller)

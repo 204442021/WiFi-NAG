@@ -73,6 +73,13 @@ struct NagAdaptiveSnapshot
     uint32_t acknowledgementCount = 0;
     uint32_t lastAcknowledgementLatencyMs = 0;
     uint32_t maxAcknowledgementLatencyMs = 0;
+    bool h2Tracking = false;
+    uint32_t h2ElapsedMs = 0;
+    uint32_t h2ThresholdMs = 0;
+    uint8_t correctiveMode = 0;
+    bool correctiveTransition = false;
+    uint8_t correctiveTransitionFrame = 0;
+    uint8_t correctiveTransitionFrameTarget = 0;
 };
 
 struct NagAdaptiveDasFreshness
@@ -111,7 +118,6 @@ public:
         PHASE_VERIFY = 7,
         PHASE_FAULT_HOLD = 8,
         PHASE_MONITOR_ONLY = 9,
-        PHASE_H2_PENDING = 10,
         PHASE_PRE_CORRECTIVE_PAUSE = 11,
         PHASE_STABILITY_VERIFY = 12,
     };
@@ -129,6 +135,7 @@ public:
         BLOCK_DAS_STATE = 8,
         BLOCK_MAINTENANCE_DISABLED = 11,
         BLOCK_STEERING_ANGLE_LIMIT = 13,
+        BLOCK_CORRECTIVE_DISABLED = 14,
     };
 
     enum DirectionSource : uint8_t
@@ -137,6 +144,16 @@ public:
         DIRECTION_ANGLE = 1,
         DIRECTION_HOLD = 2,
         DIRECTION_CORRECTIVE_SWEEP = 3,
+        DIRECTION_CORRECTIVE_FIXED = 4,
+        DIRECTION_CORRECTIVE_TRANSITION = 5,
+    };
+
+    enum CorrectiveMode : uint8_t
+    {
+        CORRECTIVE_MODE_DISABLED = 0,
+        CORRECTIVE_MODE_BIPOLAR = 1,
+        CORRECTIVE_MODE_POSITIVE_ONLY = 2,
+        CORRECTIVE_MODE_NEGATIVE_ONLY = 3,
     };
 
     static NagAdaptiveConfig normalizeConfig(NagAdaptiveConfig value)
@@ -150,9 +167,9 @@ public:
         normalizeI16Range(value.correctivePositiveMinCentiNm,
                           value.correctivePositiveMaxCentiNm, 180, 250);
         value.correctivePositiveFrames =
-            clampU16(value.correctivePositiveFrames, 10, 255);
+            normalizeCorrectiveFrames(value.correctivePositiveFrames);
         value.correctiveNegativeFrames =
-            clampU16(value.correctiveNegativeFrames, 10, 255);
+            normalizeCorrectiveFrames(value.correctiveNegativeFrames);
         normalizeU32Range(value.activityMinMs, value.activityMaxMs, 100, UINT32_MAX);
         normalizeU32Range(value.releaseMinMs, value.releaseMaxMs, 100, 1000);
         normalizeOptionalU32Range(value.restMinMs, value.restMaxMs, 100, UINT32_MAX);
@@ -196,7 +213,7 @@ public:
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
         normalHosConsecutive_ = 0;
-        h2ReturnsToStability_ = false;
+        clearH2Tracking();
         stabilityVerifyActive_ = false;
         clearSweepState();
     }
@@ -275,25 +292,24 @@ public:
             beginArming();
 
         if (!config_.maintenanceEnabled)
+        {
+            clearH2Tracking();
             return accepted;
+        }
 
         if (hos == 2)
         {
-            if (phase_ != PHASE_H2_PENDING)
-                beginH2Pending(nowMs, stabilityVerifyActive_);
-            else if (phaseExpired(nowMs))
+            if (!h2Tracking_)
+            {
+                h2Tracking_ = true;
+                h2StartedAtMs_ = nowMs;
+            }
+            if (config_.h2PersistenceMs == 0U || h2PersistenceExpired(nowMs))
                 beginRecovery(nowMs);
             return accepted;
         }
 
-        if (phase_ == PHASE_H2_PENDING)
-        {
-            if (h2ReturnsToStability_)
-                beginStabilityVerify(nowMs);
-            else
-                beginMaintenance(nowMs, rngState_);
-            return accepted;
-        }
+        clearH2Tracking();
 
         if (phase_ == PHASE_STABILITY_VERIFY && phaseExpired(nowMs))
             beginMaintenance(nowMs, rngState_);
@@ -338,7 +354,8 @@ public:
             beginArming();
         epasSeen_ = true;
         lastEpasAtMs_ = nowMs;
-        if (phase_ != PHASE_CORRECTIVE || correctiveSweepSign_ == 0)
+        if (!steeringAngleOutOfRange(steeringAngleDeciDeg) &&
+            (phase_ != PHASE_CORRECTIVE || correctiveSweepSign_ == 0))
             updateDirection(steeringAngleDeciDeg);
 
         if (armingFrames_ < 3)
@@ -350,8 +367,6 @@ public:
         {
             if (das_.raw() >= 3 && das_.raw() <= 5)
                 beginRecovery(nowMs);
-            else if (das_.raw() == 2 && config_.maintenanceEnabled)
-                beginH2Pending(nowMs, false);
             else
                 beginMaintenance(nowMs, entropy);
         }
@@ -359,7 +374,7 @@ public:
         if (phase_ == PHASE_MONITOR_ONLY)
             return blockedDecision(BLOCK_MAINTENANCE_DISABLED);
 
-        if (phase_ == PHASE_H2_PENDING && phaseExpired(nowMs))
+        if (h2Tracking_ && !correctiveActive_ && h2PersistenceExpired(nowMs))
             beginRecovery(nowMs);
 
         if (phase_ == PHASE_PRE_CORRECTIVE_PAUSE)
@@ -404,28 +419,25 @@ public:
             return decision;
         }
 
-        if (phase_ == PHASE_CORRECTIVE && correctiveSweepSign_ == 0 &&
-            injectionSign_ != 0)
-        {
-            correctiveSweepSign_ = injectionSign_;
-            correctiveSweepFrame_ = 0;
-            correctiveSweepFrameTarget_ = correctiveFramesForSign(correctiveSweepSign_);
-            correctiveSweepPeakCentiNm_ = 0;
-            correctiveBurstFrameTarget_ = correctiveSweepFrameTarget_;
-            directionSource_ = DIRECTION_CORRECTIVE_SWEEP;
-        }
+        if (phase_ == PHASE_CORRECTIVE && correctiveSweepSign_ == 0)
+            initializeCorrectiveSweep();
 
         if (steeringAngleOutOfRange(steeringAngleDeciDeg))
             return blockedDecision(BLOCK_STEERING_ANGLE_LIMIT);
 
-        if (injectionSign_ == 0)
+        if (phase_ == PHASE_CORRECTIVE && correctiveMode() == CORRECTIVE_MODE_DISABLED)
+            return blockedDecision(BLOCK_CORRECTIVE_DISABLED);
+
+        if (phase_ != PHASE_CORRECTIVE && injectionSign_ == 0)
             return blockedDecision(BLOCK_NO_DIRECTION);
+
+        if (phase_ == PHASE_CORRECTIVE && correctiveTransitionActive_)
+            return prepareCorrectiveTransitionDecision();
 
         if (phase_ == PHASE_CORRECTIVE)
             return prepareCorrectiveSweepDecision(entropy);
 
         if (phase_ == PHASE_MAINTENANCE ||
-            phase_ == PHASE_H2_PENDING ||
             phase_ == PHASE_STABILITY_VERIFY)
         {
             preparePreventive(entropy);
@@ -448,7 +460,6 @@ public:
         if (phase_ != PHASE_CORRECTIVE || !decision.corrective)
         {
             if (phase_ == PHASE_MAINTENANCE ||
-                phase_ == PHASE_H2_PENDING ||
                 phase_ == PHASE_STABILITY_VERIFY)
                 advancePreventiveSweep();
             return;
@@ -460,16 +471,23 @@ public:
             acknowledgementStartedAtMs_ = nowMs;
         }
         correctiveBurstFrame_++;
+        if (correctiveTransitionActive_)
+        {
+            if (correctiveTransitionFrame_ < kCorrectiveTransitionFrames)
+                correctiveTransitionFrame_++;
+            if (correctiveTransitionFrame_ >= kCorrectiveTransitionFrames)
+                finishCorrectiveTransition();
+            return;
+        }
         if (correctiveSweepFrame_ < correctiveSweepFrameTarget_)
             correctiveSweepFrame_++;
         if (correctiveSweepFrame_ >= correctiveSweepFrameTarget_)
         {
-            correctiveSweepSign_ = static_cast<int8_t>(-correctiveSweepSign_);
-            correctiveSweepFrame_ = 0;
-            correctiveSweepFrameTarget_ = correctiveFramesForSign(correctiveSweepSign_);
-            correctiveSweepPeakCentiNm_ = 0;
-            correctiveBurstFrameTarget_ = correctiveSweepFrameTarget_;
-            currentMagnitudeCentiNm_ = 0;
+            const int8_t nextSign = nextCorrectiveSign(correctiveSweepSign_);
+            if (nextSign != 0 && nextSign != correctiveSweepSign_)
+                beginCorrectiveTransition(correctiveSweepSign_, nextSign);
+            else
+                restartCorrectiveSide(nextSign);
         }
     }
 
@@ -511,6 +529,15 @@ public:
         value.acknowledgementCount = acknowledgementCount_;
         value.lastAcknowledgementLatencyMs = lastAcknowledgementLatencyMs_;
         value.maxAcknowledgementLatencyMs = maxAcknowledgementLatencyMs_;
+        value.h2Tracking = h2Tracking_;
+        value.h2ElapsedMs = h2Tracking_
+                                ? static_cast<uint32_t>(nowMs - h2StartedAtMs_)
+                                : 0U;
+        value.h2ThresholdMs = config_.h2PersistenceMs;
+        value.correctiveMode = static_cast<uint8_t>(correctiveMode());
+        value.correctiveTransition = correctiveTransitionActive_;
+        value.correctiveTransitionFrame = correctiveTransitionFrame_;
+        value.correctiveTransitionFrameTarget = kCorrectiveTransitionFrames;
         return value;
     }
 
@@ -540,6 +567,11 @@ private:
         if (value > maxValue)
             return maxValue;
         return value;
+    }
+
+    static uint16_t normalizeCorrectiveFrames(uint16_t value)
+    {
+        return value == 0U ? 0U : clampU16(value, 10U, 255U);
     }
 
     static void normalizeI16Range(int16_t &minValue, int16_t &maxValue,
@@ -604,13 +636,17 @@ private:
         correctiveSweepFrame_ = 0;
         correctiveSweepFrameTarget_ = 0;
         correctiveSweepPeakCentiNm_ = 0;
+        correctiveTransitionActive_ = false;
+        correctiveTransitionFrame_ = 0;
+        correctiveTransitionFromSign_ = 0;
+        correctiveTransitionToSign_ = 0;
         correctiveActive_ = false;
         correctiveAttempt_ = 0;
         correctiveBurstFrame_ = 0;
         correctiveBurstFrameTarget_ = 0;
         acknowledgementStarted_ = false;
         normalHosConsecutive_ = 0;
-        h2ReturnsToStability_ = false;
+        clearH2Tracking();
         stabilityVerifyActive_ = false;
         rngState_ = 0;
         hosEscalationCount_ = 0;
@@ -629,7 +665,7 @@ private:
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
         normalHosConsecutive_ = 0;
-        h2ReturnsToStability_ = false;
+        clearH2Tracking();
         stabilityVerifyActive_ = false;
         faultRecoveryActive_ = false;
         outputActive_ = false;
@@ -661,7 +697,6 @@ private:
                                                     entropy);
         clearSweepState();
         stabilityVerifyActive_ = false;
-        h2ReturnsToStability_ = false;
         normalHosConsecutive_ = 0;
         correctiveAttempt_ = 0;
         correctiveBurstFrame_ = 0;
@@ -681,7 +716,7 @@ private:
         correctiveBurstFrame_ = 0;
         correctiveBurstFrameTarget_ = 0;
         stabilityVerifyActive_ = false;
-        h2ReturnsToStability_ = false;
+        clearH2Tracking();
         normalHosConsecutive_ = 0;
     }
 
@@ -716,36 +751,20 @@ private:
         outputActive_ = false;
     }
 
-    void beginH2Pending(uint32_t nowMs, bool returnToStability)
-    {
-        if (!config_.maintenanceEnabled)
-        {
-            beginMonitorOnly();
-            return;
-        }
-        h2ReturnsToStability_ = returnToStability;
-        phase_ = PHASE_H2_PENDING;
-        blockReason_ = BLOCK_NONE;
-        phaseStartedAtMs_ = nowMs;
-        phaseDurationMs_ = config_.h2PersistenceMs;
-        clearSweepState();
-        preparePreventive(rngState_);
-        if (config_.h2PersistenceMs == 0U)
-            beginRecovery(nowMs);
-    }
-
     void beginRecovery(uint32_t nowMs)
     {
         if (correctiveActive_)
             return;
         correctiveActive_ = true;
         stabilityVerifyActive_ = false;
-        h2ReturnsToStability_ = false;
+        clearH2Tracking();
         normalHosConsecutive_ = 0;
         hosEscalationCount_++;
         targetTorqueCentiNm_ = 0;
         currentMagnitudeCentiNm_ = 0;
         clearSweepState();
+        correctiveBurstFrame_ = 0;
+        correctiveBurstFrameTarget_ = 0;
         outputActive_ = false;
         if (config_.preCorrectionPauseMs == 0U)
         {
@@ -771,7 +790,7 @@ private:
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
         normalHosConsecutive_ = 0;
-        h2ReturnsToStability_ = false;
+        clearH2Tracking();
         stabilityVerifyActive_ = false;
         if (!config_.maintenanceEnabled)
         {
@@ -793,7 +812,6 @@ private:
         phaseStartedAtMs_ = nowMs;
         phaseDurationMs_ = config_.stabilityVerifyMs;
         stabilityVerifyActive_ = true;
-        h2ReturnsToStability_ = false;
         clearSweepState();
         targetTorqueCentiNm_ = 0;
         outputActive_ = false;
@@ -809,17 +827,20 @@ private:
         phaseDurationMs_ = triangularDuration(config_.correctiveSendMinMs,
                                               config_.correctiveSendMaxMs,
                                               rngState_);
+        // This diagnostic counter belongs to one time-based send window. A
+        // zero target explicitly means that the window has no frame target.
+        correctiveBurstFrame_ = 0;
+        correctiveBurstFrameTarget_ = 0;
         if (correctiveAttempt_ < 0xFFU)
             correctiveAttempt_++;
-        correctiveBurstFrame_ = 0;
-        correctiveSweepSign_ = injectionSign_;
-        correctiveSweepFrame_ = 0;
-        correctiveSweepFrameTarget_ = correctiveFramesForSign(correctiveSweepSign_);
-        correctiveSweepPeakCentiNm_ = 0;
-        correctiveBurstFrameTarget_ = correctiveSweepFrameTarget_;
-        if (correctiveSweepSign_ != 0)
-            directionSource_ = DIRECTION_CORRECTIVE_SWEEP;
-        currentMagnitudeCentiNm_ = 0;
+        if (correctiveSweepSign_ == 0)
+            initializeCorrectiveSweep();
+        if (correctiveTransitionActive_)
+            directionSource_ = DIRECTION_CORRECTIVE_TRANSITION;
+        else if (correctiveSweepSign_ != 0)
+            directionSource_ = correctiveMode() == CORRECTIVE_MODE_BIPOLAR
+                                   ? DIRECTION_CORRECTIVE_SWEEP
+                                   : DIRECTION_CORRECTIVE_FIXED;
         targetTorqueCentiNm_ = 0;
         lastSuccessfullyTransmittedTorqueCentiNm_ = 0;
         outputActive_ = false;
@@ -839,8 +860,6 @@ private:
                                               config_.correctivePauseMaxMs,
                                               rngState_);
         targetTorqueCentiNm_ = 0;
-        currentMagnitudeCentiNm_ = 0;
-        clearSweepState();
         outputActive_ = false;
     }
 
@@ -863,7 +882,7 @@ private:
         correctiveActive_ = false;
         acknowledgementStarted_ = false;
         normalHosConsecutive_ = 0;
-        h2ReturnsToStability_ = false;
+        clearH2Tracking();
         stabilityVerifyActive_ = false;
         faultRecoveryActive_ = false;
         outputActive_ = false;
@@ -1004,6 +1023,139 @@ private:
         return 0;
     }
 
+    CorrectiveMode correctiveMode() const
+    {
+        const bool negativeEnabled = config_.correctiveNegativeFrames != 0U;
+        const bool positiveEnabled = config_.correctivePositiveFrames != 0U;
+        if (negativeEnabled && positiveEnabled)
+            return CORRECTIVE_MODE_BIPOLAR;
+        if (positiveEnabled)
+            return CORRECTIVE_MODE_POSITIVE_ONLY;
+        if (negativeEnabled)
+            return CORRECTIVE_MODE_NEGATIVE_ONLY;
+        return CORRECTIVE_MODE_DISABLED;
+    }
+
+    bool correctiveSignEnabled(int8_t sign) const
+    {
+        return correctiveFramesForSign(sign) != 0U;
+    }
+
+    int8_t selectEnabledCorrectiveSign(int8_t preferredSign) const
+    {
+        if (preferredSign == 0)
+        {
+            if (correctiveMode() == CORRECTIVE_MODE_POSITIVE_ONLY)
+                return 1;
+            if (correctiveMode() == CORRECTIVE_MODE_NEGATIVE_ONLY)
+                return -1;
+            return 0;
+        }
+        if (preferredSign != 0 && correctiveSignEnabled(preferredSign))
+            return preferredSign;
+        if (preferredSign != 0 &&
+            correctiveSignEnabled(static_cast<int8_t>(-preferredSign)))
+            return static_cast<int8_t>(-preferredSign);
+        if (correctiveSignEnabled(1))
+            return 1;
+        if (correctiveSignEnabled(-1))
+            return -1;
+        return 0;
+    }
+
+    int8_t nextCorrectiveSign(int8_t currentSign) const
+    {
+        if (correctiveMode() == CORRECTIVE_MODE_BIPOLAR)
+            return static_cast<int8_t>(-currentSign);
+        return selectEnabledCorrectiveSign(currentSign);
+    }
+
+    void initializeCorrectiveSweep()
+    {
+        correctiveSweepSign_ = selectEnabledCorrectiveSign(injectionSign_);
+        correctiveSweepFrame_ = 0;
+        correctiveSweepFrameTarget_ = correctiveFramesForSign(correctiveSweepSign_);
+        correctiveSweepPeakCentiNm_ = 0;
+        currentMagnitudeCentiNm_ = 0;
+        correctiveTransitionActive_ = false;
+        correctiveTransitionFrame_ = 0;
+        if (correctiveSweepSign_ != 0)
+            directionSource_ = correctiveMode() == CORRECTIVE_MODE_BIPOLAR
+                                   ? DIRECTION_CORRECTIVE_SWEEP
+                                   : DIRECTION_CORRECTIVE_FIXED;
+    }
+
+    void restartCorrectiveSide(int8_t sign)
+    {
+        correctiveSweepSign_ = sign;
+        correctiveSweepFrame_ = 0;
+        correctiveSweepFrameTarget_ = correctiveFramesForSign(sign);
+        correctiveSweepPeakCentiNm_ = 0;
+        currentMagnitudeCentiNm_ = 0;
+        correctiveTransitionActive_ = false;
+        correctiveTransitionFrame_ = 0;
+        correctiveTransitionFromSign_ = 0;
+        correctiveTransitionToSign_ = 0;
+        if (sign != 0)
+            directionSource_ = correctiveMode() == CORRECTIVE_MODE_BIPOLAR
+                                   ? DIRECTION_CORRECTIVE_SWEEP
+                                   : DIRECTION_CORRECTIVE_FIXED;
+    }
+
+    void beginCorrectiveTransition(int8_t fromSign, int8_t toSign)
+    {
+        correctiveTransitionActive_ = true;
+        correctiveTransitionFrame_ = 0;
+        correctiveTransitionFromSign_ = fromSign;
+        correctiveTransitionToSign_ = toSign;
+        correctiveSweepFrame_ = 0;
+        correctiveSweepFrameTarget_ = 0;
+        correctiveSweepPeakCentiNm_ = 0;
+        currentMagnitudeCentiNm_ = 0;
+        directionSource_ = DIRECTION_CORRECTIVE_TRANSITION;
+    }
+
+    void finishCorrectiveTransition()
+    {
+        const int8_t toSign = correctiveTransitionToSign_;
+        restartCorrectiveSide(toSign);
+    }
+
+    NagAdaptiveDecision prepareCorrectiveTransitionDecision()
+    {
+        int16_t fromMin;
+        int16_t fromMax;
+        int16_t toMin;
+        int16_t toMax;
+        correctiveRangeForSign(correctiveTransitionFromSign_, fromMin, fromMax);
+        correctiveRangeForSign(correctiveTransitionToSign_, toMin, toMax);
+        (void)fromMax;
+        (void)toMax;
+
+        const int32_t step = static_cast<int32_t>(correctiveTransitionFrame_) + 1;
+        const int32_t remaining = static_cast<int32_t>(kCorrectiveTransitionFrames) - step;
+        const int32_t fromTorque =
+            static_cast<int32_t>(correctiveTransitionFromSign_) * fromMin;
+        const int32_t toTorque =
+            static_cast<int32_t>(correctiveTransitionToSign_) * toMin;
+        targetTorqueCentiNm_ = clampI16(
+            (fromTorque * remaining + toTorque * step) /
+                static_cast<int32_t>(kCorrectiveTransitionFrames),
+            -250, 250);
+
+        NagAdaptiveDecision decision;
+        decision.shouldSend = true;
+        decision.targetTorqueCentiNm = targetTorqueCentiNm_;
+        decision.injectionSign = targetTorqueCentiNm_ < 0
+                                     ? -1
+                                     : (targetTorqueCentiNm_ > 0 ? 1 : 0);
+        decision.corrective = true;
+        decision.attempt = correctiveAttempt_;
+        decision.burstFrame = correctiveBurstFrame_;
+        blockReason_ = BLOCK_NONE;
+        return decision;
+    }
+
     NagAdaptiveDecision prepareCorrectiveSweepDecision(uint32_t entropy)
     {
         if (correctiveSweepSign_ == 0)
@@ -1016,7 +1168,6 @@ private:
             int16_t maxValue;
             correctiveRangeForSign(correctiveSweepSign_, minValue, maxValue);
             correctiveSweepPeakCentiNm_ = triangularMagnitude(minValue, maxValue, entropy);
-            correctiveBurstFrameTarget_ = correctiveSweepFrameTarget_;
         }
 
         const uint16_t lastFrame = static_cast<uint16_t>(correctiveSweepFrameTarget_ - 1U);
@@ -1024,12 +1175,16 @@ private:
                                            ? correctiveSweepFrame_
                                            : static_cast<uint16_t>(lastFrame - correctiveSweepFrame_);
         const uint16_t rampMaximum = static_cast<uint16_t>(lastFrame / 2U);
+        int16_t minValue;
+        int16_t maxValue;
+        correctiveRangeForSign(correctiveSweepSign_, minValue, maxValue);
+        (void)maxValue;
         int16_t magnitude = correctiveSweepPeakCentiNm_;
         if (rampMaximum != 0U)
         {
             const uint32_t scaled =
-                static_cast<uint32_t>(correctiveSweepPeakCentiNm_ - 1) * mirroredFrame;
-            magnitude = static_cast<int16_t>(1U + scaled / rampMaximum);
+                static_cast<uint32_t>(correctiveSweepPeakCentiNm_ - minValue) * mirroredFrame;
+            magnitude = static_cast<int16_t>(minValue + scaled / rampMaximum);
         }
         currentMagnitudeCentiNm_ = magnitude;
         targetTorqueCentiNm_ = clampI16(
@@ -1054,6 +1209,23 @@ private:
         correctiveSweepFrame_ = 0;
         correctiveSweepFrameTarget_ = 0;
         correctiveSweepPeakCentiNm_ = 0;
+        correctiveTransitionActive_ = false;
+        correctiveTransitionFrame_ = 0;
+        correctiveTransitionFromSign_ = 0;
+        correctiveTransitionToSign_ = 0;
+    }
+
+    bool h2PersistenceExpired(uint32_t nowMs) const
+    {
+        return h2Tracking_ &&
+               static_cast<uint32_t>(nowMs - h2StartedAtMs_) >=
+                   config_.h2PersistenceMs;
+    }
+
+    void clearH2Tracking()
+    {
+        h2Tracking_ = false;
+        h2StartedAtMs_ = 0;
     }
 
     NagAdaptiveDecision sendDecision(bool corrective)
@@ -1175,6 +1347,12 @@ private:
     bool faultRecoveryActive_ = false;
     uint32_t faultRecoveryStartedAtMs_ = 0;
     uint8_t normalHosConsecutive_ = 0;
-    bool h2ReturnsToStability_ = false;
     bool stabilityVerifyActive_ = false;
+    bool h2Tracking_ = false;
+    uint32_t h2StartedAtMs_ = 0;
+    static constexpr uint8_t kCorrectiveTransitionFrames = 10U;
+    bool correctiveTransitionActive_ = false;
+    uint8_t correctiveTransitionFrame_ = 0;
+    int8_t correctiveTransitionFromSign_ = 0;
+    int8_t correctiveTransitionToSign_ = 0;
 };

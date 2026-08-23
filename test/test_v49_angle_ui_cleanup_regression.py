@@ -18,7 +18,7 @@ class V49AngleAndUiCleanupRegressionTests(unittest.TestCase):
         cls.version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
     def test_version_and_screenshot_defaults_are_v49(self):
-        self.assertEqual(self.version, "V4.9 V13")
+        self.assertEqual(self.version, "V5.0 V13")
         for declaration in (
             "int16_t preventiveNegativeMinCentiNm = 150;",
             "int16_t preventiveNegativeMaxCentiNm = 180;",

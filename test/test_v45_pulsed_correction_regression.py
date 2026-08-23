@@ -22,9 +22,9 @@ class V45PulsedCorrectionRegressionTests(unittest.TestCase):
         )
 
     def test_internal_and_runtime_version_advance_to_v49_v13(self):
-        self.assertEqual(self.version, "V4.9 V13")
+        self.assertEqual(self.version, "V5.0 V13")
         self.assertNotIn("V4.5 V13", self.ui)
-        self.assertGreaterEqual(self.ui.count("V4.9 V13"), 3)
+        self.assertGreaterEqual(self.ui.count("V5.0 V13"), 3)
 
     def test_maintenance_switch_is_default_on_and_crosses_every_config_boundary(self):
         self.assertIn("bool maintenanceEnabled = true;", self.controller)

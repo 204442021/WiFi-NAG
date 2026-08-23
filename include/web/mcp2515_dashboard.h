@@ -376,7 +376,45 @@ static const char *dashNagDirectionSourceName(NagAdaptiveController::DirectionSo
     case NagAdaptiveController::DIRECTION_ANGLE: return "angle";
     case NagAdaptiveController::DIRECTION_HOLD: return "hold";
     case NagAdaptiveController::DIRECTION_CORRECTIVE_SWEEP: return "corrective-sweep";
+    case NagAdaptiveController::DIRECTION_CORRECTIVE_FIXED: return "corrective-fixed";
+    case NagAdaptiveController::DIRECTION_CORRECTIVE_TRANSITION: return "corrective-transition";
     default: return "none";
+    }
+}
+
+static const char *dashNagCorrectiveModeName(NagAdaptiveController::CorrectiveMode mode)
+{
+    switch (mode)
+    {
+    case NagAdaptiveController::CORRECTIVE_MODE_BIPOLAR: return "bipolar";
+    case NagAdaptiveController::CORRECTIVE_MODE_POSITIVE_ONLY: return "positive-only";
+    case NagAdaptiveController::CORRECTIVE_MODE_NEGATIVE_ONLY: return "negative-only";
+    default: return "disabled";
+    }
+}
+
+static const char *dashNagPreventiveSubstateName(NagAdaptiveController::Phase phase)
+{
+    switch (phase)
+    {
+    case NagAdaptiveController::PHASE_MAINTENANCE:
+    case NagAdaptiveController::PHASE_STABILITY_VERIFY: return "active";
+    case NagAdaptiveController::PHASE_RELEASE: return "release";
+    case NagAdaptiveController::PHASE_REST: return "rest";
+    default: return "inactive";
+    }
+}
+
+static uint32_t dashNagPreventiveRemainingMs(
+    NagAdaptiveController::Phase phase, const NagAdaptiveSnapshot &snapshot)
+{
+    switch (phase)
+    {
+    case NagAdaptiveController::PHASE_MAINTENANCE:
+    case NagAdaptiveController::PHASE_STABILITY_VERIFY:
+    case NagAdaptiveController::PHASE_RELEASE:
+    case NagAdaptiveController::PHASE_REST: return snapshot.phaseRemainingMs;
+    default: return 0U;
     }
 }
 
@@ -393,7 +431,6 @@ static const char *dashNagAdaptivePhaseName(NagAdaptiveController::Phase phase)
     case NagAdaptiveController::PHASE_VERIFY: return "verify";
     case NagAdaptiveController::PHASE_FAULT_HOLD: return "fault-hold";
     case NagAdaptiveController::PHASE_MONITOR_ONLY: return "monitor-only";
-    case NagAdaptiveController::PHASE_H2_PENDING: return "h2-pending";
     case NagAdaptiveController::PHASE_PRE_CORRECTIVE_PAUSE: return "pre-corrective-pause";
     case NagAdaptiveController::PHASE_STABILITY_VERIFY: return "stability-verify";
     default: return "disabled";
@@ -414,6 +451,7 @@ static const char *dashNagAdaptiveBlockName(NagAdaptiveController::BlockReason r
     case NagAdaptiveController::BLOCK_DAS_STATE: return "das-state";
     case NagAdaptiveController::BLOCK_MAINTENANCE_DISABLED: return "maintenance-disabled";
     case NagAdaptiveController::BLOCK_STEERING_ANGLE_LIMIT: return "steering-angle-limit";
+    case NagAdaptiveController::BLOCK_CORRECTIVE_DISABLED: return "corrective-disabled";
     default: return "none";
     }
 }
@@ -621,6 +659,22 @@ static void dashAppendNagClosedLoopTelemetry(String &j, NagHandler *nag)
     j += dashNagNmString(snapshot.targetTorqueCentiNm);
     j += ",\"nagAdaptivePhaseRemainingMs\":";
     j += String(snapshot.phaseRemainingMs);
+    j += ",\"nagPreventiveSubstate\":\"";
+    const NagAdaptiveController::Phase phase =
+        static_cast<NagAdaptiveController::Phase>(snapshot.phase);
+    j += dashNagPreventiveSubstateName(phase);
+    j += "\",\"nagPreventiveRemainingMs\":";
+    j += String(dashNagPreventiveRemainingMs(phase, snapshot));
+    j += ",\"nagH2Tracking\":";
+    j += snapshot.h2Tracking ? "true" : "false";
+    j += ",\"nagH2ElapsedMs\":";
+    j += String(snapshot.h2ElapsedMs);
+    j += ",\"nagH2ThresholdMs\":";
+    j += String(snapshot.h2ThresholdMs);
+    j += ",\"nagCorrectiveMode\":\"";
+    j += dashNagCorrectiveModeName(
+        static_cast<NagAdaptiveController::CorrectiveMode>(snapshot.correctiveMode));
+    j += "\"";
     j += ",\"nagCorrectiveAttempt\":";
     j += String((unsigned int)snapshot.correctiveAttempt);
     j += ",\"nagCorrectiveBurstFrame\":";
@@ -635,6 +689,12 @@ static void dashAppendNagClosedLoopTelemetry(String &j, NagHandler *nag)
     j += String((unsigned int)snapshot.correctiveSweepFrameTarget);
     j += ",\"nagCorrectiveSweepPeakNm\":";
     j += dashNagNmString(snapshot.correctiveSweepPeakCentiNm);
+    j += ",\"nagCorrectiveTransition\":";
+    j += snapshot.correctiveTransition ? "true" : "false";
+    j += ",\"nagCorrectiveTransitionFrame\":";
+    j += String((unsigned int)snapshot.correctiveTransitionFrame);
+    j += ",\"nagCorrectiveTransitionFrameTarget\":";
+    j += String((unsigned int)snapshot.correctiveTransitionFrameTarget);
     j += ",\"nagHosEscalations\":";
     j += String(snapshot.hosEscalationCount);
     j += ",\"nagAcknowledgementCount\":";
@@ -1363,7 +1423,7 @@ static bool dashParseNagConfigRequest(DashNagConfigRequest &request,
     {
         uint32_t frames = request.config.correctivePositiveFrames;
         if (!NagAdaptiveConfigInput::parseMilliseconds(
-                server.arg("correctivePositiveFrames").c_str(), 10, 255,
+                server.arg("correctivePositiveFrames").c_str(), 0, 255,
                 frames, parseError))
         {
             error = {"correctivePositiveFrames", parseError};
@@ -1375,7 +1435,7 @@ static bool dashParseNagConfigRequest(DashNagConfigRequest &request,
     {
         uint32_t frames = request.config.correctiveNegativeFrames;
         if (!NagAdaptiveConfigInput::parseMilliseconds(
-                server.arg("correctiveNegativeFrames").c_str(), 10, 255,
+                server.arg("correctiveNegativeFrames").c_str(), 0, 255,
                 frames, parseError))
         {
             error = {"correctiveNegativeFrames", parseError};

@@ -1,6 +1,6 @@
 # Adaptive NAG closed-loop operation and validation
 
-This document defines the V4.9-V13 adaptive NAG operating boundary for the Waveshare ESP32-S3 WiFi-NAG target. The vehicle baseline is Model Y HW4 on vehicle software `2026.2.11`, using the Party CAN tap pins 2/3 at `500 kbit/s`. The V4.9 angle-direction and bipolar-sweep changes have not completed vehicle validation; results from any earlier baseline must not be generalized into a cross-vehicle or cross-version guarantee.
+This document defines the V5.0-V13 adaptive NAG operating boundary for the Waveshare ESP32-S3 WiFi-NAG target. The vehicle baseline is Model Y HW4 on vehicle software `2026.2.11`, using the Party CAN tap pins 2/3 at `500 kbit/s`. The V5.0 layered-timer and configurable-polarity changes have not completed vehicle validation; results from any earlier baseline must not be generalized into a cross-vehicle or cross-version guarantee.
 
 ## Safety boundary and CAN roles
 
@@ -35,12 +35,12 @@ The controller does not treat a successful local `driver.send()` as proof that D
 flowchart TB
     W[WAIT_DAS] --> A[ARMING]
     A -->|H0-H1 + switch on| M[MAINTENANCE]
-    A -->|H2 + switch on| H[H2_PENDING]
+    A -->|H2 + switch on| M
     A -->|H0-H2 + switch off| O[MONITOR_ONLY]
     A -->|H3-H5| Q[PRE_CORRECTIVE_PAUSE]
-    M -->|H2| H
-    H -->|H0-H1| M
-    H -->|3 s| Q
+    M -.->|H2 starts independent tracker| T[H2 TRACKER]
+    T -.->|H0-H1 clears| M
+    T -->|3 s continuous| Q
     M -->|H3-H5| Q
     O -->|H3-H5| Q
     Q -->|1 s| C[CORRECTIVE]
@@ -56,13 +56,13 @@ flowchart TB
 
 `WAIT_DAS` requires fresh valid `0x39B`. `ARMING` requires three valid OEM `0x370` frames. With maintenance enabled, `MAINTENANCE` injects a `1.50..1.80 Nm` target on valid OEM frames. Preventive rest defaults to `0/0`, so the injection is continuous; a non-zero range restores the optional activity/rest cycle. With maintenance disabled, `MONITOR_ONLY` emits nothing during HOS `0..2`. `WAIT_DAS` and `FAULT_HOLD` also do not send.
 
-Continuous H2 starts `H2_PENDING` while preventive torque continues. H0/H1 cancels it; at the configurable threshold (default 3 seconds), `PRE_CORRECTIVE_PAUSE` sends nothing for a default 1 second. H3..H5 enters the same reset pause without waiting for H2. Repeated H3..H5 frames do not restart this pause.
+Continuous H2 starts an independent tracker while the existing preventive activity/rest substate and its deadline continue unchanged. H0/H1 cancels the tracker; at the configurable threshold (default 3 seconds), `PRE_CORRECTIVE_PAUSE` sends nothing for a default 1 second. H3..H5 enters the same reset pause without waiting for H2. Repeated H3..H5 frames do not restart this pause.
 
 Maintenance starts at a magnitude inside its configured sign-specific range. Each successful echo moves the magnitude by exactly `1 cNm`; the sweep reverses at either boundary. A failed send does not advance it.
 
 Adaptive direction comes only from steering-wheel angle: above `+1.0 deg` selects negative injection, below `-1.0 deg` selects positive injection, and the center band retains the last direction. A cold start in the center band has no direction and sends nothing. Absolute angle above `50.0 deg` blocks adaptive output; exact `+/-50.0 deg` is allowed. Observed OEM torque is diagnostic only.
 
-Correction locks its first sign from the angle-derived or retained direction at the start of each sending window. It then alternates negative and positive sweeps independently. Each side defaults to 100 successful frames and follows a nonzero triangle from `1 cNm` to a selected sign-specific peak and back to `1 cNm`; a failed send does not advance the frame. `VERIFY` is a true no-send pause between windows. H2 does not exit correction; two consecutive fresh H0/H1 frames are required. This recovery loop has no attempt limit.
+Correction chooses its first sign from the angle-derived or retained direction. With both frame counts nonzero, negative and positive sweeps alternate; changing polarity uses exactly 10 successful transition echoes and these transition frames do not consume either configured side count. With one frame count equal to zero, that side is disabled and the other sign remains fixed. With both counts zero, corrective output is disabled while monitoring remains active. Each enabled side defaults to 100 successful frames and follows a triangle from its configured minimum to a selected sign-specific peak and back to its minimum; a failed send does not advance the frame. `VERIFY` is a true no-send pause and preserves sign, frame, peak, and transition state so the next sending window resumes from the same position. H2 does not exit correction; two consecutive fresh H0/H1 frames are required. This recovery loop has no attempt limit.
 
 Sending is immediate and event-driven: each valid checksum/DLC-correct, non-own OEM `0x370` frame is evaluated once and may produce at most one immediate Counter+1 echo. There is no delayed scheduler, minimum corrective send interval, retry, or extra timer-generated `0x370`.
 
@@ -75,8 +75,8 @@ Sending is immediate and event-driven: each valid checksum/DLC-correct, non-own 
 | Preventive positive magnitude | `1.50..1.80 Nm` | `1.50..1.80 Nm` | Selected when steering-wheel angle is negative or that direction is retained. |
 | Corrective negative magnitude | `1.80..2.40 Nm` | `1.80..2.50 Nm` | Selected per negative triangle. |
 | Corrective positive magnitude | `1.80..2.40 Nm` | `1.80..2.50 Nm` | Selected per positive triangle. |
-| Corrective negative frames | `100` | `10..255` | Successful sends per negative triangle. |
-| Corrective positive frames | `100` | `10..255` | Successful sends per positive triangle. |
+| Corrective negative frames | `100` | `0` or `10..255` | Zero disables negative correction; otherwise successful sends per negative triangle. |
+| Corrective positive frames | `100` | `0` or `10..255` | Zero disables positive correction; otherwise successful sends per positive triangle. Both zero disable corrective sending. |
 | Angle direction threshold | `+/-1.0 deg` | Fixed | Outside the center band selects the opposite torque sign; inside it retains the last direction. |
 | Angle send limit | `+/-50.0 deg` | Fixed | Absolute angle above this value blocks adaptive output; exact endpoints remain allowed. |
 | Preventive activity window | `2.0..3.0 s` | `0.1 s..uint32 ms max` | Every valid OEM frame is eligible. |
@@ -121,7 +121,7 @@ Counter collision count and last gap are timing evidence only. They do not chang
 The custom-policy page has five policy sections:
 
 1. Preventive layer: default-on H0-H1 maintenance switch and independent negative/positive min/max magnitude.
-2. Corrective layer: independent negative/positive min/max magnitude.
+2. Corrective layer: independent negative/positive min/max magnitude and per-side frame count; zero disables that side and disables its magnitude inputs.
 3. Preventive timing: optional activity/rest cycle, with rest disabled by default using `0/0`.
 4. Recovery handoff: configurable H2 persistence, pre-correction reset pause, and H0/H1 stability verification.
 5. Corrective timing: independently configurable send/pause windows, defaulting to 3 seconds and 1..2 seconds.
@@ -131,7 +131,7 @@ Editing an input changes only the browser draft and shows an unsaved indicator. 
 
 When preventive rest is `0/0`, the activity inputs are disabled with the hint `当前持续注入；启用停发后生效`. Turning maintenance off disables preventive torque, activity/rest, H2, and pre-correction-pause controls without disabling correction controls. Hidden retained release fields are not submitted by the browser.
 
-The closed-loop diagnostic panel separates four evidence layers: original OEM/DAS input, controller decision, local send, and DAS response. Its browser-local event timeline records only changes to DAS freshness, HOS, phase, acknowledgements, and counter collisions; it keeps the newest 20 entries. Clearing it does not reset device counters.
+The closed-loop diagnostic panel separates four evidence layers: original OEM/DAS input, controller decision, local send, and DAS response. It exposes the preventive substate, independent H2 tracker, corrective mode, and polarity-transition progress so overlapping timers are not mislabeled as one phase. Its browser-local event timeline records only changes to DAS freshness, HOS, phase, acknowledgements, and counter collisions; it keeps the newest 20 entries. Clearing it does not reset device counters.
 
 Color semantics are strict: green means fresh/READY/DAS acknowledgement; yellow means release/rest/verify/collision; red means stale/fault/send failure; gray means disabled or unseen. Local send success is never colored as DAS acceptance.
 
@@ -141,7 +141,7 @@ The dedicated `/api/nag-adaptive` diagnostic poll runs only while the diagnostic
 
 Switching to `MODE_A` is allowed only as a short diagnostic check that the legacy fixed `+1.80 Nm` behavior still exists. `MODE_A` sends on every valid OEM frame and is not a safety downgrade or fail-safe mode.
 
-To stop CAN writes, disable NAG and turn `CAN Write OFF`. Do not use a mode change as a substitute for disabling writes. Revision 11 removes the retired timing keys and conditionally migrates only exact former defaults; custom torque, frame-count, and pause values are preserved. V4.9-V13 does not read the retired timing settings as adaptive policy.
+To stop CAN writes, disable NAG and turn `CAN Write OFF`. Do not use a mode change as a substitute for disabling writes. Revision 11 removes the retired timing keys and conditionally migrates only exact former defaults; custom torque, frame-count, and pause values are preserved. V5.0-V13 does not read the retired timing settings as adaptive policy.
 
 ## Validation ladder
 

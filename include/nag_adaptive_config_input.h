@@ -248,10 +248,12 @@ inline const char *validate(const NagAdaptiveConfig &config)
     if (config.correctivePositiveMaxCentiNm < config.correctivePositiveMinCentiNm ||
         config.correctivePositiveMaxCentiNm > 250)
         return "correctivePositiveMaxNm";
-    if (config.correctiveNegativeFrames < 10 ||
+    if ((config.correctiveNegativeFrames != 0 &&
+         config.correctiveNegativeFrames < 10) ||
         config.correctiveNegativeFrames > 255)
         return "correctiveNegativeFrames";
-    if (config.correctivePositiveFrames < 10 ||
+    if ((config.correctivePositiveFrames != 0 &&
+         config.correctivePositiveFrames < 10) ||
         config.correctivePositiveFrames > 255)
         return "correctivePositiveFrames";
     if (config.activityMinMs < 100)

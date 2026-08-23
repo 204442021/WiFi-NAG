@@ -15,7 +15,7 @@ class V47H2RecoveryRegressionTests(unittest.TestCase):
         cls.version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
     def test_version_and_defaults_match_v47_contract(self):
-        self.assertEqual(self.version, "V4.9 V13")
+        self.assertEqual(self.version, "V5.0 V13")
         for declaration in (
             "uint32_t restMinMs = 0;", "uint32_t restMaxMs = 0;",
             "uint32_t h2PersistenceMs = 3000;",
@@ -62,10 +62,14 @@ class V47H2RecoveryRegressionTests(unittest.TestCase):
         firmware = self.source.index('id="firmware-update-card"')
         self.assertLess(action, firmware)
 
-    def test_new_phase_names_exist_in_backend_and_frontend(self):
-        for phase in ("h2-pending", "pre-corrective-pause", "stability-verify"):
+    def test_recovery_phase_names_and_independent_h2_tracker_exist(self):
+        for phase in ("pre-corrective-pause", "stability-verify"):
             self.assertIn(f'return "{phase}"', self.dashboard)
             self.assertIn(f"'{phase}'", self.source)
+        for field in ("nagH2Tracking", "nagH2ElapsedMs", "nagH2ThresholdMs"):
+            self.assertIn(field, self.dashboard)
+        self.assertNotIn("h2-pending", self.source)
+        self.assertNotIn("PHASE_H2_PENDING", self.controller)
 
 
 if __name__ == "__main__":
